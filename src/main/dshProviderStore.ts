@@ -550,6 +550,7 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
     catalogProvider,
     enabled: input.enabled !== false,
+    reasoningEnabled: input.reasoningEnabled !== false,
     apiKey,
     meta
   };
@@ -576,6 +577,8 @@ function piProviderProfile(
   normalized: ReturnType<typeof normalizeSaveInput>,
   credentialRef: string | undefined
 ) {
+  const managesReasoning = !normalized.catalogProvider
+    && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses");
   const next: JsonObject = {
     ...current,
     displayName: normalized.name,
@@ -586,10 +589,12 @@ function piProviderProfile(
   else delete next.api;
   if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
   else delete next.baseURL;
+  if (managesReasoning && normalized.reasoningEnabled && next.reasoning === undefined) next.reasoning = "high";
+  else if (managesReasoning && !normalized.reasoningEnabled) delete next.reasoning;
   if (normalized.inheritModels) delete next.models;
   else next.models = serializeModels(
     normalized.models,
-    !normalized.catalogProvider && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses")
+    managesReasoning && normalized.reasoningEnabled
   );
   return next;
 }

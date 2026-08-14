@@ -274,6 +274,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       inheritModels,
       catalogProvider,
       enabled: provider.enabled !== false,
+      ...(managesReasoning ? { reasoningEnabled } : {}),
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,

@@ -76,11 +76,13 @@ describe("DSH provider settings", () => {
     expect(settings).toContain("llm-pi-ai:");
     expect(settings).toContain("api: openai-completions");
     expect(settings).toContain("baseURL: https://gateway.example/v1");
+    expect(settings).toContain("reasoning: high");
     expect(settings).toContain("reasoningEfforts:");
-    expect(settings).toContain("off: null");
     expect(settings).toContain("low: low");
     expect(settings).toContain("medium: medium");
     expect(settings).toContain("high: high");
+    expect(settings).toContain("xhigh: xhigh");
+    expect(settings).toContain("max: max");
     expect(settings).not.toContain("sk-private");
     expect(credentials).toContain(`${deriveDshCredentialRef("team-gateway")}: sk-private`);
 
@@ -200,6 +202,22 @@ describe("DSH provider settings", () => {
       expect.objectContaining({ id: "reasoning-model", reasoningEfforts: { off: null, high: "ultra", max: "ultra" } }),
       expect.objectContaining({ id: "plain-model", reasoningEfforts: false })
     ]);
+  });
+
+  it("omits the provider reasoning default when reasoning is disabled", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "plain-gateway",
+      name: "Plain Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      reasoningEnabled: false,
+      models: [{ id: "plain-model", reasoningEfforts: false }]
+    }, { dshHome });
+
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).toContain("reasoningEfforts: false");
+    expect(settings).not.toContain("reasoning: high");
   });
 
   it("keeps disabled providers in DSH Desk while removing them from DSH", async () => {
