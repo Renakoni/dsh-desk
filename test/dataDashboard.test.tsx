@@ -72,6 +72,25 @@ function analyticsSnapshot() {
   };
 }
 
+function persistedRuntimeStats() {
+  const today = new Date().toLocaleDateString("en-CA");
+  const hourlyActivity = new Array(24).fill(0).map((_, hour) => hour === 10 ? 64 : 0);
+  return {
+    ...structuredClone(defaultStats),
+    toolUsage: { edit: 46 },
+    eventTypeCounts: { dsh: 64 },
+    totalSessions: 1,
+    dailyStats: { [today]: { events: 64, toolCalls: 46, sessions: 1, errors: 2, permissionRequests: 1 } },
+    errorCount: 2,
+    permissionRequests: 1,
+    permissionApproved: 1,
+    totalRuntime: 1_090_000,
+    hourlyActivity,
+    dailyHourlyActivity: { [today]: hourlyActivity },
+    dailyToolUsage: { [today]: { edit: 46 } }
+  };
+}
+
 beforeEach(() => {
   localStorage.clear();
   revealDshSession.mockClear();
@@ -108,7 +127,7 @@ afterEach(() => {
 function renderDashboard() {
   return render(
     <I18nProvider initialLocale="en">
-      <DataSection persistedStats={structuredClone(defaultStats)} hideSensitiveContent={false} onResetStats={async () => undefined} />
+      <DataSection persistedStats={persistedRuntimeStats()} hideSensitiveContent={false} onResetStats={async () => undefined} />
     </I18nProvider>
   );
 }
@@ -137,9 +156,10 @@ describe("data dashboard order and disclosure", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
 
     const runtimePanel = view.container.querySelector(".dsh-runtime-panel") as HTMLElement;
-    await waitFor(() => expect(Array.from(runtimePanel.querySelectorAll(".stats-range-block .stats-range-metric strong"), metric => metric.textContent)).toEqual(["64", "46", "1", "1", "2"]));
-    expect(Array.from(runtimePanel.querySelectorAll(".runtime-range-metrics span"), metric => metric.textContent)).toEqual(["Conversation turns", "Execution steps", "Active time", "Model time", "Average TTFT", "Decode rate"]);
-    expect(Array.from(runtimePanel.querySelectorAll(".runtime-range-metrics strong"), metric => metric.textContent)).toEqual(["1", "16", "14m 35s", "3m 49s", "3s", "132.6 tok/s"]);
+    await waitFor(() => expect(Array.from(runtimePanel.querySelectorAll(".stats-range-block .stats-range-metric strong"), metric => metric.textContent)).toEqual(["64", "46", "1", "1", "2", "1", "16", "14m 35s", "3m 49s", "3s", "132.6 tok/s"]));
+    expect(Array.from(runtimePanel.querySelectorAll(".stats-range-block .stats-range-metric > span"), metric => metric.textContent)).toEqual(["Events", "Tool calls", "Sessions", "Permission requests", "Errors", "Conversation turns", "Execution steps", "Active time", "Model time", "Average TTFT", "Decode rate"]);
+    expect(within(runtimePanel).queryByText("Runtime performance")).toBeNull();
+    expect(within(runtimePanel).getAllByText("Today")).toHaveLength(1);
     expect(within(runtimePanel).getAllByRole("tab")).toHaveLength(3);
 
     const toolPanel = view.container.querySelector(".dsh-tool-stats-panel") as HTMLElement;

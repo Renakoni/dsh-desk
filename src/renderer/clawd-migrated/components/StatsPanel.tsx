@@ -1,40 +1,10 @@
 // @ts-nocheck
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { DshAnalyticsSnapshot, DshSessionMetric } from "../../../shared/dshAnalytics";
 import type { AppStats } from "../../shared/events";
 import { useI18n } from "../useI18n";
 
 type StatsRange = "today" | "7d" | "all";
-
-export function dshAnalyticsToAppStats(snapshot: DshAnalyticsSnapshot): AppStats {
-  const toolUsage = snapshot.tools.length > 0
-    ? Object.fromEntries(snapshot.tools.map(tool => [tool.name, tool.calls]))
-    : { dsh: snapshot.totals.toolCalls };
-  const events = snapshot.totals.events ?? snapshot.daily.reduce((sum, day) => sum + (day.events ?? 0), 0);
-  const sessionTimes = snapshot.sessions.flatMap(session => [session.createdAt, session.lastActivity]).filter(time => time > 0);
-  return {
-    toolUsage,
-    eventTypeCounts: events > 0 ? { dsh: events } : {},
-    totalSessions: snapshot.totals.sessions,
-    dailyStats: Object.fromEntries(snapshot.daily.map(day => [day.date, {
-      events: day.events ?? 0,
-      toolCalls: day.toolCalls,
-      sessions: day.sessions,
-      errors: day.failedToolCalls,
-      permissionRequests: day.permissionRequests ?? 0
-    }])),
-    errorCount: snapshot.totals.failedToolCalls,
-    permissionRequests: snapshot.totals.permissionRequests ?? 0,
-    permissionApproved: snapshot.totals.permissionApproved ?? 0,
-    permissionDenied: snapshot.totals.permissionDenied ?? 0,
-    totalRuntime: snapshot.totals.llmMs + snapshot.totals.toolMs,
-    hourlyActivity: snapshot.hourlyActivity ?? new Array(24).fill(0),
-    dailyHourlyActivity: snapshot.dailyHourlyActivity ?? {},
-    dailyToolUsage: snapshot.dailyToolUsage ?? {},
-    firstStartTime: sessionTimes.length > 0 ? Math.min(...sessionTimes) : snapshot.lastScannedAt,
-    lastEventTime: sessionTimes.length > 0 ? Math.max(...sessionTimes) : 0
-  };
-}
 
 function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1_000);
@@ -148,6 +118,16 @@ export function StatsPanel({ stats, snapshot = null }: {
   const zh = locale === "zh";
   const numberLocale = zh ? "zh-CN" : "en-US";
   const [range, setRange] = useState<StatsRange>("7d");
+  const runtimeAnchor = useMemo(() => ({ value: stats.totalRuntime ?? 0, capturedAt: Date.now() }), [stats]);
+  const [runtimeNow, setRuntimeNow] = useState(runtimeAnchor.capturedAt);
+
+  useEffect(() => {
+    setRuntimeNow(Date.now());
+    const timer = window.setInterval(() => setRuntimeNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [runtimeAnchor]);
+
+  const liveTotalRuntime = runtimeAnchor.value + Math.max(0, runtimeNow - runtimeAnchor.capturedAt);
   const totalToolCalls = useMemo(() => sumRecord(stats.toolUsage), [stats]);
   const totalEvents = useMemo(() => sumRecord(stats.eventTypeCounts), [stats]);
   const days = useMemo(() => Object.keys(stats.dailyStats ?? {}).length, [stats]);
@@ -205,13 +185,6 @@ export function StatsPanel({ stats, snapshot = null }: {
     return metrics;
   }, [range, snapshot]);
 
-  const rangeRows = [
-    { label: t("stats.events", "事件"), value: formatCount(rangeData.metrics.events, numberLocale) },
-    { label: t("stats.toolCalls", "工具调用"), value: formatCount(rangeData.metrics.toolCalls, numberLocale) },
-    { label: t("stats.sessions", "会话"), value: formatCount(rangeData.metrics.sessions, numberLocale) },
-    { label: t("stats.permissionRequests", "权限请求"), value: formatCount(rangeData.metrics.permissionRequests, numberLocale) },
-    { label: t("stats.errors", "错误次数"), value: formatCount(rangeData.metrics.errors, numberLocale) }
-  ];
   const hoursTitle = range === "all"
     ? t("stats.historicalActiveHours", "历史高频时段")
     : range === "today"
@@ -228,6 +201,14 @@ export function StatsPanel({ stats, snapshot = null }: {
     { label: zh ? "平均首字" : "Average TTFT", value: formatPreciseDuration(averageTtft, zh), meta: zh ? `${dshMetrics.ttftSteps} 次采样` : `${dshMetrics.ttftSteps} samples` },
     { label: zh ? "解码速度" : "Decode rate", value: decodeRate ? `${decodeRate.toFixed(1)} tok/s` : "—" }
   ] : [];
+  const rangeRows = [
+    { label: t("stats.events", "事件"), value: formatCount(rangeData.metrics.events, numberLocale) },
+    { label: t("stats.toolCalls", "工具调用"), value: formatCount(rangeData.metrics.toolCalls, numberLocale) },
+    { label: t("stats.sessions", "会话"), value: formatCount(rangeData.metrics.sessions, numberLocale) },
+    { label: t("stats.permissionRequests", "权限请求"), value: formatCount(rangeData.metrics.permissionRequests, numberLocale) },
+    { label: t("stats.errors", "错误次数"), value: formatCount(rangeData.metrics.errors, numberLocale) },
+    ...runtimeRows
+  ];
 
   return (
     <div className="stats-workbench dsh-runtime-panel">
@@ -235,7 +216,7 @@ export function StatsPanel({ stats, snapshot = null }: {
         <header className="stats-board-head">
           <div className="stats-runtime-inline">
             <span>{t("stats.totalRuntime", "累计运行")}</span>
-            <strong>{formatDuration(stats.totalRuntime ?? 0)}</strong>
+            <strong>{formatDuration(liveTotalRuntime)}</strong>
             <small>{days > 0 ? `${formatCount(days, numberLocale)} ${t("stats.activeDays", "活跃天数")} · ${t("stats.dailyAvg", "日均调用")} ${formatCount(avgDaily, numberLocale)}` : t("stats.noData", "无数据")}</small>
           </div>
         </header>
@@ -250,18 +231,9 @@ export function StatsPanel({ stats, snapshot = null }: {
             </div>
           </header>
           <div className="stats-range-metrics">
-            {rangeRows.map(row => <article key={row.label} className="stats-range-metric"><span>{row.label}</span><strong>{row.value}</strong></article>)}
+            {rangeRows.map(row => <article key={row.label} className="stats-range-metric"><span>{row.label}</span><strong>{row.value}</strong>{row.meta ? <small>{row.meta}</small> : null}</article>)}
           </div>
         </div>
-
-        {runtimeRows.length > 0 ? (
-          <div className="stats-runtime-detail">
-            <header><h3>{zh ? "运行性能" : "Runtime performance"}</h3><span>{rangeData.label}</span></header>
-            <div className="stats-range-metrics runtime-range-metrics">
-              {runtimeRows.map(row => <article key={row.label} className="stats-range-metric"><span>{row.label}</span><strong>{row.value}</strong>{row.meta ? <small>{row.meta}</small> : null}</article>)}
-            </div>
-          </div>
-        ) : null}
 
         <div className="stats-hours-section">
           <header><h3>{hoursTitle}</h3><span>{t("stats.eventTop3", "事件 Top3")}</span></header>

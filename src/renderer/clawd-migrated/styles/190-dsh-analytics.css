@@ -24,10 +24,6 @@
   white-space: nowrap;
 }
 
-.runtime-range-metrics {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
 .stats-range-metric small {
   min-width: 0;
   overflow: hidden;
@@ -183,8 +179,6 @@
 .trajectory-expand svg.rotated { transform: rotate(180deg); }
 
 @media (max-width: 1120px) {
-  .runtime-range-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .stats-activity-board .runtime-range-metrics::after { display: none; }
   .trajectory-session-header,
   .trajectory-session-row { grid-template-columns: minmax(170px, 1.35fr) minmax(125px, 1fr) minmax(145px, 1fr) 58px 30px; }
   .trajectory-session-header > span:nth-child(4),
@@ -198,8 +192,4 @@
   .trajectory-session-row { grid-template-columns: minmax(150px, 1.4fr) minmax(140px, 1fr) 58px 30px; }
   .trajectory-session-header > span:nth-child(2),
   .trajectory-session-row > div:nth-child(2) { display: none; }
-}
-
-@media (max-width: 620px) {
-  .runtime-range-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshAnalyticsSnapshot } from "../src/shared/dshAnalytics";
-import { dshAnalyticsToAppStats, StatsPanel } from "../src/renderer/clawd-migrated/components/StatsPanel";
+import { StatsPanel } from "../src/renderer/clawd-migrated/components/StatsPanel";
+import type { AppStats } from "../src/renderer/shared/events";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function dateKey(timestamp: number) {
   const date = new Date(timestamp);
@@ -32,15 +36,33 @@ function snapshot(overrides: Partial<DshAnalyticsSnapshot> = {}): DshAnalyticsSn
   };
 }
 
-function panel(data: DshAnalyticsSnapshot) {
-  return <I18nProvider initialLocale="zh"><StatsPanel stats={dshAnalyticsToAppStats(data)} snapshot={data} /></I18nProvider>;
+function appStats(overrides: Partial<AppStats> = {}): AppStats {
+  const now = Date.now();
+  const today = dateKey(now);
+  return {
+    toolUsage: { edit: 7 },
+    eventTypeCounts: { dsh: 10 },
+    totalSessions: 2,
+    dailyStats: { [today]: { events: 10, toolCalls: 7, sessions: 2, errors: 1, permissionRequests: 0 } },
+    errorCount: 1,
+    permissionRequests: 0,
+    permissionApproved: 0,
+    permissionDenied: 0,
+    totalRuntime: 3_000,
+    hourlyActivity: new Array(24).fill(0),
+    dailyHourlyActivity: { [today]: new Array(24).fill(0) },
+    dailyToolUsage: { [today]: { edit: 7 } },
+    firstStartTime: now - 3_000,
+    lastEventTime: now,
+    ...overrides
+  };
 }
 
-function runtimeMetricValues(): (string | null)[] {
-  return Array.from(document.querySelectorAll(".runtime-range-metrics strong")).map(element => element.textContent);
+function panel(data: DshAnalyticsSnapshot, stats = appStats()) {
+  return <I18nProvider initialLocale="zh"><StatsPanel stats={stats} snapshot={data} /></I18nProvider>;
 }
 
-function originalMetricValues(): (string | null)[] {
+function metricValues(): (string | null)[] {
   return Array.from(document.querySelectorAll(".stats-range-block .stats-range-metric strong")).map(element => element.textContent);
 }
 
@@ -50,8 +72,12 @@ describe("StatsPanel runtime ranges", () => {
     expect(screen.getByText("累计运行")).toBeTruthy();
     expect(screen.getByText(/活跃天数/)).toBeTruthy();
     expect(screen.getByText(/日均调用/)).toBeTruthy();
-    expect(originalMetricValues()).toEqual(["10", "7", "2", "0", "1"]);
-    expect(Array.from(document.querySelectorAll(".runtime-range-metrics span"), element => element.textContent)).toEqual([
+    expect(Array.from(document.querySelectorAll(".stats-range-block .stats-range-metric > span"), element => element.textContent)).toEqual([
+      "事件",
+      "工具调用",
+      "会话",
+      "权限请求",
+      "错误次数",
       "对话轮次",
       "执行步骤",
       "活跃耗时",
@@ -59,15 +85,32 @@ describe("StatsPanel runtime ranges", () => {
       "平均首字",
       "解码速度"
     ]);
-    expect(runtimeMetricValues()).toEqual(["3", "6", "3s", "2s", "250ms", "20.0 tok/s"]);
+    expect(metricValues()).toEqual(["10", "7", "2", "0", "1", "3", "6", "3s", "2s", "250ms", "20.0 tok/s"]);
+    expect(screen.queryByText("运行性能")).toBeNull();
+    expect(screen.getAllByText("今日")).toHaveLength(1);
     expect(screen.queryByText("最近会话")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("tab")[2]);
-    expect(originalMetricValues()).toEqual(["10", "7", "2", "0", "1"]);
-    expect(runtimeMetricValues()).toEqual(["5", "9", "3s", "2s", "250ms", "20.0 tok/s"]);
+    expect(metricValues()).toEqual(["10", "7", "2", "0", "1", "5", "9", "3s", "2s", "250ms", "20.0 tok/s"]);
 
-    view.rerender(panel(snapshot({ totals: { events: 12, sessions: 3, turns: 8, steps: 13, toolCalls: 9, failedToolCalls: 0, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, llmMs: 4_000, toolMs: 1_000, ttftMs: 900, ttftSteps: 3, decodeMs: 2_000, decodeTokens: 50 } })));
-    expect(originalMetricValues()).toEqual(["12", "9", "3", "0", "0"]);
-    expect(runtimeMetricValues()).toEqual(["8", "13", "5s", "4s", "300ms", "25.0 tok/s"]);
+    view.rerender(panel(
+      snapshot({ totals: { events: 12, sessions: 3, turns: 8, steps: 13, toolCalls: 9, failedToolCalls: 0, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, llmMs: 4_000, toolMs: 1_000, ttftMs: 900, ttftSteps: 3, decodeMs: 2_000, decodeTokens: 50 } }),
+      appStats({ toolUsage: { edit: 9 }, eventTypeCounts: { dsh: 12 }, totalSessions: 3, errorCount: 0 })
+    ));
+    expect(metricValues()).toEqual(["12", "9", "3", "0", "0", "8", "13", "5s", "4s", "300ms", "25.0 tok/s"]);
+  });
+
+  it("updates cumulative runtime once per second between persisted snapshots", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-14T12:00:00Z"));
+    render(panel(snapshot(), appStats({ totalRuntime: 1_090_000 })));
+    const totalRuntime = screen.getByText("累计运行").parentElement?.querySelector("strong");
+    expect(totalRuntime?.textContent).toBe("18m 10s");
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(totalRuntime?.textContent).toBe("18m 11s");
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(totalRuntime?.textContent).toBe("18m 12s");
   });
 });

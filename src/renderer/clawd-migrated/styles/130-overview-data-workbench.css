@@ -396,34 +396,6 @@
   border-left: 0;
 }
 
-.stats-runtime-detail {
-  min-width: 0;
-  border-top: 1px solid var(--workbench-line);
-}
-
-.stats-runtime-detail > header {
-  min-width: 0;
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px 4px;
-}
-
-.stats-runtime-detail > header h3 {
-  margin: 0;
-  color: var(--workbench-muted);
-  font-size: 12px;
-  font-weight: 760;
-}
-
-.stats-runtime-detail > header span {
-  color: var(--workbench-muted);
-  font-size: 11px;
-  font-weight: 720;
-}
-
 .stats-hours-section {
   min-width: 0;
   display: grid;
