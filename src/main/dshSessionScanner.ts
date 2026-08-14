@@ -70,6 +70,7 @@ type DayState = Omit<DshTrajectoryDay, "sessions"> & {
   sessionIds: Set<string>;
   hourlyActivity: number[];
   toolUsage: Record<string, number>;
+  toolMetrics: Record<string, DshToolMetric>;
 };
 
 type RawSessionScan = {
@@ -182,7 +183,8 @@ function createDay(date: string): DayState {
     llmMs: 0,
     toolMs: 0,
     hourlyActivity: new Array(24).fill(0),
-    toolUsage: {}
+    toolUsage: {},
+    toolMetrics: {}
   };
 }
 
@@ -397,6 +399,9 @@ class SessionAccumulator {
       const day = this.day(time);
       day.toolCalls++;
       bump(day.toolUsage, name);
+      const dayMetric = day.toolMetrics[name] ?? { name, calls: 0, errors: 0, durationMs: 0 };
+      dayMetric.calls++;
+      day.toolMetrics[name] = dayMetric;
     }
   }
 
@@ -414,10 +419,14 @@ class SessionAccumulator {
         metric.durationMs += durationMs;
         if (failed) metric.errors++;
       }
-      if (time > 0) {
-        const day = this.day(time);
+      if (time > 0 || call.time > 0) {
+        const day = this.day(call.time || time);
         day.toolMs += durationMs;
         if (failed) day.failedToolCalls++;
+        const dayMetric = day.toolMetrics[call.name] ?? { name: call.name, calls: 0, errors: 0, durationMs: 0 };
+        dayMetric.durationMs += durationMs;
+        if (failed) dayMetric.errors++;
+        day.toolMetrics[call.name] = dayMetric;
       }
     }
     if (failed) this.failedToolCalls++;
@@ -656,6 +665,13 @@ function mergeDay(target: Map<string, DayState>, incoming: DayState): void {
   for (const [tool, count] of Object.entries(incoming.toolUsage)) {
     current.toolUsage[tool] = (current.toolUsage[tool] ?? 0) + count;
   }
+  for (const metric of Object.values(incoming.toolMetrics)) {
+    const currentMetric = current.toolMetrics[metric.name] ?? { name: metric.name, calls: 0, errors: 0, durationMs: 0 };
+    currentMetric.calls += metric.calls;
+    currentMetric.errors += metric.errors;
+    currentMetric.durationMs += metric.durationMs;
+    current.toolMetrics[metric.name] = currentMetric;
+  }
   target.set(incoming.date, current);
 }
 
@@ -725,6 +741,7 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
     hourlyActivity,
     dailyHourlyActivity: Object.fromEntries(daily.map(day => [day.date, day.hourlyActivity])),
     dailyToolUsage: Object.fromEntries(daily.map(day => [day.date, day.toolUsage])),
+    dailyTools: Object.fromEntries(daily.map(day => [day.date, Object.values(day.toolMetrics).sort((left, right) => right.calls - left.calls || right.durationMs - left.durationMs || left.name.localeCompare(right.name))])),
     sessionRoot,
     lastScannedAt: scannedAt
   };

@@ -80,6 +80,7 @@ export type DshAnalyticsSnapshot = {
   hourlyActivity: number[];
   dailyHourlyActivity: Record<string, number[]>;
   dailyToolUsage: Record<string, Record<string, number>>;
+  dailyTools: Record<string, DshToolMetric[]>;
   sessionRoot: string;
   lastScannedAt: number;
 };
@@ -109,6 +110,7 @@ export function emptyDshAnalyticsSnapshot(sessionRoot = "", scannedAt = Date.now
     hourlyActivity: new Array(24).fill(0),
     dailyHourlyActivity: {},
     dailyToolUsage: {},
+    dailyTools: {},
     sessionRoot,
     lastScannedAt: scannedAt
   };

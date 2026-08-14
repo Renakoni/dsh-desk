@@ -2,6 +2,7 @@
 import React from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { CompanionSettings } from "../../../shared/events";
+import type { DisplayCurrency } from "../../../../shared/currency";
 import { useI18n } from "../../useI18n";
 
 export function GroupCard({ icon, title, action, className, children }: { icon?: React.ReactNode; title: string; action?: React.ReactNode; className?: string; children: React.ReactNode }) {
@@ -102,6 +103,34 @@ export function LanguageSegmented({ value, onChange }: { value: CompanionSetting
           <span>{item.label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+export function CurrencySegmented({ value, onChange }: { value: DisplayCurrency; onChange: (value: DisplayCurrency) => void }) {
+  const { t } = useI18n();
+  const items: Array<{ value: DisplayCurrency; label: string }> = [
+    { value: "CNY", label: t("settings.currencyCny", "人民币") },
+    { value: "USD", label: t("settings.currencyUsd", "美元") },
+    { value: "EUR", label: t("settings.currencyEur", "欧元") }
+  ];
+  return (
+    <div className="settings-choice-row">
+      <span>{t("settings.displayCurrency", "金额显示")}</span>
+      <div className="segmented currency-segmented" role="radiogroup" aria-label={t("settings.displayCurrency", "金额显示")}>
+        {items.map(item => (
+          <button
+            key={item.value}
+            type="button"
+            role="radio"
+            aria-checked={value === item.value}
+            className={value === item.value ? "active" : ""}
+            onClick={() => onChange(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -37,6 +37,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   theme: "system",
   uiStyle: "classic",
   language: "zh",
+  displayCurrency: "CNY",
   notificationRules: [
     { eventType: "done", enabled: true, playSound: true },
     { eventType: "error", enabled: true, playSound: true },

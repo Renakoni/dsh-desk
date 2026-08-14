@@ -71,6 +71,7 @@ import { backupJsonFile, writeTextFileAtomic } from "./filePersistence";
 import { EVENT_SERVER_DEV_ORIGIN, isAcceptedEventServerRequest } from "./eventServerSecurity";
 import { visitJsonlTail } from "./jsonlTail";
 import { historyToSortedArray, mergeTokenDailyHistory, normalizeTokenDailyHistory } from "./tokenHistory";
+import { EMBEDDED_CURRENCY_RATES, parseExchangeApiRates, type CurrencyRatesStatus } from "../shared/currency";
 import { recordSessionSighting } from "./runtimeSessions";
 import { loadScanCache, saveScanCache, type CachedScan } from "./scanCachePersistence";
 import { aggregateRecentEdits, editFromToolUseResult, emptyRecentEditsSnapshot, type ParsedEditRecord, type RecentEditsSnapshot } from "./claudeEditLog";
@@ -2138,6 +2139,90 @@ let pendingDynamicPricingLoad: Promise<Map<string, ModelPricingRates>> | null = 
 // doesn't re-fuzzy-scan the ~1000-entry LiteLLM map per record.
 const pricingMemo = new ModelPricingMemo();
 
+const CURRENCY_RATES_TTL_MS = 12 * 60 * 60 * 1000;
+const CURRENCY_RATES_FETCH_TIMEOUT_MS = 8_000;
+const CURRENCY_RATES_URLS = [
+  "https://latest.currency-api.pages.dev/v1/currencies/usd.json",
+  "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+] as const;
+let currencyRatesSnapshot: CurrencyRatesStatus | null = null;
+let pendingCurrencyRatesLoad: Promise<CurrencyRatesStatus> | null = null;
+let currencyRatesRefreshTimer: NodeJS.Timeout | null = null;
+
+function currencyRatesCachePath() {
+  return join(app.getPath("userData"), "dsh-currency-rates-cache.json");
+}
+
+function embeddedCurrencyRatesStatus(): CurrencyRatesStatus {
+  return { base: "USD", rates: { ...EMBEDDED_CURRENCY_RATES }, source: "embedded", updatedAt: 0, stale: true };
+}
+
+function loadCachedCurrencyRates(): CurrencyRatesStatus | null {
+  try {
+    const parsed = JSON.parse(readFileSync(currencyRatesCachePath(), "utf8")) as { version?: unknown; timestamp?: unknown; rates?: unknown };
+    const rates = parseExchangeApiRates({ usd: {
+      cny: (parsed.rates as { CNY?: unknown } | undefined)?.CNY,
+      eur: (parsed.rates as { EUR?: unknown } | undefined)?.EUR
+    } });
+    if (parsed.version !== 1 || typeof parsed.timestamp !== "number" || !Number.isFinite(parsed.timestamp) || parsed.timestamp <= 0 || !rates) return null;
+    return {
+      base: "USD",
+      rates,
+      source: "exchange-api",
+      updatedAt: parsed.timestamp,
+      stale: Date.now() - parsed.timestamp >= CURRENCY_RATES_TTL_MS
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCurrencyRates(): Promise<CurrencyRatesStatus["rates"]> {
+  for (const url of CURRENCY_RATES_URLS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CURRENCY_RATES_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) continue;
+      const rates = parseExchangeApiRates(await response.json());
+      if (rates) return rates;
+    } catch {
+      // Try the mirrored endpoint before falling back to the disk cache.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error("currency_rates_unavailable");
+}
+
+async function loadCurrencyRates(force = false): Promise<CurrencyRatesStatus> {
+  if (!force && currencyRatesSnapshot && Date.now() - currencyRatesSnapshot.updatedAt < CURRENCY_RATES_TTL_MS) return currencyRatesSnapshot;
+  if (pendingCurrencyRatesLoad) return pendingCurrencyRatesLoad;
+  pendingCurrencyRatesLoad = (async () => {
+    const cached = loadCachedCurrencyRates();
+    if (!force && cached && !cached.stale) {
+      currencyRatesSnapshot = cached;
+      return cached;
+    }
+    try {
+      const rates = await fetchCurrencyRates();
+      const next: CurrencyRatesStatus = { base: "USD", rates, source: "exchange-api", updatedAt: Date.now(), stale: false };
+      currencyRatesSnapshot = next;
+      try {
+        writeTextFileAtomic(currencyRatesCachePath(), JSON.stringify({ version: 1, timestamp: next.updatedAt, rates }));
+      } catch { /* best effort */ }
+      return next;
+    } catch {
+      const previous = cached ?? currencyRatesSnapshot;
+      currencyRatesSnapshot = previous
+        ? { ...previous, stale: Date.now() - previous.updatedAt >= CURRENCY_RATES_TTL_MS }
+        : embeddedCurrencyRatesStatus();
+      return currencyRatesSnapshot;
+    }
+  })().finally(() => { pendingCurrencyRatesLoad = null; });
+  return pendingCurrencyRatesLoad;
+}
+
 function pricingCachePath() {
   return join(app.getPath("userData"), "dsh-pricing-cache.json");
 }
@@ -3678,6 +3763,9 @@ if (singleInstanceLock) {
 app.whenReady().then(() => {
   loadCompanionSettings();
   loadRuntimeStats();
+  currencyRatesSnapshot = loadCachedCurrencyRates();
+  void loadCurrencyRates(true);
+  currencyRatesRefreshTimer = setInterval(() => { void loadCurrencyRates(true); }, CURRENCY_RATES_TTL_MS);
   // Crash leftovers from network pet installs are temp files by definition.
   cleanupPetDownloads(petDownloadsDir());
   protocol.handle("pet-asset", request => {
@@ -3840,7 +3928,11 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:check-for-updates", () => checkForUpdates());
   ipcMain.handle("companion:install-update", () => installUpdate());
   ipcMain.handle("companion:get-app-version", () => app.getVersion());
-  ipcMain.handle("companion:get-token-stats", (_, force?: boolean) => getClaudeTokenStats(Boolean(force)));
+  ipcMain.handle("companion:get-token-stats", async (_, force?: boolean) => {
+    const refresh = Boolean(force);
+    const [stats, exchangeRates] = await Promise.all([getClaudeTokenStats(refresh), loadCurrencyRates(refresh)]);
+    return { ...stats, exchangeRates };
+  });
   ipcMain.handle("companion:get-dsh-analytics", (_, force?: boolean) => getDshAnalytics(Boolean(force)));
   ipcMain.handle("companion:get-recent-edits", (_, force?: boolean) => getClaudeRecentEdits(Boolean(force)));
   ipcMain.handle("companion:get-usage-rankings", (_, force?: boolean) => getClaudeUsageRankings(Boolean(force)));
@@ -3981,6 +4073,10 @@ app.on("before-quit", () => {
   if (startupWarmupTimer) {
     clearTimeout(startupWarmupTimer);
     startupWarmupTimer = null;
+  }
+  if (currencyRatesRefreshTimer) {
+    clearInterval(currencyRatesRefreshTimer);
+    currencyRatesRefreshTimer = null;
   }
   permissionBroker.shutdown();
   saveCompanionSettings(true);

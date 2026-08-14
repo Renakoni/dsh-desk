@@ -354,6 +354,27 @@
   box-shadow: none;
 }
 
+.settings-page .settings-choice-row {
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.settings-page .settings-choice-row > span {
+  color: var(--settings-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-page .currency-segmented {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .settings-page button.toggle {
   width: 100%;
   min-height: 42px;
@@ -1558,6 +1579,7 @@
   }
 
   .settings-page .theme-style-row,
+  .settings-page .settings-choice-row,
   .settings-page .notification-global-grid,
   .settings-page .monitor-field {
     grid-template-columns: 1fr;

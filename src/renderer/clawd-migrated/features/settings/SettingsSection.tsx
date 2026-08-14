@@ -5,7 +5,7 @@ import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
 import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
 import { NotificationRulesPanel } from "../../components/NotificationRulesPanel";
-import { GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
+import { CurrencySegmented, GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
 import { ConnectionManagement } from "./ConnectionManagement";
 import { PetThemeGrid } from "./PetThemeGrid";
 import { getPetTheme } from "../../utils/petThemes";
@@ -125,6 +125,7 @@ export function SettingsSection({
           </GroupCard>
 
           <GroupCard icon={<Shield size={18} />} title={t("sections.contentDisplay", "内容显示")}>
+            <CurrencySegmented value={settings.displayCurrency ?? "CNY"} onChange={displayCurrency => updateSettings({ displayCurrency })} />
             <Toggle label={t("appearance.hideSensitiveContent", "隐藏路径与内容")} checked={settings.hideSensitiveContent} onChange={hideSensitiveContent => updateSettings({ hideSensitiveContent })} />
             <p className="note">{t("appearance.hideSensitiveContentNote", "在界面和系统通知中隐藏文件路径与消息内容；仅改变屏幕上的显示，不会删除或加密任何本地数据。权限确认仍会显示决策所需的详情。")}</p>
           </GroupCard>

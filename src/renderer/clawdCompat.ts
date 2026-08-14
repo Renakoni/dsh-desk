@@ -512,7 +512,7 @@ export function installClawdCompat() {
     installUpdate: async () => undefined,
     getUpdateStatus: async () => updateStatus(),
     getAppVersion: async () => "0.0.0-dev",
-    getTokenStats: async () => ({ sessions: [], daily: [], modelTotals: [], dailyTotals: [], projectTotals: [], recentRequests: [], totalTokens: 0, totalCostUsd: 0, totalSessions: 0, totalRequests: 0, cacheHitRatio: 0, pricing: { source: "embedded", sources: ["embedded"], updatedAt: 0, stale: true }, lastScannedAt: Date.now(), scanning: false }),
+    getTokenStats: async () => ({ sessions: [], daily: [], modelTotals: [], dailyTotals: [], projectTotals: [], recentRequests: [], totalTokens: 0, totalCostUsd: 0, totalSessions: 0, totalRequests: 0, cacheHitRatio: 0, pricing: { source: "embedded", sources: ["embedded"], updatedAt: 0, stale: true }, exchangeRates: { base: "USD", rates: { CNY: 7, USD: 1, EUR: 0.9 }, source: "embedded", updatedAt: 0, stale: true }, lastScannedAt: Date.now(), scanning: false }),
     getDshAnalytics: async () => ({
       totals: { events: 171, sessions: 7, turns: 9, steps: 42, toolCalls: 78, failedToolCalls: 2, permissionRequests: 3, permissionApproved: 2, permissionDenied: 1, llmMs: 409_422, toolMs: 665_000, ttftMs: 103_000, ttftSteps: 42, decodeMs: 306_422, decodeTokens: 42_117 },
       daily: Array.from({ length: 28 }, (_, index) => ({
@@ -544,6 +544,7 @@ export function installClawdCompat() {
       hourlyActivity: new Array(24).fill(0),
       dailyHourlyActivity: {},
       dailyToolUsage: {},
+      dailyTools: {},
       sessionRoot: "Development sessions",
       lastScannedAt: Date.now()
     }),

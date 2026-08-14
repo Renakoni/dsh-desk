@@ -102,6 +102,7 @@ describe("DSH native session scanning", () => {
     expect(result.analytics.daily).toEqual([expect.objectContaining({ sessions: 1, turns: 1, steps: 1, toolCalls: 1, totalTokens: 170 })]);
     expect(result.analytics.hourlyActivity.reduce((sum, count) => sum + count, 0)).toBe(11);
     expect(Object.values(result.analytics.dailyToolUsage)[0]).toEqual({ edit: 1 });
+    expect(Object.values(result.analytics.dailyTools)[0]).toEqual([expect.objectContaining({ name: "edit", calls: 1, errors: 0, durationMs: 300 })]);
     expect(result.requestIds.has("session-one:8")).toBe(true);
   });
 

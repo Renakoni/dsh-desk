@@ -1,17 +1,19 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Code2, FolderOpen, Gauge, HardDrive, History, Trash2 } from "lucide-react";
+import { Code2, FolderOpen, Gauge, HardDrive, History, Trash2, Wrench } from "lucide-react";
 import type { DshAnalyticsSnapshot } from "../../../../shared/dshAnalytics";
+import type { DisplayCurrency } from "../../../../shared/currency";
 import { useI18n } from "../../useI18n";
-import { dshAnalyticsToAppStats, StatsPanel } from "../../components/StatsPanel";
+import { StatsPanel } from "../../components/StatsPanel";
 import { TokenPanel } from "./TokenPanel";
-import { DshTrajectoryPanel } from "./DshTrajectoryPanel";
+import { DshToolStatsPanel } from "./DshTrajectoryPanel";
 import { RecentEditsPanel } from "./RecentEditsPanel";
 import { ConfirmDialog } from "../../components/dsh-routing/ConfirmDialog";
 
-function DataSectionInner({ persistedStats, hideSensitiveContent, onResetStats }: {
+function DataSectionInner({ persistedStats, hideSensitiveContent, displayCurrency = "CNY", onResetStats }: {
   persistedStats: any;
   hideSensitiveContent: boolean;
+  displayCurrency?: DisplayCurrency;
   onResetStats: () => Promise<void>;
 }) {
   const { t, locale } = useI18n();
@@ -24,7 +26,6 @@ function DataSectionInner({ persistedStats, hideSensitiveContent, onResetStats }
   const [dshAnalyticsLoading, setDshAnalyticsLoading] = useState(false);
   const [dshAnalyticsError, setDshAnalyticsError] = useState<string | null>(null);
   const totalStatEvents = useMemo(() => Object.values(persistedStats?.eventTypeCounts ?? {}).reduce((sum: number, count) => sum + Number(count || 0), 0), [persistedStats]);
-  const runtimeStats = useMemo(() => dshAnalytics ? dshAnalyticsToAppStats(dshAnalytics) : null, [dshAnalytics]);
 
   useEffect(() => {
     void window.companion.getDataDirectory().then(setDataDirectory).catch(() => setDataDirectory(""));
@@ -88,31 +89,7 @@ function DataSectionInner({ persistedStats, hideSensitiveContent, onResetStats }
           </div>
           <Gauge size={18} />
         </header>
-        {runtimeStats
-          ? <StatsPanel stats={runtimeStats} />
-          : <p className="note">{dshAnalyticsError ? `${zh ? "扫描失败" : "Scan failed"}: ${dshAnalyticsError}` : t("common.loading", "加载中...")}</p>}
-      </section>
-
-      <section className="workbench-section data-token-section">
-        <header className="workbench-section-head">
-          <div>
-            <span>DeepSeek Harness</span>
-            <h2>{t("sections.tokenUsage", "Token 用量")}</h2>
-          </div>
-          <Code2 size={18} />
-        </header>
-        <TokenPanel hideSensitiveContent={hideSensitiveContent} />
-      </section>
-
-      <section className="workbench-section data-trajectory-section">
-        <header className="workbench-section-head">
-          <div>
-            <span>DeepSeek Harness</span>
-            <h2>{zh ? "执行轨迹" : "Execution trajectories"}</h2>
-          </div>
-          <Activity size={18} />
-        </header>
-        <DshTrajectoryPanel
+        <StatsPanel
           snapshot={dshAnalytics}
           loading={dshAnalyticsLoading}
           error={dshAnalyticsError}
@@ -122,10 +99,33 @@ function DataSectionInner({ persistedStats, hideSensitiveContent, onResetStats }
         />
       </section>
 
+      <section className="workbench-section data-token-section">
+        <header className="workbench-section-head">
+          <div>
+            <h2>{t("sections.tokenUsage", "Token 用量")}</h2>
+          </div>
+          <Code2 size={18} />
+        </header>
+        <TokenPanel hideSensitiveContent={hideSensitiveContent} displayCurrency={displayCurrency} />
+      </section>
+
+      <section className="workbench-section data-tool-stats-section">
+        <header className="workbench-section-head">
+          <div>
+            <h2>{zh ? "工具统计" : "Tool stats"}</h2>
+          </div>
+          <Wrench size={18} />
+        </header>
+        <DshToolStatsPanel
+          snapshot={dshAnalytics}
+          loading={dshAnalyticsLoading}
+          error={dshAnalyticsError}
+        />
+      </section>
+
       <section className="workbench-section data-edits-section">
         <header className="workbench-section-head">
           <div>
-            <span>DeepSeek Harness</span>
             <h2>{t("sections.recentEdits", "最近编辑")}</h2>
           </div>
           <History size={18} />

@@ -967,6 +967,7 @@ function SettingsApp() {
             <DataSection
               persistedStats={persistedStats}
               hideSensitiveContent={settings.hideSensitiveContent}
+              displayCurrency={settings.displayCurrency ?? "CNY"}
               onResetStats={handleResetStats}
             />
           </div>
