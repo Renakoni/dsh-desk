@@ -17,6 +17,7 @@ type ProviderListProps = {
   loaded: boolean;
   emptyLabel: string;
   onDragEnd: (event: DragEndEvent) => void;
+  onToggle: (provider: DshProvider) => void;
   onSwitch: (provider: DshProvider) => void;
   onEdit: (provider: DshProvider) => void;
   onDuplicate: (provider: DshProvider) => void;
@@ -31,6 +32,7 @@ const ProviderList = memo(function ProviderList({
   loaded,
   emptyLabel,
   onDragEnd,
+  onToggle,
   onSwitch,
   onEdit,
   onDuplicate,
@@ -54,6 +56,7 @@ const ProviderList = memo(function ProviderList({
               isCurrent={provider.id === currentId}
               canRemove={!provider.isOfficial && provider.id !== currentId}
               testing={testingId === provider.id}
+              onToggle={onToggle}
               onSwitch={onSwitch}
               onEdit={onEdit}
               onDuplicate={onDuplicate}
@@ -81,6 +84,7 @@ function createEmptyProvider(name: string): DshProviderSaveInput {
     models: [],
     inheritModels: false,
     catalogProvider: false,
+    enabled: true,
     category: "custom",
     createdAt: Date.now(),
     iconColor: "#f97316"
@@ -96,6 +100,7 @@ function editDraft(provider: DshProvider): DshProviderSaveInput {
     ...(provider.modelsInherited ? {} : { models: provider.models.map(model => ({ ...model })) }),
     inheritModels: provider.modelsInherited,
     catalogProvider: provider.catalogProvider,
+    enabled: provider.enabled,
     websiteUrl: provider.websiteUrl,
     apiKeyUrl: provider.apiKeyUrl,
     category: provider.category,
@@ -154,8 +159,9 @@ export function DshRoutingPanel() {
   }, [orderOverride, providers]);
   const currentProvider = providers.find(provider => provider.id === currentId) ?? sortedProviders[0];
   const currentModel = listing?.defaultModel || currentProvider?.defaultModel || currentProvider?.preferredModel || currentProvider?.models[0]?.id || "";
+  const enabledCount = providers.filter(provider => provider.enabled).length;
   const providerSummary = currentProvider
-    ? formatI18n(t("routing.providerCountCurrent", "{count} 个供应商 · 当前 {name}"), { count: sortedProviders.length, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
+    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 当前 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
     : formatI18n(t("routing.providerCount", "{count} 个供应商"), { count: sortedProviders.length });
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -208,6 +214,19 @@ export function DshRoutingPanel() {
     const result = await companion.duplicateDshProvider(provider.id);
     if (result.ok) toast.success(t("routing.providerDuplicated", "已复制供应商"));
     else toast.error(result.error ?? t("routing.duplicateFailed", "复制失败"));
+    await refresh();
+  }, [companion, refresh, t]);
+
+  const handleToggle = useCallback(async (provider: DshProvider) => {
+    const enabled = !provider.enabled;
+    const result = await companion.setDshProviderEnabled(provider.id, enabled);
+    if (!result.ok) {
+      toast.error(result.error ?? t("dshProviders.toggleFailed", "供应商状态更新失败"));
+      return;
+    }
+    toast.success(enabled
+      ? t("dshProviders.providerEnabled", "供应商已启用")
+      : t("dshProviders.providerDisabled", "供应商已停用"));
     await refresh();
   }, [companion, refresh, t]);
 
@@ -278,6 +297,7 @@ export function DshRoutingPanel() {
         loaded={Boolean(listing)}
         emptyLabel={t("routing.noProviders", "还没有供应商，点击右上角添加")}
         onDragEnd={handleDragEnd}
+        onToggle={provider => { void handleToggle(provider); }}
         onSwitch={handleSwitch}
         onEdit={openEditProvider}
         onDuplicate={handleDuplicate}

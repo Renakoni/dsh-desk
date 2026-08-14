@@ -21,6 +21,7 @@ import type {
   DshProviderProtocol,
   DshProviderSaveInput
 } from "../../../../shared/dshProviders";
+import { DEFAULT_DSH_REASONING_EFFORTS } from "../../../../shared/dshProviders";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { IconPicker } from "./IconPicker";
@@ -159,6 +160,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [inheritModels, setInheritModels] = useState(provider.inheritModels === true);
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
+  const [reasoningEnabled, setReasoningEnabled] = useState(() => !(provider.models?.length && provider.models.every(model => model.reasoningEfforts === false)));
   const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -180,6 +182,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(preset.inheritModels);
     setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
+    setReasoningEnabled(true);
     setPreferredModel(preset.preferredModel ?? preset.models[0]?.id ?? "");
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
@@ -200,6 +203,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(false);
     setModels([]);
     setCatalogModels([]);
+    setReasoningEnabled(true);
     setPreferredModel("");
     setBaseUrl("");
     setProtocol("openai-completions");
@@ -247,7 +251,17 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   }
 
   function buildDraft(): DshProviderSaveInput {
-    const normalizedModels = models.map(model => ({ ...model, id: model.id.trim() })).filter(model => model.id);
+    const managesReasoning = !official
+      && !catalogProvider
+      && (protocol === "openai-completions" || protocol === "openai-responses");
+    const normalizedModels = models.map(model => {
+      const normalized = { ...model, id: model.id.trim() };
+      if (!managesReasoning) return normalized;
+      if (!reasoningEnabled) return { ...normalized, reasoningEfforts: false as const };
+      return normalized.reasoningEfforts === undefined
+        ? { ...normalized, reasoningEfforts: { ...DEFAULT_DSH_REASONING_EFFORTS } }
+        : normalized;
+    }).filter(model => model.id);
     const normalizedPreferredModel = inheritModels
       ? preferredModel
       : normalizedModels.some(model => model.id === preferredModel) ? preferredModel : normalizedModels[0]?.id;
@@ -259,6 +273,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       ...(inheritModels ? {} : { models: normalizedModels }),
       inheritModels,
       catalogProvider,
+      enabled: provider.enabled !== false,
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
@@ -423,6 +438,13 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                         if (!inherit && models.length === 0) setModels(catalogModels.map(model => ({ ...model })));
                       }} />
                       <span>{t("dshProviders.useCatalog", "使用 DSH 内置模型目录")}</span>
+                    </label>
+                  ) : null}
+
+                  {!official && !catalogProvider && !inheritModels && protocol !== "anthropic-messages" ? (
+                    <label className="ccs-inline-check-row">
+                      <input type="checkbox" checked={reasoningEnabled} onChange={event => setReasoningEnabled(event.target.checked)} />
+                      <span>{t("dshProviders.reasoningEfforts", "启用思考强度")}</span>
                     </label>
                   ) : null}
 

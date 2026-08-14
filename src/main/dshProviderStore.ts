@@ -4,7 +4,9 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { Document, parseDocument } from "yaml";
 import {
+  DEFAULT_DSH_REASONING_EFFORTS,
   DSH_PROVIDER_PROTOCOLS,
+  DSH_REASONING_EFFORTS,
   type DshCatalogProvider,
   type DshProvider,
   type DshProviderListResult,
@@ -23,6 +25,8 @@ const OFFICIAL_BASE_URL = "https://api.deepseek.com";
 const OFFICIAL_CREDENTIAL = "DEEPSEEK_API_KEY";
 const DEFAULT_RUNTIME_URL = "http://127.0.0.1:3080";
 const DSH_DESK_STATE_FILE = ".dsh-desk-providers.json";
+const DSH_HOME_PATCH_FILE = "cordis.patch.yml";
+const OFFICIAL_PLUGIN_ROW = "llm-deepseek";
 const DEFAULT_MODELS: DshProviderModel[] = [
   { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", contextWindow: 1_000_000 },
   { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", contextWindow: 1_000_000 }
@@ -36,10 +40,16 @@ type DshProviderStoreOptions = {
   runtimeUrl?: string | false;
 };
 
+type DshStoredProvider = {
+  profile: JsonObject;
+  catalogProvider?: boolean;
+};
+
 type DshDeskState = {
-  version: 1;
+  version: 2;
   order: string[];
   providers: Record<string, DshProviderUiMeta>;
+  disabledProviders: Record<string, DshStoredProvider>;
 };
 
 type RuntimeProvider = {
@@ -77,6 +87,10 @@ function deskStatePath(options?: DshProviderStoreOptions) {
   return join(dshHome(options), DSH_DESK_STATE_FILE);
 }
 
+function homePatchPath(options?: DshProviderStoreOptions) {
+  return join(dshHome(options), DSH_HOME_PATCH_FILE);
+}
+
 function isObject(value: unknown): value is JsonObject {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -107,6 +121,16 @@ function parseYaml(text: string | undefined, filePath: string, secret = false) {
   }
   const root = document.toJS() ?? {};
   if (!isObject(root)) throw new Error(`DeepSeek Harness YAML root must be a mapping at ${filePath}`);
+  return { document, root };
+}
+
+function parsePatchYaml(text: string | undefined, filePath: string) {
+  const document = text === undefined ? new Document([]) : parseDocument(text, { uniqueKeys: true });
+  if (document.errors.length > 0) {
+    throw new Error(`DeepSeek Harness patch file is invalid at ${filePath}: ${document.errors[0]?.code ?? "YAML_ERROR"}`);
+  }
+  const root = document.toJS() ?? [];
+  if (!Array.isArray(root)) throw new Error(`DeepSeek Harness patch root must be a sequence at ${filePath}`);
   return { document, root };
 }
 
@@ -153,8 +177,34 @@ async function mutateYaml(filePath: string, mutate: (document: ReturnType<typeof
   });
 }
 
+async function mutatePatchYaml(filePath: string, mutate: (document: ReturnType<typeof parseDocument>, rows: unknown[]) => void) {
+  await withFileLock(filePath, async () => {
+    const { document, root } = parsePatchYaml(await readOptional(filePath), filePath);
+    mutate(document as ReturnType<typeof parseDocument>, root);
+    await writeAtomic(filePath, document.toString());
+  });
+}
+
+function officialProviderEnabled(patchRows: unknown[]) {
+  let disabled: boolean | undefined;
+  for (const row of patchRows) {
+    if (!isObject(row) || row.id !== OFFICIAL_PLUGIN_ROW || typeof row.disabled !== "boolean") continue;
+    disabled = row.disabled;
+  }
+  return disabled !== true;
+}
+
+function setOfficialProviderPatch(document: ReturnType<typeof parseDocument>, rows: unknown[], enabled: boolean) {
+  let targetIndex = -1;
+  rows.forEach((row, index) => {
+    if (isObject(row) && row.id === OFFICIAL_PLUGIN_ROW) targetIndex = index;
+  });
+  if (targetIndex >= 0) document.setIn([targetIndex, "disabled"], !enabled);
+  else document.add({ id: OFFICIAL_PLUGIN_ROW, disabled: !enabled });
+}
+
 function emptyDeskState(): DshDeskState {
-  return { version: 1, order: [], providers: {} };
+  return { version: 2, order: [], providers: {}, disabledProviders: {} };
 }
 
 async function readDeskState(options?: DshProviderStoreOptions): Promise<DshDeskState> {
@@ -165,7 +215,17 @@ async function readDeskState(options?: DshProviderStoreOptions): Promise<DshDesk
     if (!isObject(parsed)) return emptyDeskState();
     const order = Array.isArray(parsed.order) ? parsed.order.filter((value): value is string => typeof value === "string") : [];
     const providers = isObject(parsed.providers) ? parsed.providers as Record<string, DshProviderUiMeta> : {};
-    return { version: 1, order, providers };
+    const disabledProviders: Record<string, DshStoredProvider> = {};
+    if (isObject(parsed.disabledProviders)) {
+      for (const [id, stored] of Object.entries(parsed.disabledProviders)) {
+        if (!isObject(stored) || !isObject(stored.profile)) continue;
+        disabledProviders[id] = {
+          profile: stored.profile,
+          ...(stored.catalogProvider === true ? { catalogProvider: true } : {})
+        };
+      }
+    }
+    return { version: 2, order, providers, disabledProviders };
   } catch {
     return emptyDeskState();
   }
@@ -185,11 +245,23 @@ function modelList(value: unknown, fallback: DshProviderModel[] = []): DshProvid
   const models: DshProviderModel[] = [];
   for (const item of value) {
     if (!isObject(item) || typeof item.id !== "string" || !item.id.trim()) continue;
+    const configuredEfforts = item.reasoningEfforts;
+    const reasoningEfforts = configuredEfforts === false
+      ? false
+      : isObject(configuredEfforts)
+        ? Object.fromEntries(DSH_REASONING_EFFORTS.flatMap(effort => {
+          const wireValue = configuredEfforts[effort];
+          return typeof wireValue === "string" || (effort === "off" && wireValue === null)
+            ? [[effort, wireValue]]
+            : [];
+        }))
+        : undefined;
     models.push({
       id: item.id.trim(),
       ...(typeof item.name === "string" && item.name.trim() ? { name: item.name.trim() } : {}),
       ...(typeof item.contextWindow === "number" && Number.isSafeInteger(item.contextWindow) && item.contextWindow > 0 ? { contextWindow: item.contextWindow } : {}),
-      ...(typeof item.maxTokens === "number" && Number.isSafeInteger(item.maxTokens) && item.maxTokens > 0 ? { maxTokens: item.maxTokens } : {})
+      ...(typeof item.maxTokens === "number" && Number.isSafeInteger(item.maxTokens) && item.maxTokens > 0 ? { maxTokens: item.maxTokens } : {}),
+      ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {})
     });
   }
   return models;
@@ -286,8 +358,10 @@ function providerFromProfile(
   defaultProvider: string,
   defaultModel: string,
   meta: DshProviderUiMeta,
+  enabled: boolean,
   runtime?: RuntimeProvider,
-  runtimeGroup?: RuntimeModelGroup
+  runtimeGroup?: RuntimeModelGroup,
+  catalogProviderHint = false
 ): DshProvider {
   const protocol = typeof profile.api === "string" && DSH_PROVIDER_PROTOCOLS.includes(profile.api as DshProviderProtocol)
     ? profile.api as DshProviderProtocol
@@ -303,8 +377,9 @@ function providerFromProfile(
     ...(protocol ? { protocol } : {}),
     models: modelsInherited && runtimeGroup ? runtimeGroup.models : configuredModels,
     modelsInherited,
-    catalogProvider: runtime?.declared === false,
-    runtimeActive: runtime?.active ?? false,
+    catalogProvider: catalogProviderHint || runtime?.declared === false,
+    enabled,
+    runtimeActive: enabled && (runtime?.active ?? false),
     ...(credentialRef ? { credentialRef } : {}),
     hasCredential: credentialRef ? !!(process.env[credentialRef] || credentials.get(credentialRef)) : false,
     isOfficial: false,
@@ -316,10 +391,12 @@ function providerFromProfile(
 export async function listDshProviders(options?: DshProviderStoreOptions): Promise<DshProviderListResult> {
   const settingsFile = settingsPath(options);
   const credentialsFile = credentialsPath(options);
+  const patchFile = homePatchPath(options);
   try {
-    const [{ root }, credentialDocument, deskState, runtime] = await Promise.all([
+    const [{ root }, credentialDocument, patchDocument, deskState, runtime] = await Promise.all([
       readOptional(settingsFile).then(text => parseYaml(text, settingsFile)),
       readOptional(credentialsFile).then(text => parseYaml(text, credentialsFile, true)),
+      readOptional(patchFile).then(text => parsePatchYaml(text, patchFile)),
       readDeskState(options),
       runtimeSnapshot(options)
     ]);
@@ -333,6 +410,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
     const officialRef = typeof deepseek.apiKeyEnv === "string" ? deepseek.apiKeyEnv : OFFICIAL_CREDENTIAL;
     const officialGroup = groupById.get(OFFICIAL_PROVIDER);
     const officialMeta = deskState.providers[OFFICIAL_PROVIDER] ?? {};
+    const officialEnabled = officialProviderEnabled(patchDocument.root);
     const providers: DshProvider[] = [{
       ...officialMeta,
       id: OFFICIAL_PROVIDER,
@@ -342,10 +420,13 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       models: Array.isArray(deepseek.models) ? modelList(deepseek.models) : officialGroup?.models ?? DEFAULT_MODELS,
       modelsInherited: !Array.isArray(deepseek.models),
       catalogProvider: true,
-      runtimeActive: runtimeById.get(OFFICIAL_PROVIDER)?.active ?? true,
+      enabled: officialEnabled,
+      runtimeActive: officialEnabled && (runtimeById.get(OFFICIAL_PROVIDER)?.active ?? true),
       credentialRef: officialRef,
       hasCredential: !!(process.env[officialRef] || credentials.get(officialRef)),
       isOfficial: true,
+      icon: "deepseek",
+      iconColor: "#4D6BFE",
       isDefault: defaultProvider === OFFICIAL_PROVIDER,
       ...(defaultProvider === OFFICIAL_PROVIDER ? { defaultModel } : {})
     }];
@@ -359,8 +440,24 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
         defaultProvider,
         defaultModel,
         deskState.providers[id] ?? {},
+        true,
         runtimeById.get(id),
         groupById.get(id)
+      ));
+    }
+    for (const [id, stored] of Object.entries(deskState.disabledProviders)) {
+      if (id in piProviders) continue;
+      providers.push(providerFromProfile(
+        id,
+        stored.profile,
+        credentials,
+        defaultProvider,
+        defaultModel,
+        deskState.providers[id] ?? {},
+        false,
+        runtimeById.get(id),
+        groupById.get(id),
+        stored.catalogProvider === true
       ));
     }
     const order = new Map(deskState.order.map((id, index) => [id, index]));
@@ -451,18 +548,67 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     protocol,
     models,
     inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
+    catalogProvider,
+    enabled: input.enabled !== false,
     apiKey,
     meta
   };
 }
 
-function serializeModels(models: DshProviderModel[]) {
-  return models.map(model => ({
-    id: model.id,
-    ...(model.name ? { name: model.name } : {}),
-    ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
-    ...(model.maxTokens ? { maxTokens: model.maxTokens } : {})
-  }));
+function serializeModels(models: DshProviderModel[], addDefaultReasoningEfforts = false) {
+  return models.map(model => {
+    const reasoningEfforts = model.reasoningEfforts
+      ?? (addDefaultReasoningEfforts ? DEFAULT_DSH_REASONING_EFFORTS : undefined);
+    return {
+      id: model.id,
+      ...(model.name ? { name: model.name } : {}),
+      ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+      ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
+      ...(reasoningEfforts === undefined
+        ? {}
+        : { reasoningEfforts: reasoningEfforts === false ? false : { ...reasoningEfforts } })
+    };
+  });
+}
+
+function piProviderProfile(
+  current: JsonObject,
+  normalized: ReturnType<typeof normalizeSaveInput>,
+  credentialRef: string | undefined
+) {
+  const next: JsonObject = {
+    ...current,
+    displayName: normalized.name,
+    ...(credentialRef ? { apiKeyEnv: credentialRef } : {})
+  };
+  if (!credentialRef) delete next.apiKeyEnv;
+  if (normalized.protocol) next.api = normalized.protocol;
+  else delete next.api;
+  if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
+  else delete next.baseURL;
+  if (normalized.inheritModels) delete next.models;
+  else next.models = serializeModels(
+    normalized.models,
+    !normalized.catalogProvider && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses")
+  );
+  return next;
+}
+
+function updateDeskProviderMeta(state: DshDeskState, id: string, meta: DshProviderUiMeta) {
+  const existingMeta = state.providers[id] ?? {};
+  state.providers[id] = {
+    ...existingMeta,
+    ...meta,
+    createdAt: meta.createdAt ?? existingMeta.createdAt ?? Date.now()
+  };
+  if (!state.order.includes(id)) state.order.push(id);
+}
+
+function fallbackSelection(providers: DshProvider[], excludingId: string) {
+  const provider = providers.find(item => item.id !== excludingId && item.enabled);
+  if (!provider) return undefined;
+  const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id;
+  return model ? { provider: provider.id, model } : undefined;
 }
 
 async function setCredential(ref: string, value: string, options?: DshProviderStoreOptions) {
@@ -473,16 +619,22 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
   try {
     const normalized = normalizeSaveInput(input);
     const settingsFile = settingsPath(options);
-    const { root } = parseYaml(await readOptional(settingsFile), settingsFile);
+    const [{ root }, deskState] = await Promise.all([
+      readOptional(settingsFile).then(text => parseYaml(text, settingsFile)),
+      readDeskState(options)
+    ]);
+    const configured = asObject(asObject(asObject(root["llm-pi-ai"]).providers)[normalized.id]);
+    const disabled = deskState.disabledProviders[normalized.id];
     const existing = normalized.id === OFFICIAL_PROVIDER
       ? asObject(root["llm-deepseek"])
-      : asObject(asObject(asObject(root["llm-pi-ai"]).providers)[normalized.id]);
+      : Object.keys(configured).length > 0 ? configured : disabled?.profile ?? {};
     const existingRef = typeof existing.apiKeyEnv === "string" && existing.apiKeyEnv ? existing.apiKeyEnv : undefined;
     const credentialRef = existingRef
       ?? (normalized.id === OFFICIAL_PROVIDER ? OFFICIAL_CREDENTIAL : normalized.apiKey ? deriveDshCredentialRef(normalized.id) : undefined);
-    await mutateYaml(settingsFile, document => {
-      const currentRoot = asObject(document.toJS());
-      if (normalized.id === OFFICIAL_PROVIDER) {
+    if (normalized.apiKey && credentialRef) await setCredential(credentialRef, normalized.apiKey, options);
+    if (normalized.id === OFFICIAL_PROVIDER) {
+      await mutateYaml(settingsFile, document => {
+        const currentRoot = asObject(document.toJS());
         const current = asObject(currentRoot["llm-deepseek"]);
         const next: JsonObject = {
           ...current,
@@ -492,35 +644,93 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
         if (normalized.inheritModels) delete next.models;
         else next.models = serializeModels(normalized.models);
         document.setIn(["llm-deepseek"], next);
-        return;
+      });
+      await mutateDeskState(options, state => {
+        updateDeskProviderMeta(state, normalized.id, normalized.meta);
+        delete state.disabledProviders[normalized.id];
+      });
+    } else {
+      const next = piProviderProfile(existing, normalized, credentialRef);
+      const catalogProvider = normalized.catalogProvider || disabled?.catalogProvider === true;
+      if (normalized.enabled) {
+        await mutateYaml(settingsFile, document => document.setIn(["llm-pi-ai", "providers", normalized.id], next));
+        await mutateDeskState(options, state => {
+          updateDeskProviderMeta(state, normalized.id, normalized.meta);
+          delete state.disabledProviders[normalized.id];
+        });
+      } else {
+        await mutateDeskState(options, state => {
+          updateDeskProviderMeta(state, normalized.id, normalized.meta);
+          state.disabledProviders[normalized.id] = {
+            profile: next,
+            ...(catalogProvider ? { catalogProvider: true } : {})
+          };
+        });
+        await mutateYaml(settingsFile, document => {
+          document.deleteIn(["llm-pi-ai", "providers", normalized.id]);
+          const selection = asObject(asObject(document.toJS())["agent-default-model"]);
+          if (selection.provider === normalized.id) {
+            document.setIn(["agent-default-model"], { provider: OFFICIAL_PROVIDER, model: DEFAULT_MODELS[0].id });
+          }
+        });
       }
-      const current = asObject(asObject(asObject(currentRoot["llm-pi-ai"]).providers)[normalized.id]);
-      const next: JsonObject = {
-        ...current,
-        displayName: normalized.name,
-        ...(credentialRef ? { apiKeyEnv: credentialRef } : {})
-      };
-      if (normalized.protocol) next.api = normalized.protocol;
-      else delete next.api;
-      if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
-      else delete next.baseURL;
-      if (normalized.inheritModels) delete next.models;
-      else next.models = serializeModels(normalized.models);
-      document.setIn(["llm-pi-ai", "providers", normalized.id], next);
-    });
-    if (normalized.apiKey && credentialRef) await setCredential(credentialRef, normalized.apiKey, options);
-    await mutateDeskState(options, state => {
-      const existingMeta = state.providers[normalized.id] ?? {};
-      state.providers[normalized.id] = {
-        ...existingMeta,
-        ...normalized.meta,
-        createdAt: normalized.meta.createdAt ?? existingMeta.createdAt ?? Date.now()
-      };
-      if (!state.order.includes(normalized.id)) state.order.push(normalized.id);
-    });
+    }
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === normalized.id);
     return provider ? { ok: true, provider } : { ok: false, error: listing.error ?? "Provider was saved but could not be reloaded" };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
+export async function setDshProviderEnabled(id: string, enabled: boolean, options?: DshProviderStoreOptions): Promise<DshProviderMutationResult> {
+  try {
+    const listing = await listDshProviders(options);
+    const target = listing.providers.find(provider => provider.id === id);
+    if (!target) throw new Error("Provider not found");
+    if (target.enabled === enabled) return { ok: true, provider: target };
+    const settingsFile = settingsPath(options);
+    if (id === OFFICIAL_PROVIDER) {
+      if (!enabled && listing.defaultProvider === id) {
+        const fallback = fallbackSelection(listing.providers, id);
+        if (fallback) await mutateYaml(settingsFile, document => document.setIn(["agent-default-model"], fallback));
+      }
+      await mutatePatchYaml(homePatchPath(options), (document, rows) => {
+        setOfficialProviderPatch(document, rows, enabled);
+      });
+      const updated = await listDshProviders(options);
+      const provider = updated.providers.find(item => item.id === id);
+      return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
+    }
+    const [{ root }, deskState] = await Promise.all([
+      readOptional(settingsFile).then(text => parseYaml(text, settingsFile)),
+      readDeskState(options)
+    ]);
+    if (enabled) {
+      const stored = deskState.disabledProviders[id];
+      if (!stored) throw new Error("Disabled provider profile not found");
+      await mutateYaml(settingsFile, document => document.setIn(["llm-pi-ai", "providers", id], stored.profile));
+      await mutateDeskState(options, state => { delete state.disabledProviders[id]; });
+    } else {
+      const profile = asObject(asObject(asObject(root["llm-pi-ai"]).providers)[id]);
+      if (Object.keys(profile).length === 0) throw new Error("Configured provider profile not found");
+      await mutateDeskState(options, state => {
+        state.disabledProviders[id] = {
+          profile,
+          ...(target.catalogProvider ? { catalogProvider: true } : {})
+        };
+      });
+      await mutateYaml(settingsFile, document => {
+        document.deleteIn(["llm-pi-ai", "providers", id]);
+        if (listing.defaultProvider === id) {
+          const fallback = fallbackSelection(listing.providers, id);
+          if (fallback) document.setIn(["agent-default-model"], fallback);
+        }
+      });
+    }
+    const updated = await listDshProviders(options);
+    const provider = updated.providers.find(item => item.id === id);
+    return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -542,6 +752,7 @@ export async function deleteDshProvider(id: string, options?: DshProviderStoreOp
     if (ownedRef) await mutateYaml(credentialsPath(options), document => document.deleteIn([ownedRef]), true);
     await mutateDeskState(options, state => {
       delete state.providers[id];
+      delete state.disabledProviders[id];
       state.order = state.order.filter(providerId => providerId !== id);
     });
     return { ok: true };
@@ -565,18 +776,33 @@ export async function duplicateDshProvider(id: string, options?: DshProviderStor
   try {
     if (id === OFFICIAL_PROVIDER) throw new Error("The official DeepSeek provider is already available through its native route");
     const filePath = settingsPath(options);
-    const { root } = parseYaml(await readOptional(filePath), filePath);
+    const [{ root }, deskState] = await Promise.all([
+      readOptional(filePath).then(text => parseYaml(text, filePath)),
+      readDeskState(options)
+    ]);
     const providers = asObject(asObject(root["llm-pi-ai"]).providers);
-    const source = asObject(providers[id]);
+    const configured = asObject(providers[id]);
+    const stored = deskState.disabledProviders[id];
+    const sourceEnabled = Object.keys(configured).length > 0;
+    const source = sourceEnabled ? configured : stored?.profile ?? {};
     if (Object.keys(source).length === 0) throw new Error("Provider not found");
-    const nextId = copyId(id, new Set(Object.keys(providers)));
+    const nextId = copyId(id, new Set([...Object.keys(providers), ...Object.keys(deskState.disabledProviders)]));
     const sourceName = typeof source.displayName === "string" && source.displayName ? source.displayName : id;
-    await mutateYaml(filePath, document => {
-      document.setIn(["llm-pi-ai", "providers", nextId], { ...source, displayName: `${sourceName} Copy` });
-    });
+    const nextProfile = { ...source, displayName: `${sourceName} Copy` };
+    if (sourceEnabled) {
+      await mutateYaml(filePath, document => {
+        document.setIn(["llm-pi-ai", "providers", nextId], nextProfile);
+      });
+    }
     await mutateDeskState(options, state => {
       const sourceMeta = state.providers[id] ?? {};
       state.providers[nextId] = { ...sourceMeta, createdAt: Date.now() };
+      if (!sourceEnabled && stored) {
+        state.disabledProviders[nextId] = {
+          profile: nextProfile,
+          ...(stored.catalogProvider ? { catalogProvider: true } : {})
+        };
+      }
       const sourceIndex = state.order.indexOf(id);
       state.order.splice(sourceIndex >= 0 ? sourceIndex + 1 : state.order.length, 0, nextId);
     });
@@ -611,6 +837,7 @@ export async function switchDshProvider(id: string, model?: string, options?: Ds
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === id);
     if (!provider) throw new Error("Provider not found");
+    if (!provider.enabled) throw new Error("Provider is disabled");
     const selectedModel = model?.trim() || provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing.defaultModel;
     if (!selectedModel) throw new Error("No model is selected. Enter a model ID or choose one from the DSH catalog first");
     await mutateYaml(settingsPath(options), document => {

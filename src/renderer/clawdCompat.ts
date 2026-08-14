@@ -140,6 +140,7 @@ type CompanionApi = {
   deleteDshProvider: (id: string) => Promise<DshProviderMutationResult>;
   duplicateDshProvider: (id: string) => Promise<DshProviderMutationResult>;
   reorderDshProviders: (ids: string[]) => Promise<DshProviderMutationResult>;
+  setDshProviderEnabled: (id: string, enabled: boolean) => Promise<DshProviderMutationResult>;
   switchDshProvider: (id: string, model?: string) => Promise<DshProviderSwitchResult>;
   probeDshProvider: (payload: { id?: string; baseUrl?: string; protocol?: DshProviderProtocol | "deepseek-chat-completions"; apiKey?: string; mode?: "connectivity" | "models" }) => Promise<DshProviderProbeResult>;
   openClaudeProviderTerminal: (providerId: string, cwd: string) => Promise<{ ok: boolean; command: string; error?: string }>;
@@ -227,6 +228,7 @@ const mockDshProviders: DshProvider[] = [{
   ],
   modelsInherited: true,
   catalogProvider: true,
+  enabled: true,
   runtimeActive: true,
   credentialRef: "DEEPSEEK_API_KEY",
   hasCredential: false,
@@ -729,7 +731,8 @@ export function installClawdCompat() {
         models: input.models ?? [],
         modelsInherited: input.inheritModels === true || input.models === undefined,
         catalogProvider: input.catalogProvider === true,
-        runtimeActive: true,
+        enabled: input.enabled !== false,
+        runtimeActive: input.enabled !== false,
         credentialRef: id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
         hasCredential: !!input.apiKey,
         isOfficial: id === "deepseek-official",
@@ -757,9 +760,25 @@ export function installClawdCompat() {
       mockDshProviders.sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id));
       return { ok: true };
     },
-    switchDshProvider: async (id, model) => {
+    setDshProviderEnabled: async (id, enabled) => {
       const provider = mockDshProviders.find(item => item.id === id);
       if (!provider) return { ok: false, error: "Provider not found" };
+      provider.enabled = enabled;
+      provider.runtimeActive = enabled;
+      if (!enabled && provider.isDefault) {
+        const fallback = mockDshProviders.find(item => item.id !== id && item.enabled);
+        provider.isDefault = false;
+        provider.defaultModel = undefined;
+        if (fallback) {
+          fallback.isDefault = true;
+          fallback.defaultModel = fallback.models[0]?.id;
+        }
+      }
+      return { ok: true, provider };
+    },
+    switchDshProvider: async (id, model) => {
+      const provider = mockDshProviders.find(item => item.id === id);
+      if (!provider || !provider.enabled) return { ok: false, error: "Provider not found or disabled" };
       const selectedModel = model || provider.models[0]?.id;
       mockDshProviders.forEach(item => { item.isDefault = item.id === id; item.defaultModel = item.id === id ? selectedModel : undefined; });
       return { ok: true, provider: id, model: selectedModel };

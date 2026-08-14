@@ -171,14 +171,19 @@
 .ccs-provider-titleline h3 { margin: 0; color: #f4efe7; font-size: 16px; font-weight: 800; line-height: 1; }
 .ccs-provider-titleline span { display: inline-flex; align-items: center; border-radius: 6px; padding: 2px 7px; background: rgba(148,163,184,.22); color: rgba(244,239,231,.78); font-size: 11px; font-weight: 900; }
 .ccs-provider-url { max-width: 360px; display: inline-flex; padding: 0; border: 0; background: transparent; color: #60a5fa; font-size: 14px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.ccs-provider-actions { margin-left: auto; flex: 0 0 auto; min-width: 228px; opacity: 0; pointer-events: none; visibility: hidden; transform: translateX(4px); transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s; }
+.ccs-provider-actions { margin-left: auto; flex: 0 0 auto; min-width: 264px; opacity: 0; pointer-events: none; visibility: hidden; transform: translateX(4px); transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s; }
 .ccs-provider-card:hover .ccs-provider-actions, .ccs-provider-card:focus-within .ccs-provider-actions { opacity: 1; pointer-events: auto; visibility: visible; transform: translateX(0); transition-delay: 0s; }
 .ccs-provider-actions-inner { display: flex; align-items: center; gap: 6px; }
 .ccs-provider-action-wrap { display: inline-flex; }
 .ccs-provider-action-wrap.disabled { cursor: not-allowed; }
 .ccs-provider-main-action { width: 72px; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 8px; color: #fff; background: #3b82f6; font-size: 13px; font-weight: 800; }
 .ccs-provider-main-action:hover { background: #2563eb; }
+.ccs-provider-main-action.disable { color: rgba(244,239,231,.74); background: rgba(148,163,184,.24); }
+.ccs-provider-main-action.disable:hover { color: #fff; background: rgba(239,68,68,.78); }
+.ccs-provider-main-action:disabled { opacity: .55; cursor: not-allowed; }
 .ccs-provider-main-action.current { color: rgba(244,239,231,.54); background: rgba(148,163,184,.24); }
+.ccs-provider-titleline .ccs-provider-state.current { color: #93c5fd; background: rgba(59,130,246,.2); }
+.ccs-provider-titleline .ccs-provider-state.disabled { color: rgba(244,239,231,.54); background: rgba(148,163,184,.14); }
 .ccs-provider-icon-actions { display: flex; align-items: center; gap: 4px; }
 .ccs-provider-icon-actions button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: rgba(244,239,231,.54); }
 .ccs-provider-icon-actions button:hover { color: #f4efe7; background: rgba(255,255,255,.08); }

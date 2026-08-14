@@ -10,6 +10,7 @@ import {
   probeDshProvider,
   reorderDshProviders,
   saveDshProvider,
+  setDshProviderEnabled,
   switchDshProvider
 } from "../src/main/dshProviderStore";
 
@@ -45,6 +46,9 @@ describe("DSH provider settings", () => {
         id: "deepseek-official",
         baseUrl: "https://api.deepseek.com",
         protocol: "deepseek-chat-completions",
+        icon: "deepseek",
+        iconColor: "#4D6BFE",
+        enabled: true,
         isDefault: true,
         hasCredential: false,
         models: [
@@ -72,6 +76,11 @@ describe("DSH provider settings", () => {
     expect(settings).toContain("llm-pi-ai:");
     expect(settings).toContain("api: openai-completions");
     expect(settings).toContain("baseURL: https://gateway.example/v1");
+    expect(settings).toContain("reasoningEfforts:");
+    expect(settings).toContain("off: null");
+    expect(settings).toContain("low: low");
+    expect(settings).toContain("medium: medium");
+    expect(settings).toContain("high: high");
     expect(settings).not.toContain("sk-private");
     expect(credentials).toContain(`${deriveDshCredentialRef("team-gateway")}: sk-private`);
 
@@ -167,6 +176,153 @@ describe("DSH provider settings", () => {
     const credentials = readFileSync(join(dshHome, ".credentials.yaml"), "utf8");
     expect(credentials).toContain("TEAM_EXISTING_KEY: new-secret");
     expect(credentials).not.toContain(deriveDshCredentialRef("team-gateway"));
+  });
+
+  it("preserves explicit reasoning mappings and supports opting out", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "reasoning-gateway",
+      name: "Reasoning Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [
+        { id: "reasoning-model", reasoningEfforts: { off: null, high: "ultra", max: "ultra" } },
+        { id: "plain-model", reasoningEfforts: false }
+      ]
+    }, { dshHome });
+
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).toContain("high: ultra");
+    expect(settings).toContain("max: ultra");
+    expect(settings).toContain("reasoningEfforts: false");
+    const listing = await listDshProviders({ dshHome });
+    expect(listing.providers.find(provider => provider.id === "reasoning-gateway")?.models).toEqual([
+      expect.objectContaining({ id: "reasoning-model", reasoningEfforts: { off: null, high: "ultra", max: "ultra" } }),
+      expect.objectContaining({ id: "plain-model", reasoningEfforts: false })
+    ]);
+  });
+
+  it("keeps disabled providers in DSH Desk while removing them from DSH", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      apiKey: "sk-private",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    await switchDshProvider("team-gateway", "team-model", { dshHome });
+
+    const disabled = await setDshProviderEnabled("team-gateway", false, { dshHome });
+    expect(disabled).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ id: "team-gateway", enabled: false, runtimeActive: false })
+    }));
+    const disabledSettings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(disabledSettings).not.toContain("team-gateway:");
+    expect(disabledSettings).toContain("provider: deepseek-official");
+    expect(readFileSync(join(dshHome, ".credentials.yaml"), "utf8")).toContain("sk-private");
+    const deskState = JSON.parse(readFileSync(join(dshHome, ".dsh-desk-providers.json"), "utf8")) as {
+      disabledProviders: Record<string, { profile: { baseURL?: string } }>;
+    };
+    expect(deskState.disabledProviders["team-gateway"]?.profile.baseURL).toBe("https://gateway.example/v1");
+
+    const enabled = await setDshProviderEnabled("team-gateway", true, { dshHome });
+    expect(enabled).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ id: "team-gateway", enabled: true })
+    }));
+    const enabledSettings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(enabledSettings).toContain("team-gateway:");
+    expect(enabledSettings).toContain("baseURL: https://gateway.example/v1");
+    const restoredState = JSON.parse(readFileSync(join(dshHome, ".dsh-desk-providers.json"), "utf8")) as {
+      disabledProviders: Record<string, unknown>;
+    };
+    expect(restoredState.disabledProviders).not.toHaveProperty("team-gateway");
+  });
+
+  it("disables the official adapter through the shared Cordis patch", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "cordis.patch.yml"), [
+      "# keep this user patch",
+      "- id: session-telemetry-otel",
+      "  disabled: true",
+      "- id: llm-deepseek",
+      "  disabled: false",
+      "  config:",
+      "    thinking: enabled",
+      ""
+    ].join("\n"));
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+
+    const disabled = await setDshProviderEnabled("deepseek-official", false, { dshHome });
+    expect(disabled).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ id: "deepseek-official", enabled: false, runtimeActive: false })
+    }));
+    const disabledPatch = readFileSync(join(dshHome, "cordis.patch.yml"), "utf8");
+    expect(disabledPatch).toContain("# keep this user patch");
+    expect(disabledPatch).toContain("id: session-telemetry-otel");
+    expect(disabledPatch).toContain("thinking: enabled");
+    expect(disabledPatch).toMatch(/id: llm-deepseek[\s\S]*disabled: true/);
+    expect(readFileSync(join(dshHome, "settings.yaml"), "utf8")).toContain("provider: team-gateway");
+
+    const enabled = await setDshProviderEnabled("deepseek-official", true, { dshHome });
+    expect(enabled).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ id: "deepseek-official", enabled: true })
+    }));
+    expect(readFileSync(join(dshHome, "cordis.patch.yml"), "utf8")).toMatch(/id: llm-deepseek[\s\S]*disabled: false/);
+  });
+
+  it("allows the official adapter to be disabled when no fallback exists", async () => {
+    const dshHome = home();
+    const result = await setDshProviderEnabled("deepseek-official", false, { dshHome });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ enabled: false, isDefault: true })
+    }));
+    expect(readFileSync(join(dshHome, "cordis.patch.yml"), "utf8")).toContain("disabled: true");
+  });
+
+  it("edits a disabled provider without enabling it", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://old.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "old-model" }]
+    }, { dshHome });
+    await setDshProviderEnabled("team-gateway", false, { dshHome });
+
+    const saved = await saveDshProvider({
+      id: "team-gateway",
+      name: "Dormant Gateway",
+      baseUrl: "https://new.example/v1",
+      protocol: "openai-responses",
+      models: [{ id: "new-model" }],
+      enabled: false
+    }, { dshHome });
+
+    expect(saved).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({
+        name: "Dormant Gateway",
+        baseUrl: "https://new.example/v1",
+        protocol: "openai-responses",
+        enabled: false
+      })
+    }));
+    expect(readFileSync(join(dshHome, "settings.yaml"), "utf8")).not.toContain("team-gateway:");
   });
 
   it("leaves a keyless custom route reference-free for provider-native authentication", async () => {

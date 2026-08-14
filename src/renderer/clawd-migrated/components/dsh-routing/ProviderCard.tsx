@@ -1,12 +1,13 @@
 import React from "react";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { Activity, Check, Copy, GripVertical, Loader2, Pencil, Play, Trash2 } from "lucide-react";
+import { Activity, Check, Copy, GripVertical, Loader2, Pencil, Play, Power, Trash2 } from "lucide-react";
 import { useI18n } from "../../useI18n";
 import { ProviderIcon } from "./ProviderIcon";
 import type { DragHandleProps, DshRouteProvider } from "./types";
 
 type ProviderActionHandlers = {
+  onToggle: (provider: DshRouteProvider) => void;
   onSwitch: (provider: DshRouteProvider) => void;
   onEdit: (provider: DshRouteProvider) => void;
   onDuplicate: (provider: DshRouteProvider) => void;
@@ -44,6 +45,7 @@ function DshProviderActions({
   isCurrent,
   canRemove,
   testing,
+  onToggle,
   onSwitch,
   onEdit,
   onDuplicate,
@@ -60,20 +62,27 @@ function DshProviderActions({
 
   return (
     <div className="ccs-provider-actions-inner">
-      <span className={isCurrent ? "ccs-provider-action-wrap disabled" : "ccs-provider-action-wrap"}>
+      <span className="ccs-provider-action-wrap">
         <button
-          className={`ccs-provider-main-action ${isCurrent ? "current" : ""}`}
-          onClick={() => onSwitch(provider)}
-          disabled={isCurrent}
-          title={isCurrent
-            ? t("routing.currentRoute", "当前供应商")
-            : t("routing.switchRoute", "切换到此供应商")}
+          className={`ccs-provider-main-action ${provider.enabled ? "disable" : "enable"}`}
+          onClick={() => onToggle(provider)}
+          title={provider.enabled
+            ? t("dshProviders.disable", "停用")
+            : t("dshProviders.enable", "启用")}
         >
-          {isCurrent ? <Check size={16} /> : <Play size={16} />}
-          <span>{isCurrent ? t("routing.inUse", "已在用") : t("routing.switch", "启用")}</span>
+          <Power size={16} />
+          <span>{provider.enabled
+            ? t("dshProviders.disable", "停用")
+            : t("dshProviders.enable", "启用")}</span>
         </button>
       </span>
       <div className="ccs-provider-icon-actions">
+        <button
+          onClick={() => onSwitch(provider)}
+          disabled={!provider.enabled || isCurrent}
+          title={isCurrent ? t("routing.currentRoute", "当前供应商") : t("routing.switchRoute", "设为当前供应商")}
+          aria-label={isCurrent ? t("routing.currentRoute", "当前供应商") : t("routing.switchRoute", "设为当前供应商")}
+        >{isCurrent ? <Check size={16} /> : <Play size={16} />}</button>
         <button onClick={() => onEdit(provider)} title={t("common.edit", "编辑")} aria-label={t("common.edit", "编辑")}><Pencil size={16} /></button>
         <button onClick={() => onDuplicate(provider)} disabled={provider.isOfficial} title={t("routing.duplicate", "复制")} aria-label={t("routing.duplicate", "复制")}><Copy size={16} /></button>
         <button
@@ -96,6 +105,7 @@ function DshProviderCard({
   canRemove,
   testing,
   dragHandleProps,
+  onToggle,
   onSwitch,
   onEdit,
   onDuplicate,
@@ -112,7 +122,7 @@ function DshProviderCard({
   const display = extractDisplayUrl(provider, t("routing.noEndpoint", "使用 DSH 内置配置"));
 
   return (
-    <div className={`ccs-provider-card ${isCurrent ? "active" : ""} ${dragHandleProps?.isDragging ? "dragging" : ""}`}>
+    <div className={`ccs-provider-card ${isCurrent ? "active" : ""} ${provider.enabled ? "" : "provider-disabled"} ${dragHandleProps?.isDragging ? "dragging" : ""}`}>
       <div className="ccs-provider-gradient" />
       <div className="ccs-provider-content">
         <div className="ccs-provider-left">
@@ -124,6 +134,8 @@ function DshProviderCard({
             <div className="ccs-provider-titleline">
               <h3>{provider.name}</h3>
               <span>{protocolLabel(provider, t)}</span>
+              {isCurrent ? <span className="ccs-provider-state current">{t("dshProviders.current", "当前")}</span> : null}
+              {!provider.enabled ? <span className="ccs-provider-state disabled">{t("dshProviders.disabled", "已停用")}</span> : null}
             </div>
             <button
               className={`ccs-provider-url ${display.url ? "clickable" : ""}`}
@@ -140,6 +152,7 @@ function DshProviderCard({
             isCurrent={isCurrent}
             canRemove={canRemove}
             testing={testing}
+            onToggle={onToggle}
             onSwitch={onSwitch}
             onEdit={onEdit}
             onDuplicate={onDuplicate}
@@ -157,6 +170,7 @@ export const SortableDshProviderCard = React.memo(function SortableDshProviderCa
   isCurrent,
   canRemove,
   testing,
+  onToggle,
   onSwitch,
   onEdit,
   onDuplicate,
@@ -182,6 +196,7 @@ export const SortableDshProviderCard = React.memo(function SortableDshProviderCa
         canRemove={canRemove}
         testing={testing}
         dragHandleProps={{ attributes, listeners, isDragging }}
+        onToggle={onToggle}
         onSwitch={onSwitch}
         onEdit={onEdit}
         onDuplicate={onDuplicate}

@@ -85,6 +85,7 @@ import {
   probeDshProvider,
   reorderDshProviders,
   saveDshProvider,
+  setDshProviderEnabled,
   switchDshProvider
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
@@ -3832,6 +3833,7 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-providers-delete", (_, id: string) => deleteDshProvider(id));
   ipcMain.handle("companion:dsh-providers-duplicate", (_, id: string) => duplicateDshProvider(id));
   ipcMain.handle("companion:dsh-providers-reorder", (_, ids: string[]) => reorderDshProviders(ids));
+  ipcMain.handle("companion:dsh-providers-enabled", (_, id: string, enabled: boolean) => setDshProviderEnabled(id, enabled));
   ipcMain.handle("companion:dsh-providers-switch", (_, id: string, model?: string) => switchDshProvider(id, model));
   ipcMain.handle("companion:dsh-providers-probe", (_, payload: { id?: string; baseUrl?: string; apiKey?: string; mode?: "connectivity" | "models" }) => probeDshProvider(payload));
   ipcMain.handle("companion:get-update-status", () => getUpdateStatus());

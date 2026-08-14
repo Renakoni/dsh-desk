@@ -228,7 +228,7 @@
 .overview-workbench .ccs-provider-content {
   min-height: 82px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 214px;
+  grid-template-columns: minmax(260px, 1fr) 246px;
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
@@ -349,8 +349,8 @@
 
 .overview-workbench .ccs-provider-actions {
   flex: 0 0 auto;
-  width: 214px;
-  min-width: 214px;
+  width: 246px;
+  min-width: 246px;
   margin-left: 0;
   justify-self: end;
   opacity: 1;

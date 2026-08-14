@@ -6,11 +6,32 @@ export const DSH_PROVIDER_PROTOCOLS = [
 
 export type DshProviderProtocol = typeof DSH_PROVIDER_PROTOCOLS[number];
 
+export const DSH_REASONING_EFFORTS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max"
+] as const;
+
+export type DshReasoningEffort = typeof DSH_REASONING_EFFORTS[number];
+export type DshReasoningEfforts = Partial<Record<DshReasoningEffort, string | null>>;
+
+export const DEFAULT_DSH_REASONING_EFFORTS: DshReasoningEfforts = {
+  off: null,
+  low: "low",
+  medium: "medium",
+  high: "high"
+};
+
 export type DshProviderModel = {
   id: string;
   name?: string;
   contextWindow?: number;
   maxTokens?: number;
+  reasoningEfforts?: DshReasoningEfforts | false;
 };
 
 export type DshProviderUiMeta = {
@@ -40,6 +61,7 @@ export type DshProvider = DshProviderUiMeta & {
   models: DshProviderModel[];
   modelsInherited: boolean;
   catalogProvider: boolean;
+  enabled: boolean;
   runtimeActive: boolean;
   credentialRef?: string;
   hasCredential: boolean;
@@ -68,6 +90,7 @@ export type DshProviderSaveInput = DshProviderUiMeta & {
   models?: DshProviderModel[];
   inheritModels?: boolean;
   catalogProvider?: boolean;
+  enabled?: boolean;
   apiKey?: string;
 };
 
