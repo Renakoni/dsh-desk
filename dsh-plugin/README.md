@@ -31,3 +31,9 @@ bounded error text, and numeric token usage with provider/model/cwd metadata.
 It does not send prompts, assistant messages, tool results, credentials, or
 model request bodies. DSH Desk stores usage locally in `dsh-usage.ndjson`
 under Electron's DSH Desk user-data directory.
+
+The bridge also publishes the Loader's non-group plugin inventory to the same
+loopback server. DSH Desk uses this live projection for resource schemes; core
+DeepSeek Harness entries and the bridge itself remain read-only. The inventory
+is republished after Loader changes and periodically so starting DSH Desk after
+Harness does not require a Harness restart.

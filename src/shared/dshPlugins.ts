@@ -34,6 +34,21 @@ export type DshPluginSnapshot = {
   scannedAt: number;
 };
 
+export type DshRuntimePluginPhase = "pending" | "loading" | "active" | "failed" | "unloading" | null;
+
+export type DshRuntimePluginEntry = {
+  entryId: string;
+  configId: string;
+  moduleName: string;
+  enabled: boolean;
+  fiberPhase: DshRuntimePluginPhase;
+};
+
+export type DshRuntimePluginSnapshot = {
+  entries: DshRuntimePluginEntry[];
+  receivedAt: number;
+};
+
 export type DshMarketplaceCategory = {
   id: string;
   en: string;
@@ -109,6 +124,10 @@ export type DshSkillItem = {
   directory: string;
   source: DshSkillSource;
   active: boolean;
+  enabled: boolean;
+  manageable: boolean;
+  storageName: string;
+  storagePath: string;
   modelInvocable: boolean;
   userInvocable: boolean;
 };
@@ -117,4 +136,41 @@ export type DshSkillSnapshot = {
   skills: DshSkillItem[];
   roots: Array<{ source: DshSkillSource; path: string }>;
   scannedAt: number;
+};
+
+export type DshSkillRepo = {
+  owner: string;
+  name: string;
+  branch: string;
+  enabled: boolean;
+};
+
+export type DshMarketplaceSkill = {
+  key: string;
+  name: string;
+  description: string;
+  directory: string;
+  repoOwner: string;
+  repoName: string;
+  repoBranch: string;
+  installed: boolean;
+};
+
+export type DshSkillMarketplaceSnapshot = {
+  repos: DshSkillRepo[];
+  skills: DshMarketplaceSkill[];
+  scannedAt: number;
+  errors: string[];
+};
+
+export type DshSkillInstallResult = {
+  ok: boolean;
+  snapshot: DshSkillSnapshot;
+  error?: string;
+};
+
+export type DshSkillRepoMutationResult = {
+  ok: boolean;
+  snapshot?: DshSkillMarketplaceSnapshot;
+  error?: string;
 };

@@ -8,6 +8,7 @@ import {
   sessionStartEvent,
   usageRecordForSessionEvent,
 } from '../src/bridge.js'
+import { applyDesiredPluginStates, loaderInventory } from '../src/index.js'
 
 const servers = new Set()
 
@@ -213,5 +214,34 @@ describe('DSH Desk loopback transport', () => {
     }
     assert.equal(await bridge.requestApproval(request), 'allowed-once')
     assert.equal(await bridge.requestApproval(request), undefined)
+  })
+})
+
+describe('DSH Loader inventory bridge', () => {
+  it('publishes the complete non-group Loader order', () => {
+    const entries = Array.from({ length: 160 }, (_, index) => ({
+      id: `root:entry-${index}`,
+      disabled: index % 2 === 0,
+      options: { id: `entry-${index}`, name: `@deepseek-ai/plugin-${index}`, group: false },
+      fiber: { state: 2 },
+    }))
+    assert.equal(loaderInventory({ entries: () => entries }).entries.length, 160)
+    assert.deepEqual(loaderInventory({ entries: () => entries }).entries[159], {
+      entryId: 'root:entry-159',
+      configId: 'entry-159',
+      moduleName: '@deepseek-ai/plugin-159',
+      enabled: true,
+      fiberPhase: 'active',
+    })
+  })
+
+  it('applies only third-party desired states and persists through the owning tree', async () => {
+    const updates = []
+    const tree = { update: async (id, value) => { updates.push([id, value]) } }
+    const entries = [{ id: 'core', disabled: false, options: { id: 'core', name: '@deepseek-ai/core' }, parent: { tree } }, {
+      id: 'third', disabled: false, options: { id: 'third-config', name: 'third-party-plugin' }, parent: { tree },
+    }]
+    await applyDesiredPluginStates({ entries: () => entries }, { core: false, third: false })
+    assert.deepEqual(updates, [['third-config', { disabled: true }]])
   })
 })

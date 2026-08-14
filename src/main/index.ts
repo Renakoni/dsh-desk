@@ -91,11 +91,15 @@ import {
   switchDshProvider
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
-import type { DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput } from "../shared/dshPlugins";
+import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshRuntimePluginSnapshot, DshSkillRepo } from "../shared/dshPlugins";
+import type { DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, scanDshSkills } from "./dshSkillCatalog";
+import { dshRuntimePluginResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
+import { DshResourceSchemeManager } from "./dshResourceSchemes";
+import { DshSkillMarketplace } from "./dshSkillMarketplace";
 
 type DailyRuntimeStats = {
   events: number;
@@ -149,6 +153,9 @@ let trayMenuWindow: BrowserWindow | null = null;
 // cards while keeping the character anchored to the same desktop position.
 let petExpanded = false;
 let eventServer: ReturnType<typeof createServer> | null = null;
+let dshRuntimePluginSnapshot: DshRuntimePluginSnapshot | null = null;
+let desiredDshPluginStates: Record<string, boolean> = {};
+let dshSkillMarketplaceInstance: DshSkillMarketplace | null = null;
 let tray: Tray | null = null;
 let startupWarmupTimer: ReturnType<typeof setTimeout> | null = null;
 let startupWarmupStarted = false;
@@ -1199,6 +1206,14 @@ function claudeProfilesPath() {
 
 function claudeMcpInventoryPath() {
   return join(app.getPath("userData"), "claude-mcp-inventory.json");
+}
+
+function dshResourceSchemesPath() {
+  return join(app.getPath("userData"), "dsh-resource-schemes.json");
+}
+
+function dshSkillRepositoriesPath() {
+  return join(app.getPath("userData"), "dsh-skill-repositories.json");
 }
 
 const CLAUDE_RESOURCE_CACHE_TTL = 30 * 1000;
@@ -3623,6 +3638,75 @@ function dshPluginCatalog() {
   });
 }
 
+function dshResourceInventory(): DshResourceInventory {
+  const skillSnapshot = scanDshSkills();
+  const skills = skillSnapshot.skills.map(skill => ({
+    id: skill.id,
+    kind: "skill" as const,
+    name: skill.name,
+    description: skill.description,
+    detail: skill.source === "user-dsh" ? "~/.dsh/skills" : "~/.agents/skills",
+    enabled: skill.enabled && skill.active,
+    manageable: skill.manageable
+  }));
+  let plugins = dshRuntimePluginResources(dshRuntimePluginSnapshot);
+  if (plugins.length === 0) {
+    plugins = dshPluginCatalog().snapshot().plugins.map(plugin => ({
+      id: `plugin:package:${plugin.packageName}`,
+      kind: "plugin" as const,
+      name: plugin.name,
+      ...(plugin.description ? { description: plugin.description } : {}),
+      detail: plugin.packageName,
+      enabled: plugin.states.some(state => state.enabled),
+      manageable: false
+    }));
+  }
+  return {
+    skills,
+    plugins,
+    scannedAt: Date.now(),
+    runtimeConnected: dshRuntimePluginSnapshot !== null
+  };
+}
+
+function setDesiredDshPlugins(states: Record<string, boolean>) {
+  desiredDshPluginStates = { ...states };
+}
+
+function dshResourceSchemeManager() {
+  return new DshResourceSchemeManager({
+    storePath: dshResourceSchemesPath(),
+    dshHome: resolveDshHome(),
+    inventory: dshResourceInventory,
+    setDesiredPlugins: setDesiredDshPlugins
+  });
+}
+
+function dshSkillMarketplace() {
+  dshSkillMarketplaceInstance ??= new DshSkillMarketplace({
+    dshHome: resolveDshHome(),
+    storePath: dshSkillRepositoriesPath()
+  });
+  return dshSkillMarketplaceInstance;
+}
+
+function restoreDesiredDshPlugins() {
+  if (Object.keys(desiredDshPluginStates).length > 0) return;
+  try {
+    const snapshot = dshResourceSchemeManager().snapshot();
+    const scheme = snapshot.schemes.find(item => item.id === snapshot.appliedSchemeId);
+    if (!scheme) return;
+    const selected = new Set(scheme.plugins);
+    setDesiredDshPlugins(Object.fromEntries(
+      snapshot.inventory.plugins
+        .filter(item => item.manageable)
+        .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
+    ));
+  } catch {
+    // A malformed scheme file is reported by the resource page; never block the event bridge.
+  }
+}
+
 function getHooksStatus(): HookStatus {
   return getDshPluginStatus(dshPluginManagerOptions());
 }
@@ -3727,6 +3811,25 @@ function startEventServer() {
     if (permissionMatch) {
       const result: PermissionPollResult = await permissionBroker.wait(permissionMatch[1]);
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/dsh-plugin-inventory") {
+      try {
+        const snapshot = normalizeDshRuntimePluginSnapshot(await readJson(req));
+        if (!snapshot) {
+          sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
+          return;
+        }
+        dshRuntimePluginSnapshot = snapshot;
+        restoreDesiredDshPlugins();
+        if (panelWindow && !panelWindow.isDestroyed()) {
+          panelWindow.webContents.send("companion:dsh-resources-updated");
+        }
+        sendJson(res, 200, { ok: true, desiredPlugins: desiredDshPluginStates });
+      } catch {
+        sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
+      }
       return;
     }
 
@@ -4031,6 +4134,15 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-plugins-install", (_, input: DshPluginInstallInput) => dshPluginCatalog().install(input));
   ipcMain.handle("companion:dsh-plugins-remove", (_, input: DshPluginRemoveInput) => dshPluginCatalog().remove(input));
   ipcMain.handle("companion:dsh-skills-list", () => scanDshSkills());
+  ipcMain.handle("companion:dsh-resource-schemes", () => dshResourceSchemeManager().snapshot());
+  ipcMain.handle("companion:dsh-resource-scheme-save", (_, input: DshResourceSchemeSaveInput) => dshResourceSchemeManager().save(input));
+  ipcMain.handle("companion:dsh-resource-scheme-delete", (_, schemeId: unknown) => dshResourceSchemeManager().delete(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-resource-scheme-apply", (_, schemeId: unknown) => dshResourceSchemeManager().apply(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-resource-state", (_, input: DshResourceStateInput) => dshResourceSchemeManager().setResourceState(input));
+  ipcMain.handle("companion:dsh-skill-marketplace", () => dshSkillMarketplace().snapshot());
+  ipcMain.handle("companion:dsh-skill-repo-add", (_, repo: DshSkillRepo) => dshSkillMarketplace().addRepo(repo));
+  ipcMain.handle("companion:dsh-skill-repo-remove", (_, owner: unknown, name: unknown) => dshSkillMarketplace().removeRepo(String(owner ?? ""), String(name ?? "")));
+  ipcMain.handle("companion:dsh-skill-install", (_, skill: DshMarketplaceSkill) => dshSkillMarketplace().install(skill));
   ipcMain.handle("companion:dsh-skill-reveal", (_, targetPath: unknown) => {
     if (typeof targetPath !== "string" || !canRevealDshSkillPath(targetPath)) return false;
     if (existsSync(targetPath) && statSync(targetPath).isFile()) shell.showItemInFolder(targetPath);

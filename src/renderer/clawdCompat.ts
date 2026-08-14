@@ -18,13 +18,25 @@ import type { DshProvider, DshProviderListResult, DshProviderMutationResult, Dsh
 import type { DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type {
   DshMarketplaceSnapshot,
+  DshMarketplaceSkill,
   DshPluginInstallInput,
   DshPluginMutationResult,
   DshPluginRemoveInput,
   DshPluginSnapshot,
   DshPluginStateInput,
+  DshSkillInstallResult,
+  DshSkillMarketplaceSnapshot,
+  DshSkillRepo,
+  DshSkillRepoMutationResult,
   DshSkillSnapshot
 } from "../shared/dshPlugins";
+import type {
+  DshResourceMutationResult,
+  DshResourceSchemeSaveInput,
+  DshResourceSchemesSnapshot,
+  DshResourceStateInput
+} from "../shared/dshResources";
+import { createEmptyDshResourceSchemesSnapshot } from "../shared/dshResources";
 import {
   defaultSettings,
   defaultStats,
@@ -114,6 +126,16 @@ type CompanionApi = {
   installDshMarketplacePlugin: (input: DshPluginInstallInput) => Promise<DshPluginMutationResult>;
   removeDshPluginPackage: (input: DshPluginRemoveInput) => Promise<DshPluginMutationResult>;
   listDshSkills: () => Promise<DshSkillSnapshot>;
+  getDshResourceSchemes: () => Promise<DshResourceSchemesSnapshot>;
+  saveDshResourceScheme: (input: DshResourceSchemeSaveInput) => Promise<DshResourceMutationResult>;
+  deleteDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
+  applyDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
+  setDshResourceState: (input: DshResourceStateInput) => Promise<DshResourceMutationResult>;
+  onDshResourcesUpdated: (callback: Listener<void>) => Unsubscribe;
+  getDshSkillMarketplace: () => Promise<DshSkillMarketplaceSnapshot>;
+  addDshSkillRepo: (repo: DshSkillRepo) => Promise<DshSkillRepoMutationResult>;
+  removeDshSkillRepo: (owner: string, name: string) => Promise<DshSkillRepoMutationResult>;
+  installDshSkill: (skill: DshMarketplaceSkill) => Promise<DshSkillInstallResult>;
   revealDshSkill: (path: string) => Promise<boolean>;
   getClaudeResources: (force?: boolean) => Promise<ClaudeResourcesSnapshot>;
   getClaudeProfiles: (force?: boolean) => Promise<ClaudeProfilesSnapshot>;
@@ -354,6 +376,10 @@ const mockDshSkills: DshSkillSnapshot = {
     directory: "~/.dsh/skills/review",
     source: "user-dsh",
     active: true,
+    enabled: true,
+    manageable: true,
+    storageName: "review",
+    storagePath: "~/.dsh/skills/review",
     modelInvocable: true,
     userInvocable: true
   }, {
@@ -364,10 +390,43 @@ const mockDshSkills: DshSkillSnapshot = {
     directory: "~/.agents/skills/release-notes",
     source: "user-agents",
     active: true,
+    enabled: true,
+    manageable: false,
+    storageName: "release-notes",
+    storagePath: "~/.agents/skills/release-notes",
     modelInvocable: false,
     userInvocable: true
   }],
   scannedAt: Date.now()
+};
+let mockDshResourceSchemes: DshResourceSchemesSnapshot = {
+  ...createEmptyDshResourceSchemesSnapshot(Date.now()),
+  schemes: createEmptyDshResourceSchemesSnapshot().schemes.map(scheme => ({
+    ...scheme,
+    skills: mockDshSkills.skills.map(skill => skill.id),
+    plugins: mockDshPluginSnapshot.plugins.map(plugin => `plugin:package:${plugin.packageName}`)
+  })),
+  inventory: {
+    skills: mockDshSkills.skills.map(skill => ({ id: skill.id, kind: "skill", name: skill.name, description: skill.description, enabled: skill.active, manageable: skill.manageable })),
+    plugins: mockDshPluginSnapshot.plugins.map(plugin => ({ id: `plugin:package:${plugin.packageName}`, kind: "plugin", name: plugin.name, description: plugin.description, enabled: plugin.states.some(state => state.enabled), manageable: false })),
+    scannedAt: Date.now(),
+    runtimeConnected: false
+  }
+};
+let mockDshSkillMarketplace: DshSkillMarketplaceSnapshot = {
+  repos: [{ owner: "anthropics", name: "skills", branch: "main", enabled: true }],
+  skills: [{
+    key: "anthropics/skills:skills/frontend-design",
+    name: "frontend-design",
+    description: "Build polished frontend interfaces.",
+    directory: "skills/frontend-design",
+    repoOwner: "anthropics",
+    repoName: "skills",
+    repoBranch: "main",
+    installed: false
+  }],
+  scannedAt: Date.now(),
+  errors: []
 };
 
 const settingsListeners = new Set<Listener<CompanionSettings>>();
@@ -723,6 +782,55 @@ export function installClawdCompat() {
     installDshMarketplacePlugin: async input => ({ ok: true, snapshot: mockDshPluginSnapshot, changedProfiles: input.profiles, restartRequired: true }),
     removeDshPluginPackage: async input => ({ ok: true, snapshot: mockDshPluginSnapshot, changedProfiles: input.profiles, restartRequired: true }),
     listDshSkills: async () => mockDshSkills,
+    getDshResourceSchemes: async () => mockDshResourceSchemes,
+    saveDshResourceScheme: async input => {
+      const existing = input.id ? mockDshResourceSchemes.schemes.find(scheme => scheme.id === input.id) : undefined;
+      const now = Date.now();
+      const scheme = existing
+        ? { ...existing, ...input, id: existing.id, isProtected: existing.isProtected, updatedAt: now }
+        : { ...input, id: `scheme-${now}`, isProtected: false, createdAt: now, updatedAt: now };
+      mockDshResourceSchemes = {
+        ...mockDshResourceSchemes,
+        schemes: existing ? mockDshResourceSchemes.schemes.map(item => item.id === scheme.id ? scheme : item) : [...mockDshResourceSchemes.schemes, scheme]
+      };
+      return { ok: true, schemeId: scheme.id, snapshot: mockDshResourceSchemes };
+    },
+    deleteDshResourceScheme: async schemeId => {
+      mockDshResourceSchemes = { ...mockDshResourceSchemes, schemes: mockDshResourceSchemes.schemes.filter(scheme => scheme.id !== schemeId) };
+      return { ok: true, schemeId, snapshot: mockDshResourceSchemes };
+    },
+    applyDshResourceScheme: async schemeId => {
+      mockDshResourceSchemes = { ...mockDshResourceSchemes, appliedSchemeId: schemeId };
+      return { ok: true, schemeId, snapshot: mockDshResourceSchemes };
+    },
+    setDshResourceState: async input => {
+      const resource = [...mockDshResourceSchemes.inventory.skills, ...mockDshResourceSchemes.inventory.plugins].find(item => item.id === input.resourceId);
+      const field = resource?.kind === "plugin" ? "plugins" : "skills";
+      mockDshResourceSchemes = {
+        ...mockDshResourceSchemes,
+        schemes: mockDshResourceSchemes.schemes.map(scheme => {
+          if (scheme.id !== input.schemeId) return scheme;
+          const ids = new Set(scheme[field]);
+          if (input.enabled) ids.add(input.resourceId); else ids.delete(input.resourceId);
+          return { ...scheme, [field]: [...ids] };
+        })
+      };
+      return { ok: true, schemeId: input.schemeId, snapshot: mockDshResourceSchemes };
+    },
+    onDshResourcesUpdated: () => () => undefined,
+    getDshSkillMarketplace: async () => mockDshSkillMarketplace,
+    addDshSkillRepo: async repo => {
+      mockDshSkillMarketplace = { ...mockDshSkillMarketplace, repos: [...mockDshSkillMarketplace.repos, repo] };
+      return { ok: true, snapshot: mockDshSkillMarketplace };
+    },
+    removeDshSkillRepo: async (owner, name) => {
+      mockDshSkillMarketplace = { ...mockDshSkillMarketplace, repos: mockDshSkillMarketplace.repos.filter(repo => repo.owner !== owner || repo.name !== name) };
+      return { ok: true, snapshot: mockDshSkillMarketplace };
+    },
+    installDshSkill: async skill => {
+      mockDshSkillMarketplace = { ...mockDshSkillMarketplace, skills: mockDshSkillMarketplace.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) };
+      return { ok: true, snapshot: mockDshSkills };
+    },
     revealDshSkill: async () => true,
     getClaudeResources: async () => ({ summary: { skills: 0, plugins: 0, mcp: 0 }, skills: [], plugins: [], mcp: [], scannedAt: Date.now(), paths: { claudeDir: "~/.claude", claudeJson: "~/.claude.json" } }),
     getClaudeProfiles: async () => mockClaudeProfiles,

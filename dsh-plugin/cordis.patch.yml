@@ -6,3 +6,4 @@
         eventTimeoutMs: 800
         permissionCreateTimeoutMs: 5000
         permissionWaitTimeoutMs: 65000
+        inventoryPublishMs: 3000

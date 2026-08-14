@@ -221,9 +221,9 @@ function requestJson({ port, path, method, timeoutMs, body, signal }) {
 
 export function createBridge(config, lifecycleSignal) {
   const toolCalls = new Map()
-  let eventQueue = Promise.resolve(true)
+  let eventQueue = Promise.resolve(null)
 
-  const publishTo = (path, body) => {
+  const requestTo = (path, body) => {
     eventQueue = eventQueue.then(() => requestJson({
       port: config.port,
       path,
@@ -231,14 +231,19 @@ export function createBridge(config, lifecycleSignal) {
       timeoutMs: config.eventTimeoutMs,
       body,
       signal: lifecycleSignal,
-    }).then(result => result?.ok === true))
+    }))
     return eventQueue
   }
+
+  const publishTo = (path, body) => requestTo(path, body).then(result => result?.ok === true)
 
   const publish = event => publishTo('/event', event)
 
   return {
     publish,
+    publishPluginInventory(snapshot) {
+      return requestTo('/dsh-plugin-inventory', snapshot)
+    },
     publishSessionEvent(session, event) {
       const usage = usageRecordForSessionEvent(session, event)
       if (usage !== null) return publishTo('/dsh-usage', usage)

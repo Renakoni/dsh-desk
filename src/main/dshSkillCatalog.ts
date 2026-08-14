@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -13,6 +13,7 @@ type SkillRoot = {
   path: string;
   rank: number;
   skipSystem: boolean;
+  enabled: boolean;
 };
 
 type Frontmatter = Record<string, unknown>;
@@ -23,9 +24,13 @@ export function resolveDshAgentsHome(): string {
 
 export function dshSkillRoots(dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): SkillRoot[] {
   return [
-    { source: "user-dsh", path: join(dshHome, "skills"), rank: 400, skipSystem: true },
-    { source: "user-agents", path: join(agentsHome, "skills"), rank: 500, skipSystem: false }
+    { source: "user-dsh", path: join(dshHome, "skills"), rank: 400, skipSystem: true, enabled: true },
+    { source: "user-agents", path: join(agentsHome, "skills"), rank: 500, skipSystem: false, enabled: true }
   ];
+}
+
+export function dshDisabledSkillsRoot(dshHome = resolveDshHome()): string {
+  return join(dshHome, ".dsh-desk", "disabled-skills");
 }
 
 function entryKind(filePath: string, directory: boolean, file: boolean, symbolicLink: boolean): "directory" | "file" | null {
@@ -73,7 +78,7 @@ function frontmatterBoolean(data: Frontmatter, key: string): boolean | undefined
   throw new Error(`${key} must be a boolean`);
 }
 
-function readSkill(filePath: string, directory: string, root: SkillRoot): DshSkillItem | null {
+function readSkill(filePath: string, directory: string, storageName: string, storagePath: string, root: SkillRoot): DshSkillItem | null {
   try {
     const info = statSync(filePath);
     if (!info.isFile() || info.size > MAX_SKILL_FILE_BYTES) return null;
@@ -85,13 +90,17 @@ function readSkill(filePath: string, directory: string, root: SkillRoot): DshSki
     const modelInvocable = frontmatterBoolean(data, "disable-model-invocation") !== true;
     const userInvocable = frontmatterBoolean(data, "user-invocable") !== false;
     return {
-      id: `${root.source}:${resolve(filePath)}`,
+      id: `skill:${root.source}:${storageName.toLocaleLowerCase()}`,
       name,
       description,
       path: resolve(filePath),
       directory: resolve(directory),
       source: root.source,
       active: true,
+      enabled: root.enabled,
+      manageable: root.source === "user-dsh",
+      storageName,
+      storagePath: resolve(storagePath),
       modelInvocable,
       userInvocable
     };
@@ -119,7 +128,7 @@ function scanRoot(root: SkillRoot): DshSkillItem[] {
         ? fullPath
         : null;
     if (!filePath) continue;
-    const skill = readSkill(filePath, kind === "directory" ? fullPath : dirname(fullPath), root);
+    const skill = readSkill(filePath, kind === "directory" ? fullPath : dirname(fullPath), entry.name, fullPath, root);
     if (skill) skills.push(skill);
   }
   return skills;
@@ -127,12 +136,19 @@ function scanRoot(root: SkillRoot): DshSkillItem[] {
 
 export function scanDshSkills(dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): DshSkillSnapshot {
   const roots = dshSkillRoots(dshHome, agentsHome);
-  const ranked = roots.flatMap(root => scanRoot(root).map(skill => ({ skill, rank: root.rank })));
-  ranked.sort((left, right) => left.skill.name.localeCompare(right.skill.name) || left.rank - right.rank || left.skill.path.localeCompare(right.skill.path));
+  const disabledRoot: SkillRoot = {
+    source: "user-dsh",
+    path: dshDisabledSkillsRoot(dshHome),
+    rank: 400,
+    skipSystem: false,
+    enabled: false
+  };
+  const ranked = [...roots, disabledRoot].flatMap(root => scanRoot(root).map(skill => ({ skill, rank: root.rank })));
+  ranked.sort((left, right) => left.skill.name.localeCompare(right.skill.name) || Number(right.skill.enabled) - Number(left.skill.enabled) || left.rank - right.rank || left.skill.path.localeCompare(right.skill.path));
   const activeNames = new Set<string>();
   const skills = ranked.map(({ skill }) => {
-    const active = !activeNames.has(skill.name);
-    activeNames.add(skill.name);
+    const active = skill.enabled && !activeNames.has(skill.name);
+    if (skill.enabled) activeNames.add(skill.name);
     return active ? skill : { ...skill, active: false };
   });
   return {
@@ -140,6 +156,35 @@ export function scanDshSkills(dshHome = resolveDshHome(), agentsHome = resolveDs
     roots: roots.map(root => ({ source: root.source, path: root.path })),
     scannedAt: Date.now()
   };
+}
+
+export function applyDshSkillSelection(selectedIds: ReadonlySet<string>, dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): void {
+  const snapshot = scanDshSkills(dshHome, agentsHome);
+  const activeRoot = join(dshHome, "skills");
+  const disabledRoot = dshDisabledSkillsRoot(dshHome);
+  const moves: Array<{ from: string; to: string }> = [];
+  for (const skill of snapshot.skills) {
+    if (!skill.manageable) continue;
+    const shouldEnable = selectedIds.has(skill.id);
+    if (skill.enabled === shouldEnable) continue;
+    const from = skill.storagePath;
+    const to = join(shouldEnable ? activeRoot : disabledRoot, skill.storageName);
+    if (existsSync(to)) throw new Error(`Skill target already exists: ${to}`);
+    moves.push({ from, to });
+  }
+  const completed: Array<{ from: string; to: string }> = [];
+  try {
+    for (const move of moves) {
+      mkdirSync(dirname(move.to), { recursive: true });
+      renameSync(move.from, move.to);
+      completed.push(move);
+    }
+  } catch (error) {
+    for (const move of completed.reverse()) {
+      try { renameSync(move.to, move.from); } catch { /* Keep the original failure; the caller reports that reconciliation is required. */ }
+    }
+    throw error;
+  }
 }
 
 export function canRevealDshSkillPath(filePath: string, dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): boolean {

@@ -9,7 +9,8 @@ import type {
   ClaudeProfilesSnapshot,
   ClaudeResourcesSnapshot
 } from "../shared/claudeProfiles";
-import type { DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput } from "../shared/dshPlugins";
+import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
+import type { DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 
 export interface PetSnapshot {
   state: PetState;
@@ -137,6 +138,16 @@ contextBridge.exposeInMainWorld("companion", {
   installDshMarketplacePlugin: (input: DshPluginInstallInput) => ipcRenderer.invoke("companion:dsh-plugins-install", input),
   removeDshPluginPackage: (input: DshPluginRemoveInput) => ipcRenderer.invoke("companion:dsh-plugins-remove", input),
   listDshSkills: () => ipcRenderer.invoke("companion:dsh-skills-list"),
+  getDshResourceSchemes: () => ipcRenderer.invoke("companion:dsh-resource-schemes"),
+  saveDshResourceScheme: (input: DshResourceSchemeSaveInput) => ipcRenderer.invoke("companion:dsh-resource-scheme-save", input),
+  deleteDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-delete", schemeId),
+  applyDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-apply", schemeId),
+  setDshResourceState: (input: DshResourceStateInput) => ipcRenderer.invoke("companion:dsh-resource-state", input),
+  onDshResourcesUpdated: (callback: () => void) => onChannel("companion:dsh-resources-updated", callback),
+  getDshSkillMarketplace: () => ipcRenderer.invoke("companion:dsh-skill-marketplace"),
+  addDshSkillRepo: (repo: DshSkillRepo) => ipcRenderer.invoke("companion:dsh-skill-repo-add", repo),
+  removeDshSkillRepo: (owner: string, name: string) => ipcRenderer.invoke("companion:dsh-skill-repo-remove", owner, name),
+  installDshSkill: (skill: DshMarketplaceSkill) => ipcRenderer.invoke("companion:dsh-skill-install", skill),
   revealDshSkill: (path: string) => ipcRenderer.invoke("companion:dsh-skill-reveal", path),
   getClaudeResources: (force?: boolean) => ipcRenderer.invoke("companion:get-claude-resources", force) as Promise<ClaudeResourcesSnapshot>,
   getClaudeProfiles: (force?: boolean) => ipcRenderer.invoke("companion:get-claude-profiles", force) as Promise<ClaudeProfilesSnapshot>,
