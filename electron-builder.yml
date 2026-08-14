@@ -1,0 +1,48 @@
+# electron-builder packaging config (auto-detected from the project root).
+# Produces an installable, UNSIGNED Windows alpha. Run it with: npm run dist:win
+
+# Windows AppUserModelID — MUST match app.setAppUserModelId("DSHDesk") in the main
+# process, or toast notifications won't be attributed/grouped to this app.
+appId: DSHDesk
+productName: DSH Desk
+copyright: Copyright © 2026 Renakoni
+
+directories:
+  output: release        # installers land in release/ (already gitignored)
+  buildResources: build  # electron-builder looks here for icon.ico (optional; see win.icon)
+
+# What goes INSIDE app.asar. dist/ = the Vite renderer bundle (includes the default pet
+# sprites), dist-electron/ = the compiled main + preload. electron-builder additionally
+# bundles the production node_modules closure automatically (so electron-updater ships).
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+# Files that MUST live on disk OUTSIDE app.asar:
+#  - The DSH plugin tarball is installed into the user's web/headless profiles via npx.
+#  - kuaclock.png is the tray icon, loaded from process.resourcesPath when packaged.
+extraResources:
+  - from: build/dsh-desk-plugin-0.1.0.tgz
+    to: dsh-plugin/dsh-desk-plugin.tgz
+  - from: src/main/assets/kuaclock.png
+    to: kuaclock.png
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # The exe/installer/Start-menu icon (separate from the runtime tray icon).
+  # A 256x256 square PNG derived from kuaclock.png (letterboxed to square with
+  # transparency); electron-builder converts it into a multi-size .ico.
+  icon: build/icon.png
+
+nsis:
+  oneClick: false                        # show a small install wizard instead of silent install
+  perMachine: false                      # install per-user → no admin/UAC prompt
+  allowToChangeInstallationDirectory: true
+  artifactName: DSHDesk-Setup-${version}.${ext}
+  include: build/installer.nsh
+
+# Unsigned alpha: no `win.certificateFile` / signing. Windows SmartScreen will warn on first
+# run ("Windows protected your PC" → More info → Run anyway). Sign before broad distribution.

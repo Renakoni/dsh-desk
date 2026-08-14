@@ -1,0 +1,8 @@
+- insert:
+    - id: dsh-desk
+      name: dsh-desk-plugin
+      config:
+        port: 17321
+        eventTimeoutMs: 800
+        permissionCreateTimeoutMs: 5000
+        permissionWaitTimeoutMs: 65000

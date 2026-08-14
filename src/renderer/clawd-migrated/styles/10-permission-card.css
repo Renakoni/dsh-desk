@@ -1,0 +1,417 @@
+/* Permission Card - Terminal Console */
+.permission-card-wrapper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+  z-index: 10;
+}
+.permission-card-inner {
+  display: inline-block;
+  transform-origin: top left;
+}
+.perm-card {
+  position: relative;
+  min-width: 230px;
+  max-width: 290px;
+  border-radius: 12px;
+  background: rgba(28, 24, 20, 0.94);
+  border: 1px solid rgba(234, 187, 88, 0.22);
+  box-shadow:
+    0 16px 48px rgba(23, 18, 15, 0.4),
+    0 0 0 1px rgba(234, 187, 88, 0.1),
+    0 0 24px var(--risk-glow, rgba(234, 187, 88, 0.08));
+  backdrop-filter: blur(16px);
+  animation: perm-card-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  pointer-events: auto;
+  overflow: hidden;
+  transform-origin: top left;
+}
+
+/* Risk indicator bar at top */
+.perm-card-risk-bar {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--risk-color, var(--honey)), transparent);
+  position: relative;
+}
+.perm-card-risk-bar[data-risk="high"] {
+  background: linear-gradient(90deg, transparent, var(--coral), transparent);
+}
+.perm-card-risk-bar[data-risk="medium"] {
+  background: linear-gradient(90deg, transparent, var(--honey), transparent);
+}
+.perm-card-risk-bar[data-risk="low"] {
+  background: linear-gradient(90deg, transparent, var(--mint), transparent);
+}
+.perm-card-risk-pulse {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: perm-risk-sweep 2s ease-in-out infinite;
+}
+@keyframes perm-risk-sweep {
+  0%, 100% { transform: translateX(-100%); opacity: 0; }
+  50% { transform: translateX(100%); opacity: 1; }
+}
+
+/* Header */
+.perm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 6px;
+}
+.perm-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.perm-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.perm-card-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.perm-card-risk-badge[data-risk="low"] {
+  color: var(--mint);
+  background: rgba(86,166,123,0.14);
+}
+.perm-card-risk-badge[data-risk="medium"] {
+  color: var(--honey);
+  background: rgba(234,187,88,0.16);
+}
+.perm-card-risk-badge[data-risk="high"] {
+  color: var(--coral);
+  background: rgba(210,95,80,0.16);
+  animation: perm-badge-pulse 1.5s ease-in-out infinite;
+}
+@keyframes perm-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Body */
+.perm-card-body {
+  padding: 4px 12px 10px;
+}
+.perm-card-tool-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.perm-card-tool-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.perm-card-tool-icon[data-color="mint"]  { background: rgba(86,166,123,0.18); color: var(--mint); }
+.perm-card-tool-icon[data-color="coral"] { background: rgba(210,95,80,0.16); color: var(--coral); }
+.perm-card-tool-icon[data-color="ink"]   { background: rgba(36,29,23,0.2); color: var(--ink); border: 1px solid rgba(36,29,23,0.3); }
+.perm-card-tool-icon[data-color="blue"]  { background: rgba(109,147,167,0.16); color: var(--blue); }
+.perm-card-tool-icon[data-color="steel"] { background: rgba(69,105,123,0.16); color: var(--steel); }
+.perm-card-tool-icon[data-color="honey"] { background: rgba(234,187,88,0.16); color: var(--honey); }
+.perm-card-tool-icon[data-color="purple"]{ background: rgba(139,109,200,0.16); color: var(--purple); }
+.perm-card-tool-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.perm-card-tool-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff5d9;
+  letter-spacing: -0.02em;
+}
+.perm-card-tool-detail {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 11px;
+  color: #b0c0a8;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 220px;
+  mask-image: linear-gradient(to right, transparent 0%, black 6px, black calc(100% - 6px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6px, black calc(100% - 6px), transparent 100%);
+}
+
+@keyframes perm-detail-marquee {
+  0%, 8% { transform: translateX(0); }
+  85%, 100% { transform: translateX(calc(-100% + 200px)); }
+}
+
+.perm-card-tool-detail.marquee {
+  animation: perm-detail-marquee 6s ease-in-out infinite;
+}
+
+/* Queue indicator */
+.perm-card-queue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--honey);
+  opacity: 0.8;
+}
+
+/* Actions */
+.perm-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px 10px;
+}
+.perm-card-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 100ms ease, box-shadow 140ms ease;
+}
+.perm-card-btn:hover {
+  transform: translateY(-1px);
+}
+.perm-card-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+.perm-card-btn-deny {
+  background: rgba(210, 95, 80, 0.14);
+  border-color: rgba(210, 95, 80, 0.32);
+  color: #e8a098;
+}
+.perm-card-btn-deny:hover {
+  background: rgba(210, 95, 80, 0.24);
+  border-color: rgba(210, 95, 80, 0.48);
+  box-shadow: 0 4px 12px rgba(210, 95, 80, 0.12);
+}
+.perm-card-btn-allow {
+  background: rgba(86, 166, 123, 0.2);
+  border-color: rgba(86, 166, 123, 0.4);
+  color: #b8e8c4;
+}
+.perm-card-btn-allow:hover {
+  background: rgba(86, 166, 123, 0.32);
+  border-color: rgba(86, 166, 123, 0.56);
+  box-shadow: 0 4px 12px rgba(86, 166, 123, 0.12);
+}
+.perm-card-btn-arrow {
+  opacity: 0.5;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.perm-card-btn-allow:hover .perm-card-btn-arrow {
+  opacity: 1;
+  transform: translateX(1px);
+}
+.edit-zone-permission {
+  left: 10px;
+  top: 10px;
+  width: 240px;
+  height: 140px;
+  z-index: 11;
+}
+@keyframes perm-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.clawd {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 226px;
+  height: 238px;
+  display: grid;
+  place-items: center;
+  transform-origin: bottom center;
+  animation: pixel-bob 2.8s steps(2, end) infinite;
+  image-rendering: pixelated;
+}
+.clawd-glow {
+  position: absolute;
+  left: 32px;
+  top: 62px;
+  width: 162px;
+  height: 118px;
+  border-radius: 10px;
+  background: rgba(215, 119, 87, 0.22);
+  filter: blur(16px);
+  animation: pulse 2.6s steps(3, end) infinite;
+}
+.clawd-image {
+  position: relative;
+  z-index: 4;
+  width: 168px;
+  height: 168px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  user-select: none;
+  pointer-events: none;
+}
+.clawd-animation-img {
+  position: relative;
+  z-index: 4;
+  align-self: end;
+  justify-self: center;
+  width: 226px;
+  height: 226px;
+  object-fit: contain;
+  image-rendering: auto;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* === State-specific animations === */
+
+/* thinking: gentle pulse glow, inspired by GIF where Clawd has something above its head */
+.clawd-thinking .clawd-glow {
+  animation: glow-think 1.2s steps(3, end) infinite;
+}
+
+/* tool_bash: rapid shake, inspired by OGC.gif (Clawd with hardhat working) */
+.clawd-tool_bash {
+  animation: clawd-work 0.3s steps(2, end) infinite;
+}
+
+/* tool_edit: side-to-side wiggle, inspired by cdcfb2c.gif (Clawd with headset) */
+.clawd-tool_edit {
+  animation: clawd-wiggle 0.4s steps(2, end) infinite;
+}
+
+/* tool_read: slow tilt up, inspired by e8b21b9.gif (Clawd looking up) */
+.clawd-tool_read {
+  animation: clawd-look-up 2s ease-in-out infinite;
+}
+
+/* tool_search: slow scan, similar to read but with slight rotation */
+.clawd-tool_search {
+  animation: clawd-scan 2.4s ease-in-out infinite;
+}
+
+/* tool_mcp: MCP tool call, reuse scan animation */
+.clawd-tool_mcp {
+  animation: clawd-scan 2.4s ease-in-out infinite;
+}
+
+/* skill: skill activation, gentle pulse */
+.clawd-skill {
+  animation: glow-think 1.2s steps(2, end) infinite;
+}
+.clawd-skill .clawd-glow {
+  animation: glow-happy 0.8s steps(2, end) infinite;
+}
+
+/* task: task processing, subtle bounce */
+.clawd-task {
+  animation: clawd-work 0.8s steps(3, end) infinite;
+}
+
+/* agent: agent invocation, similar to work */
+.clawd-agent {
+  animation: clawd-wiggle 0.4s steps(2, end) infinite;
+}
+
+/* waiting_permission: alert pulse, inspired by awdad.gif */
+.clawd-waiting_permission {
+  animation: clawd-alert 0.6s steps(2, end) infinite;
+}
+.clawd-waiting_permission .clawd-glow {
+  animation: glow-alert 0.8s steps(2, end) infinite;
+}
+
+/* done: happy bounce, inspired by 6f34b40.gif (big happy face) */
+.clawd-done {
+  animation: clawd-celebrate 0.5s steps(2, end) 3;
+}
+.clawd-done .clawd-glow {
+  animation: glow-happy 0.8s steps(2, end) infinite;
+}
+
+/* error: collapse/shake, inspired by awdwd.gif (sitting on ground) */
+.clawd-error {
+  animation: clawd-collapse 0.6s steps(2, end) 2;
+}
+.clawd-error .clawd-glow {
+  background: rgba(217, 107, 90, 0.3);
+  animation: glow-error 0.6s steps(2, end) infinite;
+}
+
+@keyframes glow-think {
+  0%, 100% { opacity: .5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes clawd-work {
+  0%, 100% { translate: 0 0; }
+  25% { translate: -3px 0; }
+  75% { translate: 3px 0; }
+}
+@keyframes clawd-wiggle {
+  0%, 100% { translate: 0 0; rotate: 0; }
+  25% { translate: -2px 0; rotate: -3deg; }
+  75% { translate: 2px 0; rotate: 3deg; }
+}
+@keyframes clawd-look-up {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -6px; }
+}
+@keyframes clawd-scan {
+  0%, 100% { translate: 0 0; rotate: 0; }
+  25% { translate: -4px 0; rotate: -2deg; }
+  50% { translate: 4px 0; rotate: 2deg; }
+  75% { translate: -2px 0; rotate: -1deg; }
+}
+@keyframes clawd-alert {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -4px; }
+}
+@keyframes glow-alert {
+  0%, 100% { opacity: .4; }
+  50% { opacity: 1; }
+}
+@keyframes clawd-celebrate {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -12px; }
+}
+@keyframes glow-happy {
+  0%, 100% { opacity: .6; background: rgba(114, 169, 140, 0.2); }
+  50% { opacity: 1; background: rgba(114, 169, 140, 0.35); }
+}
+@keyframes clawd-collapse {
+  0% { translate: 0 0; }
+  100% { translate: 0 6px; }
+}
+@keyframes glow-error {
+  0%, 100% { opacity: .5; }
+  50% { opacity: .9; }
+}

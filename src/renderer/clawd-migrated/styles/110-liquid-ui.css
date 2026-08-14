@@ -1,0 +1,570 @@
+/* === Liquid Glass UI Style === */
+[data-ui-style=liquid] {
+  --paper: #eef6ff;
+  --panel: rgba(255, 255, 255, 0.38);
+  --line: rgba(115, 143, 180, 0.22);
+  --shadow: 0 28px 90px rgba(58, 86, 130, 0.18);
+}
+
+[data-ui-style=liquid] .settings-shell {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(126, 225, 255, 0.34), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(182, 140, 255, 0.3), transparent 26%),
+    radial-gradient(circle at 50% 92%, rgba(255, 214, 120, 0.32), transparent 34%),
+    linear-gradient(135deg, #edf8ff 0%, #f7f3ff 46%, #fff8e9 100%);
+}
+
+[data-ui-style=liquid] .settings-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(255,255,255,0.38), transparent 28%, rgba(255,255,255,0.24) 62%, transparent),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), transparent 18%);
+  mix-blend-mode: soft-light;
+  opacity: 0.85;
+}
+
+[data-ui-style=liquid] .window-bar,
+[data-ui-style=liquid] .tab-bar,
+[data-ui-style=liquid] .version-bar {
+  background: rgba(255, 255, 255, 0.36);
+  border-color: rgba(115, 143, 180, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.58), 0 12px 34px rgba(58,86,130,0.08);
+}
+
+[data-ui-style=liquid] .hero-panel,
+[data-ui-style=liquid] .panel,
+[data-ui-style=liquid] .panel-group-card,
+[data-ui-style=liquid] .group-card,
+[data-ui-style=liquid] .onboarding-card,
+[data-ui-style=liquid] .settings-group,
+[data-ui-style=liquid] .status-card,
+[data-ui-style=liquid] .stat-item,
+[data-ui-style=liquid] .event-row,
+[data-ui-style=liquid] .sound-row,
+[data-ui-style=liquid] .command-row,
+[data-ui-style=liquid] .code-card,
+[data-ui-style=liquid] .empty {
+  border-color: rgba(255, 255, 255, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.52), rgba(255,255,255,0.22)),
+    rgba(255,255,255,0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.64), 0 22px 54px rgba(58,86,130,0.12);
+  backdrop-filter: blur(26px) saturate(1.34);
+}
+
+[data-ui-style=liquid] .hero-panel {
+  background:
+    radial-gradient(circle at 82% 22%, rgba(126,225,255,0.3), transparent 26%),
+    radial-gradient(circle at 20% 84%, rgba(255,214,120,0.28), transparent 30%),
+    linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.26));
+}
+
+[data-ui-style=liquid] .tab-item {
+  color: #3c4a5a;
+}
+[data-ui-style=liquid] .tab-item:hover {
+  background: rgba(255,255,255,0.42);
+  color: #1c2a3a;
+}
+[data-ui-style=liquid] .tab-item.active,
+[data-ui-style=liquid] .segmented button.active,
+[data-ui-style=liquid] .feedback-mode-row button.active {
+  background: rgba(255,255,255,0.48);
+  color: #1c2a3a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 24px rgba(58,86,130,0.12);
+}
+
+[data-ui-style=liquid] .theme-switch,
+[data-ui-style=liquid] .ui-style-toggle,
+[data-ui-style=liquid] .toggle {
+  background: rgba(255,255,255,0.34);
+  border-color: rgba(255,255,255,0.46);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.66), 0 14px 32px rgba(58,86,130,0.1);
+  backdrop-filter: blur(22px) saturate(1.28);
+}
+
+[data-ui-style=liquid] .toggle i {
+  background: rgba(58, 86, 130, 0.18);
+  border-color: rgba(58, 86, 130, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+}
+[data-ui-style=liquid] .toggle i::after {
+  background: linear-gradient(135deg, #ffffff, #d8e3f1);
+  box-shadow: 0 5px 12px rgba(58,86,130,0.22), inset 0 0 0 1px rgba(255,255,255,0.72);
+}
+[data-ui-style=liquid] .toggle.on {
+  background: linear-gradient(135deg, rgba(126,225,255,0.46), rgba(182,140,255,0.36));
+  border-color: rgba(126,225,255,0.46);
+  color: #1c2a3a;
+}
+[data-ui-style=liquid] .toggle.on > svg {
+  color: #1c4a6e;
+}
+[data-ui-style=liquid] .toggle.on i {
+  background: linear-gradient(135deg, #7ee1ff, #b68cff 58%, #ffd678);
+  border-color: rgba(58,86,130,0.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 8px 18px rgba(126,225,255,0.26);
+}
+[data-ui-style=liquid] .toggle.on i::after {
+  background: linear-gradient(135deg, #ffffff, #d3e7f1);
+}
+
+[data-ui-style=liquid] .toggle-row .toggle {
+  background: rgba(58, 86, 130, 0.18);
+  border-color: rgba(58, 86, 130, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+}
+[data-ui-style=liquid] .toggle-row .toggle-knob {
+  background: linear-gradient(135deg, #ffffff, #d8e3f1);
+  box-shadow: 0 5px 12px rgba(58,86,130,0.22), inset 0 0 0 1px rgba(255,255,255,0.72);
+}
+[data-ui-style=liquid] .toggle-row .toggle.on {
+  background: linear-gradient(135deg, #7ee1ff, #b68cff 58%, #ffd678);
+  border-color: rgba(58,86,130,0.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 8px 18px rgba(126,225,255,0.26);
+}
+[data-ui-style=liquid] .toggle-row .toggle.on::before {
+  background: rgba(255,255,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+}
+[data-ui-style=liquid] .toggle-row .toggle.on .toggle-knob {
+  background: linear-gradient(135deg, #ffffff, #d3e7f1);
+}
+
+[data-ui-style=liquid] .theme-switch-liquid .theme-switch-liquid {
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.86), transparent 30%),
+    linear-gradient(135deg, rgba(126,225,255,0.62), rgba(182,140,255,0.42));
+}
+[data-ui-style=liquid] .theme-switch-dark .theme-switch-liquid {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,0.5), transparent 28%),
+    linear-gradient(135deg, rgba(45,80,120,0.78), rgba(80,60,130,0.68));
+  box-shadow: 0 12px 26px rgba(58,86,130,0.22), inset 0 0 0 1px rgba(255,255,255,0.34);
+}
+[data-ui-style=liquid] .theme-switch-system .theme-switch-liquid {
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.82), transparent 30%),
+    linear-gradient(135deg, rgba(126,225,255,0.42), rgba(255,214,120,0.42));
+}
+
+[data-ui-style=liquid] .ui-style-toggle-liquid {
+  background:
+    radial-gradient(circle at 22% 22%, rgba(255,255,255,0.72), transparent 32%),
+    linear-gradient(135deg, rgba(126,225,255,0.32), rgba(182,140,255,0.28));
+  border-color: rgba(126,225,255,0.42);
+}
+
+[data-ui-style=liquid] input,
+[data-ui-style=liquid] pre,
+[data-ui-style=liquid] .event-list,
+[data-ui-style=liquid] .code-card,
+[data-ui-style=liquid] .step,
+[data-ui-style=liquid] .clawd-idle-dropdown,
+[data-ui-style=liquid] .hook-result,
+[data-ui-style=liquid] .hooks-result,
+[data-ui-style=liquid] .clawd-idle-picker,
+[data-ui-style=liquid] .clawd-idle-option,
+[data-ui-style=liquid] .idle-sprite-preview,
+[data-ui-style=liquid] .state-anim-picker {
+  background: rgba(255,255,255,0.32);
+  border-color: rgba(255,255,255,0.46);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.56);
+  backdrop-filter: blur(18px) saturate(1.24);
+}
+
+[data-ui-style=liquid] input:focus,
+[data-ui-style=liquid] textarea:focus {
+  border-color: rgba(126,225,255,0.6);
+  box-shadow: 0 0 0 4px rgba(126,225,255,0.18), inset 0 1px 0 rgba(255,255,255,0.56);
+}
+
+[data-ui-style=liquid] input[type="range"] {
+  background: transparent;
+}
+[data-ui-style=liquid] input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, rgba(126,225,255,0.72) var(--slider-fill, 0%), rgba(58,86,130,0.18) var(--slider-fill, 0%));
+}
+[data-ui-style=liquid] input[type="range"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #ffffff, #cfe6f3);
+  box-shadow: 0 4px 12px rgba(58,86,130,0.28), inset 0 0 0 1px rgba(255,255,255,0.72);
+  border-color: rgba(58,86,130,0.22);
+}
+
+[data-ui-style=liquid] .feedback-mode-row,
+[data-ui-style=liquid] .mapping-row,
+[data-ui-style=liquid] .clawd-idle-row {
+  background: rgba(255,255,255,0.28);
+  border-color: rgba(255,255,255,0.42);
+}
+
+[data-ui-style=liquid] .feedback-mode-row button,
+[data-ui-style=liquid] .segmented button {
+  color: #3c4a5a;
+}
+[data-ui-style=liquid] .feedback-mode-row button.active,
+[data-ui-style=liquid] .segmented button.active {
+  background: rgba(255,255,255,0.6);
+  color: #1c2a3a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 6px 14px rgba(58,86,130,0.1);
+}
+
+[data-ui-style=liquid] .hero-actions button,
+[data-ui-style=liquid] .command-row button,
+[data-ui-style=liquid] .code-card-head button,
+[data-ui-style=liquid] .hooks-actions button,
+[data-ui-style=liquid] .onboarding-actions button,
+[data-ui-style=liquid] .update-btn,
+[data-ui-style=liquid] .ghost-btn,
+[data-ui-style=liquid] .inline-action {
+  background: rgba(255,255,255,0.4);
+  border-color: rgba(255,255,255,0.5);
+  color: #1c2a3a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.62), 0 10px 22px rgba(58,86,130,0.1);
+}
+[data-ui-style=liquid] .hero-actions button:hover,
+[data-ui-style=liquid] .command-row button:hover,
+[data-ui-style=liquid] .code-card-head button:hover,
+[data-ui-style=liquid] .hooks-actions button:hover:not(:disabled),
+[data-ui-style=liquid] .onboarding-actions button:hover,
+[data-ui-style=liquid] .update-btn:hover:not(:disabled),
+[data-ui-style=liquid] .ghost-btn:hover,
+[data-ui-style=liquid] .inline-action:hover {
+  background: rgba(255,255,255,0.54);
+  color: #102030;
+}
+
+[data-ui-style=liquid] .hero-actions button:not(.ghost),
+[data-ui-style=liquid] .command-row button:not(.danger),
+[data-ui-style=liquid] .code-card-head button,
+[data-ui-style=liquid] .hooks-actions button:not(.danger),
+[data-ui-style=liquid] .onboarding-actions button:not(.ghost) {
+  color: #0c1d2c;
+  background: linear-gradient(135deg, rgba(126,225,255,0.78), rgba(255,214,120,0.62));
+  border-color: rgba(255,255,255,0.46);
+  box-shadow: 0 12px 26px rgba(58,86,130,0.18), inset 0 1px 0 rgba(255,255,255,0.62);
+}
+
+[data-ui-style=liquid] .command-row button.danger,
+[data-ui-style=liquid] .hooks-actions button.danger {
+  color: #7b3028;
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(217, 107, 90, 0.32);
+}
+
+[data-ui-style=liquid] .window-actions button {
+  background: rgba(255,255,255,0.5);
+  border-color: rgba(255,255,255,0.55);
+  color: #2a3a4a;
+}
+[data-ui-style=liquid] .window-actions button:hover {
+  background: linear-gradient(135deg, rgba(126,225,255,0.72), rgba(255,214,120,0.6));
+  color: #0c1d2c;
+  border-color: rgba(255,255,255,0.6);
+}
+[data-ui-style=liquid] .window-actions .close:hover {
+  color: #fff4d7;
+  background: linear-gradient(135deg, #d96b5a, #b85d43);
+}
+
+/* --- Liquid Glass Permission Card --- */
+[data-ui-style=liquid] .perm-card {
+  background: rgba(255, 255, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.48);
+  box-shadow:
+    0 16px 48px rgba(58, 86, 130, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 0 24px var(--risk-glow, rgba(126, 225, 255, 0.08));
+}
+[data-ui-style=liquid] .perm-card-title { color: #1c2a3a; }
+[data-ui-style=liquid] .perm-card-tool-name { color: #1a2a3a; }
+[data-ui-style=liquid] .perm-card-tool-detail {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #3a4a5a;
+}
+[data-ui-style=liquid] .perm-card-btn-deny {
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(210, 95, 80, 0.32);
+  color: #7b3028;
+}
+[data-ui-style=liquid] .perm-card-btn-deny:hover {
+  background: rgba(255, 255, 255, 0.54);
+  border-color: rgba(210, 95, 80, 0.48);
+}
+[data-ui-style=liquid] .perm-card-btn-allow {
+  background: linear-gradient(135deg, rgba(126,225,255,0.68), rgba(255,214,120,0.58));
+  border-color: rgba(255,255,255,0.46);
+  color: #0c1d2c;
+  box-shadow: 0 8px 20px rgba(58,86,130,0.14), inset 0 1px 0 rgba(255,255,255,0.62);
+}
+[data-ui-style=liquid] .perm-card-btn-allow:hover {
+  background: linear-gradient(135deg, rgba(126,225,255,0.82), rgba(255,214,120,0.72));
+}
+[data-ui-style=liquid] .perm-card-risk-badge[data-risk="low"] {
+  color: #2a7a4a;
+  background: rgba(86,166,123,0.18);
+}
+[data-ui-style=liquid] .perm-card-risk-badge[data-risk="medium"] {
+  color: #8a6a1a;
+  background: rgba(234,187,88,0.2);
+}
+[data-ui-style=liquid] .perm-card-risk-badge[data-risk="high"] {
+  color: #8a3a2a;
+  background: rgba(210,95,80,0.18);
+}
+[data-ui-style=liquid] .perm-card-tool-icon[data-color="ink"] {
+  background: rgba(28, 42, 58, 0.12);
+  color: #1c2a3a;
+  border-color: rgba(28, 42, 58, 0.2);
+}
+
+[data-ui-style=liquid] .note,
+[data-ui-style=liquid] .launch-note,
+[data-ui-style=liquid] .event-row span,
+[data-ui-style=liquid] .event-row p,
+[data-ui-style=liquid] .event-row small,
+[data-ui-style=liquid] .stat-label,
+[data-ui-style=liquid] .status-card small,
+[data-ui-style=liquid] .field span,
+[data-ui-style=liquid] .slider-row span,
+[data-ui-style=liquid] .subtle {
+  color: rgba(40, 60, 80, 0.7);
+}
+[data-ui-style=liquid] h1,
+[data-ui-style=liquid] .eyebrow,
+[data-ui-style=liquid] .panel-title,
+[data-ui-style=liquid] .panel h2,
+[data-ui-style=liquid] .group-card-header h3,
+[data-ui-style=liquid] .event-row strong,
+[data-ui-style=liquid] .status-card strong,
+[data-ui-style=liquid] .stat-value,
+[data-ui-style=liquid] .token-model-name,
+[data-ui-style=liquid] code {
+  color: #102030;
+}
+
+[data-ui-style=liquid] .theme-settings-group {
+  background: linear-gradient(135deg, rgba(126,225,255,0.18), rgba(182,140,255,0.14));
+  border-color: rgba(126,225,255,0.32);
+}
+
+[data-ui-style=liquid] .update-error {
+  color: #7b3028;
+}
+[data-ui-style=liquid] .connection-error {
+  background: rgba(255, 232, 225, 0.62);
+  border-color: rgba(217, 107, 90, 0.42);
+  color: #7b3028;
+}
+
+[data-ui-style=liquid][data-theme=dark] {
+  --paper: #0e1620;
+  --panel: rgba(20, 30, 44, 0.46);
+  --line: rgba(218, 239, 255, 0.18);
+}
+
+[data-ui-style=liquid][data-theme=dark] .settings-shell {
+  background:
+    radial-gradient(circle at 14% 16%, rgba(63, 186, 226, 0.32), transparent 30%),
+    radial-gradient(circle at 86% 18%, rgba(133, 92, 221, 0.26), transparent 28%),
+    radial-gradient(circle at 52% 90%, rgba(240, 196, 95, 0.18), transparent 34%),
+    linear-gradient(135deg, #0d1720 0%, #171426 48%, #201914 100%);
+}
+[data-ui-style=liquid][data-theme=dark] .window-bar,
+[data-ui-style=liquid][data-theme=dark] .tab-bar,
+[data-ui-style=liquid][data-theme=dark] .version-bar {
+  background: linear-gradient(135deg, rgba(218,239,255,0.12), rgba(218,239,255,0.04));
+  border-color: rgba(218,239,255,0.18);
+  color: #dde6f0;
+}
+[data-ui-style=liquid][data-theme=dark] .tab-item { color: #c8d4e0; }
+[data-ui-style=liquid][data-theme=dark] .tab-item.active {
+  color: #f4eadf;
+  background: rgba(218,239,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(0,0,0,0.28);
+}
+[data-ui-style=liquid][data-theme=dark] .hero-panel,
+[data-ui-style=liquid][data-theme=dark] .panel,
+[data-ui-style=liquid][data-theme=dark] .panel-group-card,
+[data-ui-style=liquid][data-theme=dark] .group-card,
+[data-ui-style=liquid][data-theme=dark] .settings-group,
+[data-ui-style=liquid][data-theme=dark] .status-card,
+[data-ui-style=liquid][data-theme=dark] .stat-item,
+[data-ui-style=liquid][data-theme=dark] .event-row,
+[data-ui-style=liquid][data-theme=dark] .sound-row,
+[data-ui-style=liquid][data-theme=dark] .command-row,
+[data-ui-style=liquid][data-theme=dark] .empty,
+[data-ui-style=liquid][data-theme=dark] .feedback-mode-row,
+[data-ui-style=liquid][data-theme=dark] .mapping-row,
+[data-ui-style=liquid][data-theme=dark] .clawd-idle-picker,
+[data-ui-style=liquid][data-theme=dark] .clawd-idle-option,
+[data-ui-style=liquid][data-theme=dark] .idle-sprite-preview,
+[data-ui-style=liquid][data-theme=dark] .state-anim-picker {
+  background: linear-gradient(135deg, rgba(218,239,255,0.14), rgba(218,239,255,0.06));
+  border-color: rgba(218,239,255,0.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 22px 54px rgba(0,0,0,0.32);
+  color: #dde6f0;
+}
+[data-ui-style=liquid][data-theme=dark] .toggle,
+[data-ui-style=liquid][data-theme=dark] .theme-switch,
+[data-ui-style=liquid][data-theme=dark] .ui-style-toggle {
+  background: linear-gradient(135deg, rgba(218,239,255,0.14), rgba(218,239,255,0.06));
+  border-color: rgba(218,239,255,0.2);
+  color: #f4eadf;
+}
+[data-ui-style=liquid][data-theme=dark] .toggle i {
+  background: rgba(218,239,255,0.18);
+  border-color: rgba(218,239,255,0.24);
+}
+[data-ui-style=liquid][data-theme=dark] .toggle i::after {
+  background: linear-gradient(135deg, #f4eadf, #c0c8d0);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.36), inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+[data-ui-style=liquid][data-theme=dark] .toggle.on {
+  background: linear-gradient(135deg, rgba(126,225,255,0.34), rgba(182,140,255,0.28));
+  border-color: rgba(126,225,255,0.36);
+}
+[data-ui-style=liquid][data-theme=dark] .toggle.on i {
+  background: linear-gradient(135deg, #7ee1ff, #b68cff 58%, #ffd678);
+  border-color: rgba(255,255,255,0.18);
+}
+[data-ui-style=liquid][data-theme=dark] .toggle.on i::after {
+  background: linear-gradient(135deg, #ffffff, #d3e7f1);
+}
+[data-ui-style=liquid][data-theme=dark] .hero-actions button,
+[data-ui-style=liquid][data-theme=dark] .command-row button,
+[data-ui-style=liquid][data-theme=dark] .code-card-head button,
+[data-ui-style=liquid][data-theme=dark] .hooks-actions button,
+[data-ui-style=liquid][data-theme=dark] .onboarding-actions button,
+[data-ui-style=liquid][data-theme=dark] .update-btn,
+[data-ui-style=liquid][data-theme=dark] .ghost-btn,
+[data-ui-style=liquid][data-theme=dark] .inline-action,
+[data-ui-style=liquid][data-theme=dark] .window-actions button {
+  background: linear-gradient(135deg, rgba(218,239,255,0.16), rgba(218,239,255,0.08));
+  border-color: rgba(218,239,255,0.22);
+  color: #f4eadf;
+}
+[data-ui-style=liquid][data-theme=dark] .hero-actions button:not(.ghost),
+[data-ui-style=liquid][data-theme=dark] .command-row button:not(.danger),
+[data-ui-style=liquid][data-theme=dark] .code-card-head button,
+[data-ui-style=liquid][data-theme=dark] .hooks-actions button:not(.danger),
+[data-ui-style=liquid][data-theme=dark] .onboarding-actions button:not(.ghost) {
+  color: #0c1d2c;
+  background: linear-gradient(135deg, rgba(126,225,255,0.7), rgba(255,214,120,0.6));
+}
+/* --- Liquid Glass Dark Permission Card --- */
+[data-ui-style=liquid][data-theme=dark] .perm-card {
+  background: linear-gradient(135deg, rgba(218,239,255,0.1), rgba(218,239,255,0.04));
+  border-color: rgba(218,239,255,0.16);
+  box-shadow:
+    0 16px 48px rgba(0,0,0,0.28),
+    0 0 0 1px rgba(218,239,255,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 0 24px var(--risk-glow, rgba(126,225,255,0.06));
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-title { color: #f4eadf; }
+[data-ui-style=liquid][data-theme=dark] .perm-card-tool-name { color: #fff5d9; }
+[data-ui-style=liquid][data-theme=dark] .perm-card-tool-detail {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.08);
+  color: #a0b098;
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-btn-deny {
+  background: linear-gradient(135deg, rgba(218,239,255,0.16), rgba(218,239,255,0.08));
+  border-color: rgba(210,95,80,0.26);
+  color: #d89088;
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-btn-deny:hover {
+  background: linear-gradient(135deg, rgba(218,239,255,0.22), rgba(218,239,255,0.12));
+  border-color: rgba(210,95,80,0.4);
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-btn-allow {
+  background: linear-gradient(135deg, rgba(126,225,255,0.7), rgba(255,214,120,0.6));
+  border-color: rgba(255,255,255,0.28);
+  color: #0c1d2c;
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-btn-allow:hover {
+  background: linear-gradient(135deg, rgba(126,225,255,0.82), rgba(255,214,120,0.72));
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-risk-badge[data-risk="low"] {
+  color: var(--mint);
+  background: rgba(86,166,123,0.14);
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-risk-badge[data-risk="medium"] {
+  color: var(--honey);
+  background: rgba(234,187,88,0.16);
+}
+[data-ui-style=liquid][data-theme=dark] .perm-card-risk-badge[data-risk="high"] {
+  color: var(--coral);
+  background: rgba(210,95,80,0.16);
+}
+
+[data-ui-style=liquid][data-theme=dark] .note,
+[data-ui-style=liquid][data-theme=dark] .subtle,
+[data-ui-style=liquid][data-theme=dark] .stat-label,
+[data-ui-style=liquid][data-theme=dark] .status-card small,
+[data-ui-style=liquid][data-theme=dark] .event-row span,
+[data-ui-style=liquid][data-theme=dark] .event-row p,
+[data-ui-style=liquid][data-theme=dark] .event-row small,
+[data-ui-style=liquid][data-theme=dark] .field span,
+[data-ui-style=liquid][data-theme=dark] .slider-row span {
+  color: rgba(244, 234, 223, 0.7);
+}
+[data-ui-style=liquid][data-theme=dark] h1,
+[data-ui-style=liquid][data-theme=dark] .eyebrow,
+[data-ui-style=liquid][data-theme=dark] .panel-title,
+[data-ui-style=liquid][data-theme=dark] .panel h2,
+[data-ui-style=liquid][data-theme=dark] .group-card-header h3,
+[data-ui-style=liquid][data-theme=dark] .event-row strong,
+[data-ui-style=liquid][data-theme=dark] .status-card strong,
+[data-ui-style=liquid][data-theme=dark] .stat-value,
+[data-ui-style=liquid][data-theme=dark] .token-model-name,
+[data-ui-style=liquid][data-theme=dark] code {
+  color: #f4eadf;
+}
+[data-ui-style=liquid][data-theme=dark] .theme-switch-dark .theme-switch-liquid,
+[data-ui-style=liquid][data-theme=dark] .theme-switch-system .theme-switch-liquid,
+[data-ui-style=liquid][data-theme=dark] .theme-switch .theme-switch-liquid {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,0.5), transparent 28%),
+    linear-gradient(135deg, rgba(126,225,255,0.4), rgba(182,140,255,0.3));
+}
+[data-ui-style=liquid][data-theme=dark] .window-actions .close:hover {
+  color: #fff4d7;
+}
+
+[data-ui-style=liquid][data-theme=dark] {
+  --paper: #101821;
+  --panel: rgba(21, 32, 46, 0.42);
+  --line: rgba(218, 239, 255, 0.18);
+}
+
+[data-ui-style=liquid][data-theme=dark] .settings-shell {
+  background:
+    radial-gradient(circle at 14% 16%, rgba(63, 186, 226, 0.28), transparent 30%),
+    radial-gradient(circle at 86% 18%, rgba(133, 92, 221, 0.24), transparent 28%),
+    radial-gradient(circle at 52% 90%, rgba(240, 196, 95, 0.18), transparent 34%),
+    linear-gradient(135deg, #0d1720 0%, #171426 48%, #201914 100%);
+}
+
+[data-ui-style=liquid][data-theme=dark] .hero-panel,
+[data-ui-style=liquid][data-theme=dark] .panel,
+[data-ui-style=liquid][data-theme=dark] .panel-group-card,
+[data-ui-style=liquid][data-theme=dark] .group-card,
+[data-ui-style=liquid][data-theme=dark] .settings-group,
+[data-ui-style=liquid][data-theme=dark] .status-card,
+[data-ui-style=liquid][data-theme=dark] .stat-item,
+[data-ui-style=liquid][data-theme=dark] .event-row,
+[data-ui-style=liquid][data-theme=dark] .sound-row,
+[data-ui-style=liquid][data-theme=dark] .command-row,
+[data-ui-style=liquid][data-theme=dark] .empty {
+  background: linear-gradient(135deg, rgba(218,239,255,0.14), rgba(218,239,255,0.06));
+  border-color: rgba(218,239,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 22px 54px rgba(0,0,0,0.28);
+}
+

@@ -1,0 +1,72 @@
+# Windows matches the app's primary development and runtime environment.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer commit on the same PR cancels the obsolete in-progress run; pushes
+# to main are never cancelled mid-validation.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    name: Tests (Windows, shard ${{ matrix.shard }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/2, 2/2]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test shard ${{ matrix.shard }}
+        run: npm test -- --shard=${{ matrix.shard }}
+
+  quality:
+    name: Quality (Windows, plugin, typecheck, build)
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dsh-plugin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install DSH plugin dependencies
+        run: npm ci --prefix ./dsh-plugin
+
+      - name: Test DSH plugin
+        run: npm test --prefix ./dsh-plugin
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

@@ -1,0 +1,674 @@
+/* === Overview Front Door Refinement === */
+/* .connection-management (Settings → Connection details) reuses the connection
+   rows and their --overview-* ramp, so it shares this scope. */
+.overview-workbench,
+.connection-management {
+  --overview-ink: oklch(23% 0.011 75);
+  --overview-muted: oklch(49% 0.011 75);
+  --overview-faint: oklch(63% 0.01 75);
+  --overview-line: oklch(34% 0.012 75 / 0.16);
+  --overview-line-strong: oklch(34% 0.012 75 / 0.28);
+  --overview-surface: oklch(98% 0.008 78 / 0.84);
+  --overview-surface-raised: oklch(99% 0.006 78 / 0.92);
+  --overview-surface-hover: oklch(95% 0.01 78 / 0.9);
+  --overview-accent: oklch(73% 0.115 82);
+  --overview-accent-ink: oklch(24% 0.01 75);
+  --overview-header-surface: linear-gradient(180deg, oklch(99% 0.006 78 / 0.92), var(--overview-surface));
+  --overview-control-border: oklch(34% 0.012 75 / 0.18);
+  --overview-control-bg: oklch(99% 0.006 78 / 0.78);
+  --overview-control-hover: oklch(96% 0.012 78 / 0.95);
+  --overview-control-muted: oklch(52% 0.01 75);
+  --overview-active-surface: oklch(94% 0.018 82 / 0.82);
+  --overview-active-line: oklch(64% 0.065 82 / 0.42);
+  --overview-link: oklch(54% 0.075 250);
+  --overview-link-hover: oklch(46% 0.085 250);
+  --overview-success: oklch(62% 0.09 154);
+  --overview-danger: oklch(60% 0.11 32);
+  --overview-scrollbar: oklch(68% 0.01 75 / 0.58);
+  --overview-shadow: 0 18px 44px oklch(34% 0.012 75 / 0.1);
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  color: var(--overview-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+[data-theme=dark] .overview-workbench,
+[data-theme=dark] .connection-management {
+  --overview-ink: oklch(91% 0.012 78);
+  --overview-muted: oklch(60% 0.01 78);
+  --overview-faint: oklch(49% 0.009 78);
+  --overview-line: oklch(27% 0.006 75);
+  --overview-line-strong: oklch(32% 0.007 75);
+  --overview-surface: oklch(17.5% 0.006 75);
+  --overview-surface-raised: oklch(20% 0.006 75);
+  --overview-surface-hover: oklch(21.5% 0.007 75);
+  --overview-accent: oklch(77% 0.105 82);
+  --overview-accent-ink: oklch(16% 0.006 75);
+  --overview-header-surface: linear-gradient(180deg, oklch(20% 0.007 75), var(--overview-surface));
+  --overview-control-border: oklch(40% 0.018 78);
+  --overview-control-bg: oklch(22% 0.008 75);
+  --overview-control-hover: oklch(25% 0.01 75);
+  --overview-control-muted: oklch(58% 0.01 78);
+  --overview-active-surface: oklch(21% 0.008 76);
+  --overview-active-line: oklch(41% 0.028 76);
+  --overview-link: oklch(68% 0.07 250);
+  --overview-link-hover: oklch(76% 0.075 250);
+  --overview-success: oklch(72% 0.07 154);
+  --overview-danger: oklch(76% 0.08 32);
+  --overview-scrollbar: oklch(43% 0.008 78);
+  --overview-shadow: 0 18px 50px oklch(12% 0.006 75 / .18);
+}
+
+.overview-workbench .hook-setup-card {
+  border-radius: 10px;
+}
+
+.overview-workbench .ccs-provider-board {
+  min-width: 0;
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--overview-line);
+  border-radius: 10px;
+  color: var(--overview-ink);
+  background: var(--overview-surface);
+  box-shadow: var(--overview-shadow);
+}
+
+.overview-workbench .ccs-provider-board-header {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px 14px 18px;
+  border-bottom: 1px solid var(--overview-line);
+  background: var(--overview-header-surface);
+}
+
+.overview-workbench .ccs-provider-board-title {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.overview-workbench .ccs-provider-board-header h3 {
+  margin: 0;
+  color: var(--overview-ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.overview-workbench .ccs-provider-board-title p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--overview-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-workbench .cc-switch-add {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--overview-control-border);
+  border-radius: 8px;
+  color: var(--overview-accent);
+  background: var(--overview-control-bg);
+  box-shadow: none;
+  font-size: 0;
+  line-height: 1;
+}
+
+.overview-workbench .cc-switch-add svg {
+  width: 18px;
+  height: 18px;
+}
+
+.overview-workbench .cc-switch-add:hover {
+  border-color: var(--overview-active-line);
+  color: var(--overview-accent);
+  background: var(--overview-control-hover);
+  filter: none;
+  transform: none;
+}
+
+.overview-workbench .cc-switch-add:focus-visible,
+.overview-workbench .ccs-drag-handle:focus-visible,
+.overview-workbench .ccs-provider-main-action:focus-visible,
+.overview-workbench .ccs-provider-icon-actions button:focus-visible {
+  outline: 2px solid var(--overview-active-line);
+  outline-offset: 1px;
+}
+
+.overview-workbench .ccs-provider-status {
+  justify-self: stretch;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--overview-line);
+  border-radius: 0;
+  color: var(--overview-muted);
+  background: var(--overview-surface-raised);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.overview-workbench .ccs-provider-list {
+  display: grid;
+  gap: 0;
+  max-height: min(56vh, 560px);
+  overflow-y: auto;
+  padding: 0;
+  background: var(--overview-surface);
+}
+
+.overview-workbench .ccs-provider-list::-webkit-scrollbar { width: 10px; }
+.overview-workbench .ccs-provider-list::-webkit-scrollbar-thumb {
+  border: 3px solid var(--overview-surface);
+  border-radius: 999px;
+  background: var(--overview-scrollbar);
+  background-clip: padding-box;
+}
+.overview-workbench .ccs-provider-list::-webkit-scrollbar-track { background: transparent; }
+
+.overview-workbench .ccs-provider-card {
+  position: relative;
+  min-height: 82px;
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid var(--overview-line);
+  border-radius: 0;
+  padding: 0;
+  color: var(--overview-ink);
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.overview-workbench .ccs-provider-list > div:last-child .ccs-provider-card {
+  border-bottom: 0;
+}
+
+.overview-workbench .ccs-provider-card:hover {
+  border-color: var(--overview-line);
+  background: var(--overview-surface-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.overview-workbench .ccs-provider-card.active {
+  border-color: var(--overview-line);
+  background: var(--overview-active-surface);
+  box-shadow: inset 0 0 0 1px var(--overview-active-line);
+}
+
+.overview-workbench .ccs-provider-card.dragging {
+  border-color: var(--overview-line-strong);
+  background: var(--overview-surface-hover);
+  box-shadow: var(--overview-shadow);
+}
+
+.overview-workbench .ccs-provider-gradient {
+  display: none;
+}
+
+.overview-workbench .ccs-provider-content {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 206px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+}
+
+.overview-workbench .ccs-provider-left {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.overview-workbench .ccs-drag-handle {
+  width: 22px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--overview-control-muted);
+  background: transparent;
+}
+
+.overview-workbench .ccs-drag-handle:hover {
+  color: var(--overview-ink);
+  background: var(--overview-control-hover);
+}
+
+.overview-workbench .ccs-provider-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--overview-control-border);
+  border-radius: 8px;
+  color: var(--overview-accent);
+  background: var(--overview-control-bg);
+  font-size: 14px;
+  font-weight: 600;
+  transition: none;
+}
+
+.overview-workbench .ccs-provider-card:hover .ccs-provider-icon {
+  transform: none;
+}
+
+.overview-workbench .ccs-provider-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.overview-workbench .ccs-provider-titleline {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-height: 20px;
+}
+
+.overview-workbench .ccs-provider-titleline h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--overview-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-workbench .ccs-provider-titleline span {
+  min-height: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--overview-muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.overview-workbench .ccs-provider-titleline span::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.overview-workbench .ccs-provider-url {
+  max-width: min(420px, 100%);
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--overview-link);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-workbench .ccs-provider-url:hover {
+  color: var(--overview-link-hover);
+}
+
+.overview-workbench .ccs-provider-actions {
+  flex: 0 0 auto;
+  width: 206px;
+  min-width: 206px;
+  margin-left: 0;
+  justify-self: end;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transform: none;
+  transition: none;
+}
+
+.overview-workbench .ccs-provider-actions-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.overview-workbench .ccs-provider-main-action {
+  width: 72px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--overview-control-border);
+  border-radius: 8px;
+  color: var(--overview-ink);
+  background: var(--overview-control-bg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.overview-workbench .ccs-provider-main-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.overview-workbench .ccs-provider-main-action:hover:not(:disabled) {
+  border-color: var(--overview-active-line);
+  color: var(--overview-accent-ink);
+  background: var(--overview-accent);
+}
+
+.overview-workbench .ccs-provider-main-action.current {
+  color: var(--overview-muted);
+  border-color: var(--overview-control-border);
+  background: var(--overview-control-bg);
+  cursor: default;
+}
+
+.overview-workbench .ccs-provider-icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.overview-workbench .ccs-provider-icon-actions button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--overview-control-muted);
+  background: transparent;
+}
+
+.overview-workbench .ccs-provider-icon-actions button:hover:not(:disabled) {
+  color: var(--overview-ink);
+  border-color: var(--overview-control-border);
+  background: var(--overview-control-hover);
+}
+
+.overview-workbench .ccs-provider-icon-actions button:last-child:hover:not(:disabled) {
+  color: var(--overview-danger);
+}
+
+.overview-workbench .ccs-provider-icon-actions button:disabled {
+  opacity: .35;
+}
+
+
+.overview-workbench .connection-error {
+  border-radius: 8px;
+  color: var(--overview-danger);
+  background: oklch(76% 0.08 32 / .1);
+}
+
+/* Connection workbench: one surface that changes state (onboarding -> factual
+   delivery-chain rows). Factual rows over cards, small dot + text status. */
+.overview-connection {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--overview-line);
+  border-radius: 9px;
+  color: var(--overview-ink);
+  background: var(--overview-surface);
+}
+
+.overview-connection .workbench-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--overview-line);
+  background: var(--overview-surface-raised);
+}
+
+.overview-connection .workbench-section-head h2 {
+  color: var(--overview-ink);
+  font-size: 14px;
+  font-weight: 740;
+  line-height: 1.25;
+}
+
+/* In the compact head-actions flex box the base rule's 42% max-width is
+   narrower than the label itself, so the nowrap text spilled past the pill's
+   border. The pill sizes to its content here. */
+.overview-connection .overview-state-badge { max-width: none; font-size: 11px; font-weight: 700; }
+.overview-connection .overview-state-badge.good { color: var(--overview-success); }
+.overview-connection .overview-state-badge.wait { color: var(--overview-accent); }
+.overview-connection .overview-state-badge.bad { color: var(--overview-danger); }
+
+.connection-rows { display: flex; flex-direction: column; }
+
+.connection-row {
+  display: grid;
+  grid-template-columns: 8px minmax(84px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--overview-line);
+  font-variant-numeric: tabular-nums;
+}
+.connection-row:first-child { border-top: 0; }
+
+.connection-row-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--overview-faint);
+}
+.connection-row.state-healthy .connection-row-dot { background: var(--overview-success); }
+.connection-row.state-partial .connection-row-dot,
+.connection-row.state-repair .connection-row-dot { background: var(--overview-accent); }
+.connection-row.state-unavailable .connection-row-dot { background: var(--overview-danger); }
+
+.connection-row-label { color: var(--overview-faint); font-size: 11px; font-weight: 700; }
+
+.connection-row-value {
+  min-width: 0;
+  color: var(--overview-ink);
+  font-size: 12px;
+  font-weight: 640;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-loading { padding: 14px; color: var(--overview-faint); font-size: 12px; }
+
+.connection-onboarding { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.connection-onboarding h3 { color: var(--overview-ink); font-size: 14px; font-weight: 740; }
+.connection-onboarding p { color: var(--overview-faint); font-size: 12px; line-height: 1.5; }
+
+.overview-connection .hooks-manager.actions-only {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  border-top: 1px solid var(--overview-line);
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions {
+  margin: 0;
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions button {
+  min-width: 92px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid oklch(64% 0.065 82 / .42);
+  border-radius: 7px;
+  color: var(--overview-ink);
+  background: var(--overview-active-surface);
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions button svg {
+  color: var(--overview-accent);
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions button:hover:not(:disabled) {
+  transform: none;
+  border-color: var(--overview-active-line);
+  color: var(--overview-ink);
+  background: var(--overview-surface-hover);
+  box-shadow: none;
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions button:focus-visible {
+  outline: 2px solid var(--overview-accent);
+  outline-offset: 2px;
+}
+
+.overview-workbench .overview-connection .hooks-manager.actions-only .hooks-actions button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+/* The extra specificity beats 130's generic `.workbench-section-head > div`
+   grid rule, which used to stack the badge and the recheck button vertically. */
+.overview-connection .workbench-section-head > .connection-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--overview-line);
+  border-radius: 7px;
+  color: var(--overview-faint);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 640;
+  cursor: pointer;
+}
+.connection-recheck:hover:not(:disabled) { color: var(--overview-ink); border-color: var(--overview-ink); }
+.connection-recheck:disabled { opacity: .6; cursor: default; }
+.connection-recheck .spin { animation: connection-recheck-spin .8s linear infinite; }
+@keyframes connection-recheck-spin { to { transform: rotate(360deg); } }
+
+/* Compact header variant: a square icon button matching the badge height. */
+.connection-recheck.icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* The settings-page recheck (GroupCard action) reuses the same spinner. */
+.group-reset-button .spin { animation: connection-recheck-spin .8s linear infinite; }
+
+/* Settings → Connection details: the GroupCard provides the outer chrome, so
+   the rows sit in their own hairline frame inside it. */
+.connection-management .connection-rows {
+  border: 1px solid var(--overview-line);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+/* Check-failed state: never leave the area stuck on "Checking…"; offer Retry. */
+.connection-check-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+}
+.connection-check-error p { color: var(--overview-danger); font-size: 12px; line-height: 1.5; }
+
+/* Factual guidance for a link Repair cannot fix (forwarder file / listener). */
+.connection-guidance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--overview-line);
+}
+.connection-guidance p { color: var(--overview-faint); font-size: 12px; line-height: 1.5; }
+
+/* Parent-owned action outcome, pinned to the connection surface so it reads as a
+   full-width row (and survives the onboarding <-> workbench swap). */
+.overview-connection .connection-action-result {
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--overview-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--overview-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .overview-workbench .ccs-provider-content {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-workbench .ccs-provider-left {
+    grid-template-columns: 22px 34px minmax(0, 1fr);
+  }
+
+  .overview-workbench .ccs-provider-actions {
+    width: auto;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  .overview-workbench .ccs-provider-actions-inner {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+

@@ -1,0 +1,15 @@
+{
+  // Typechecks the vitest suites (node and jsdom harnesses alike). Extends the
+  // root renderer config so tests are held to the same strict settings as the
+  // production program; imported src files enter the program transitively.
+  // vite-env.d.ts supplies the image-module declarations that transitively
+  // imported renderer asset modules rely on.
+  "extends": "./tsconfig.json",
+  "include": [
+    "test/**/*.test.ts",
+    "test/**/*.test.tsx",
+    "src/vite-env.d.ts",
+    // Supplies the global window.companion declaration for component tests.
+    "src/renderer/clawdCompat.ts"
+  ]
+}

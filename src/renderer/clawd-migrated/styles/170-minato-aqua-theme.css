@@ -1,0 +1,977 @@
+/* ============================================================
+   Minato Aqua Pet Theme — "clear-water maid workbench"
+   ============================================================
+   Design language (keep this contract when editing):
+   - Navy (maid dress)  : window chrome + primary buttons + selected nav.
+   - Pearl/foam (apron) : all content surfaces; chroma stays <= 0.03.
+   - Aqua (hair streak) : interactive accent — focus, links, fills,
+     in-content selection washes.
+   - Pink (twin tails)  : identity highlights only — small marks, icons
+     on navy, the version pill. Never large fills.
+   - Gold (idol/anchor) : tiny accents — the title anchor, wait states.
+   - Two-level selection language: primary navigation selection = navy
+     pill; in-content item selection = aqua wash + aqua ring.
+   - Decoration budget: the title-bar ribbon, the active-tab twin-tail
+     underline, the version pill dots, soft bubbles in empty states.
+     Nothing else. No stripes, no scallops, no fixed overlays.
+   ============================================================ */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] {
+  /* character palette */
+  --aqua-navy: oklch(28% 0.095 262);
+  --aqua-navy-2: oklch(35% 0.105 252);
+  --aqua-navy-deep: oklch(23% 0.085 264);
+  --aqua-pearl: oklch(98.5% 0.012 220);
+  --aqua-foam: oklch(96.5% 0.024 212);
+  --aqua-wave: oklch(76% 0.095 213);
+  --aqua-wave-strong: oklch(56% 0.125 232);
+  --aqua-wave-deep: oklch(48% 0.13 238);
+  --aqua-pink: oklch(77% 0.115 348);
+  --aqua-pink-strong: oklch(60% 0.15 350);
+  --aqua-pink-wash: oklch(93% 0.045 348 / 0.55);
+  --aqua-gold: oklch(76% 0.105 88);
+  --aqua-gold-deep: oklch(62% 0.105 84);
+
+  /* text ramp */
+  --aqua-ink: oklch(23% 0.045 262);
+  --aqua-ink-soft: oklch(34% 0.045 258);
+  --aqua-muted: oklch(46% 0.035 250);
+  --aqua-faint: oklch(60% 0.03 240);
+
+  /* lines & shadows */
+  --aqua-line: oklch(55% 0.07 235 / 0.2);
+  --aqua-line-strong: oklch(50% 0.1 238 / 0.36);
+  --aqua-shadow-soft: 0 8px 24px oklch(35% 0.09 250 / 0.08);
+  --aqua-shadow-card: 0 12px 32px oklch(35% 0.09 250 / 0.1);
+  --aqua-shadow-float: 0 16px 44px oklch(30% 0.1 252 / 0.16);
+
+  /* semantic states */
+  --aqua-success: oklch(60% 0.095 175);
+  --aqua-success-wash: oklch(60% 0.095 175 / 0.12);
+  --aqua-danger: oklch(58% 0.13 24);
+  --aqua-danger-wash: oklch(58% 0.13 24 / 0.1);
+  --aqua-warn: oklch(70% 0.11 80);
+  --aqua-warn-wash: oklch(70% 0.11 80 / 0.14);
+
+  /* washes shared by controls */
+  --aqua-wash: oklch(76% 0.095 213 / 0.16);
+  --aqua-wash-hover: oklch(76% 0.095 213 / 0.26);
+
+  /* remap the foundation palette */
+  --ink: var(--aqua-ink);
+  --muted: var(--aqua-muted);
+  --paper: var(--aqua-pearl);
+  --panel: oklch(98.5% 0.012 220 / 0.86);
+  --line: var(--aqua-line);
+  --honey: var(--aqua-gold);
+  --amber: var(--aqua-pink-strong);
+  --amber-dark: oklch(53% 0.15 350);
+  --amber-light: oklch(86% 0.09 348);
+  --coral: var(--aqua-danger);
+  --mint: var(--aqua-success);
+  --steel: var(--aqua-navy-2);
+  --blue: var(--aqua-wave-strong);
+  --purple: oklch(52% 0.09 295);
+  --black: var(--aqua-navy-deep);
+  --shadow: var(--aqua-shadow-float);
+  color: var(--aqua-ink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] body {
+  background: transparent;
+}
+
+/* ---------- shell ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-shell {
+  background:
+    radial-gradient(1100px 480px at 12% -6%, oklch(88% 0.07 210 / 0.5), transparent 60%),
+    radial-gradient(900px 400px at 96% -2%, oklch(93% 0.045 348 / 0.42), transparent 58%),
+    radial-gradient(760px 480px at 88% 104%, oklch(90% 0.05 212 / 0.4), transparent 62%),
+    linear-gradient(180deg, var(--aqua-pearl), oklch(95.5% 0.028 212) 56%, var(--aqua-pearl));
+  color: var(--aqua-ink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .section-content {
+  scrollbar-color: oklch(62% 0.1 220 / 0.46) transparent;
+}
+
+/* ---------- window bar (dress navy) ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-bar {
+  background: linear-gradient(90deg, var(--aqua-navy-deep), var(--aqua-navy-2) 55%, var(--aqua-navy));
+  border-bottom-color: oklch(80% 0.07 214 / 0.34);
+  box-shadow: inset 0 -1px 0 oklch(98% 0.012 220 / 0.18);
+  backdrop-filter: none;
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-title {
+  gap: 9px;
+  color: oklch(97% 0.016 220);
+  font-weight: 720;
+  letter-spacing: 0.01em;
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-title svg {
+  color: var(--aqua-gold);
+}
+
+/* the one ribbon: a small twin-tail bow before the title */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-title::before {
+  content: "";
+  width: 16px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  background:
+    radial-gradient(circle at 50% 50%, oklch(97% 0.02 345) 0 1.8px, transparent 2.2px),
+    linear-gradient(135deg, transparent 0 24%, var(--aqua-pink) 25% 50%, transparent 51%),
+    linear-gradient(45deg, transparent 0 24%, var(--aqua-pink) 25% 50%, transparent 51%),
+    linear-gradient(90deg, var(--aqua-wave), var(--aqua-pink));
+  box-shadow: 0 0 0 1px oklch(92% 0.06 348 / 0.35);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-hint-btn {
+  color: oklch(93% 0.045 212);
+  background: oklch(76% 0.095 213 / 0.22);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-hint-btn:hover {
+  background: oklch(76% 0.095 213 / 0.34);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-actions button {
+  color: oklch(86% 0.03 222 / 0.85);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-actions button:hover,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-actions button:active {
+  color: oklch(99% 0.012 220);
+  background: oklch(76% 0.095 213 / 0.22);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-actions .close:hover {
+  color: oklch(99% 0.012 220);
+  background: var(--aqua-pink-strong);
+}
+
+/* ---------- tab bar (apron foam) ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-bar {
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.94), oklch(95% 0.032 212 / 0.9));
+  border-bottom-color: var(--aqua-line);
+  box-shadow: inset 0 -1px 0 oklch(99% 0.012 220 / 0.6);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item {
+  position: relative;
+  color: var(--aqua-ink-soft);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item:hover {
+  color: var(--aqua-navy);
+  background: oklch(93% 0.04 214 / 0.6);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item.active {
+  color: oklch(98% 0.014 220);
+  background: linear-gradient(180deg, var(--aqua-navy-2), var(--aqua-navy));
+  box-shadow: 0 6px 14px oklch(30% 0.1 252 / 0.22), inset 0 0 0 1px oklch(99% 0.012 220 / 0.14);
+}
+
+/* twin-tail underline: aqua -> pearl -> pink */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item.active::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--aqua-wave), oklch(99% 0.012 220), var(--aqua-pink));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item.active svg {
+  color: var(--aqua-pink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tab-item:focus-visible {
+  outline: 2px solid var(--aqua-wave-strong);
+  outline-offset: 1px;
+}
+
+/* ---------- version bar ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-bar {
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.92), oklch(95.5% 0.03 211 / 0.9));
+  border-top-color: var(--aqua-line);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 1px solid oklch(72% 0.13 348 / 0.34);
+  border-radius: 7px;
+  color: var(--aqua-pink-strong);
+  background: var(--aqua-pink-wash);
+  font-weight: 740;
+}
+
+/* twin-tail dots after the character name */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-label::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: var(--aqua-wave);
+  box-shadow: 8px 0 0 var(--aqua-pink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-error { color: var(--aqua-danger); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-progress,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-checking,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-install-hint { color: var(--aqua-muted); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-available { color: var(--aqua-wave-strong); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-uptodate { color: var(--aqua-success); }
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-btn.update-ready {
+  color: oklch(38% 0.08 175);
+  border-color: oklch(60% 0.095 175 / 0.4);
+  background: var(--aqua-success-wash);
+}
+
+/* ---------- shared button vocabulary ---------- */
+
+/* ghost buttons: pearl surface, navy text, aqua hover */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-link,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-btn,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ghost-btn,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .inline-action,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-refresh-btn,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-list-toolbar button {
+  border-color: oklch(58% 0.09 228 / 0.28);
+  color: var(--aqua-navy);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.92), oklch(95% 0.03 214 / 0.8));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-link:hover,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-btn:hover:not(:disabled),
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ghost-btn:hover:not(:disabled),
+[data-theme="pet"][data-pet-theme="minato-aqua"] .inline-action:hover,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-refresh-btn:hover:not(:disabled),
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-list-toolbar button:hover:not(:disabled) {
+  border-color: oklch(56% 0.125 232 / 0.5);
+  background: linear-gradient(180deg, oklch(99% 0.012 220), oklch(90% 0.055 213 / 0.75));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ghost-btn.danger {
+  color: var(--aqua-danger);
+  border-color: oklch(58% 0.13 24 / 0.34);
+  background: var(--aqua-danger-wash);
+}
+
+/* primary buttons: dress navy */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hooks-actions button,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .code-card-head button,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .perm-card-btn-allow {
+  color: oklch(98.5% 0.012 220);
+  border-color: oklch(76% 0.095 213 / 0.55);
+  background: linear-gradient(180deg, var(--aqua-navy-2), var(--aqua-navy));
+  box-shadow: 0 8px 20px oklch(30% 0.1 252 / 0.2), inset 0 1px 0 oklch(99% 0.012 220 / 0.2);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hooks-actions button:hover:not(:disabled),
+[data-theme="pet"][data-pet-theme="minato-aqua"] .code-card-head button:hover:not(:disabled) {
+  background: linear-gradient(180deg, oklch(40% 0.115 246), var(--aqua-navy-2));
+  box-shadow: 0 10px 24px oklch(30% 0.1 252 / 0.24), inset 0 1px 0 oklch(99% 0.012 220 / 0.22);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hooks-manager.compact .hooks-actions button {
+  background: linear-gradient(180deg, var(--aqua-navy-2), var(--aqua-navy));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hooks-manager.compact .hooks-actions button:hover:not(:disabled) {
+  background: linear-gradient(180deg, oklch(40% 0.115 246), var(--aqua-navy-2));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hooks-manager.compact.install-success .hooks-actions button {
+  background: linear-gradient(135deg, oklch(66% 0.1 175), oklch(52% 0.1 178));
+}
+
+/* ---------- page variable systems ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .pet-import-overlay,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .overview-workbench,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .data-workbench {
+  --settings-ink: var(--aqua-ink);
+  --settings-muted: var(--aqua-muted);
+  --settings-faint: var(--aqua-faint);
+  --settings-line: var(--aqua-line);
+  --settings-line-strong: var(--aqua-line-strong);
+  --settings-surface: oklch(98.5% 0.014 218 / 0.82);
+  --settings-surface-raised: oklch(99% 0.012 220 / 0.92);
+  --settings-surface-hover: oklch(92% 0.045 213 / 0.6);
+  --settings-accent: var(--aqua-wave-strong);
+  --settings-accent-soft: var(--aqua-wash);
+  --settings-success: var(--aqua-success);
+  --settings-danger: var(--aqua-danger);
+  --workbench-surface: oklch(98.5% 0.014 218 / 0.82);
+  --workbench-subtle: oklch(93% 0.04 213 / 0.36);
+  --workbench-line: var(--aqua-line);
+  --workbench-muted: var(--aqua-muted);
+  --workbench-strong: var(--aqua-ink);
+}
+
+/* the overview front door runs on --overview-*; give it the full ramp.
+   .connection-management (Settings → Connection details) shares the ramp. */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .overview-workbench,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .connection-management {
+  --overview-ink: var(--aqua-ink);
+  --overview-muted: var(--aqua-muted);
+  --overview-faint: var(--aqua-faint);
+  --overview-line: var(--aqua-line);
+  --overview-line-strong: var(--aqua-line-strong);
+  --overview-surface: oklch(98.5% 0.014 218 / 0.84);
+  --overview-surface-raised: oklch(99% 0.012 220 / 0.94);
+  --overview-surface-hover: oklch(93% 0.04 213 / 0.55);
+  --overview-accent: var(--aqua-wave-strong);
+  --overview-accent-ink: oklch(98.5% 0.012 220);
+  --overview-header-surface: linear-gradient(180deg, oklch(99% 0.012 220 / 0.94), oklch(96.5% 0.026 214 / 0.85));
+  --overview-control-border: oklch(58% 0.09 228 / 0.28);
+  --overview-control-bg: oklch(99% 0.012 220 / 0.82);
+  --overview-control-hover: oklch(92% 0.045 213 / 0.7);
+  --overview-control-muted: var(--aqua-muted);
+  --overview-active-surface: var(--aqua-wash);
+  --overview-active-line: oklch(56% 0.125 232 / 0.45);
+  --overview-link: var(--aqua-wave-strong);
+  --overview-link-hover: var(--aqua-wave-deep);
+  --overview-success: var(--aqua-success);
+  --overview-danger: var(--aqua-danger);
+  --overview-scrollbar: oklch(62% 0.1 220 / 0.46);
+  --overview-shadow: var(--aqua-shadow-card);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resources-page-dark,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-page {
+  --resource-ink: var(--aqua-ink);
+  --resource-muted: var(--aqua-muted);
+  --resource-faint: var(--aqua-faint);
+  --resource-line: var(--aqua-line);
+  --resource-line-strong: var(--aqua-line-strong);
+  --resource-surface: oklch(98.5% 0.014 218 / 0.82);
+  --resource-surface-raised: oklch(99% 0.012 220 / 0.92);
+  --resource-surface-hover: oklch(92% 0.045 213 / 0.6);
+  --resource-surface-active: var(--aqua-wash);
+  --resource-control-bg: oklch(99% 0.012 220 / 0.84);
+  --resource-control-hover: oklch(92% 0.045 213 / 0.7);
+  --resource-focus: oklch(56% 0.125 232 / 0.45);
+  --resource-accent: var(--aqua-wave-strong);
+  --resource-success: var(--aqua-success);
+  --resource-idle: oklch(62% 0.13 84);
+  --resource-missing: var(--aqua-danger);
+  --resource-scrollbar: oklch(62% 0.1 220 / 0.46);
+  --resource-shadow: var(--aqua-shadow-card);
+  --anim-ink: var(--aqua-ink);
+  --anim-muted: var(--aqua-muted);
+  --anim-faint: var(--aqua-faint);
+  --anim-line: var(--aqua-line);
+  --anim-line-strong: var(--aqua-line-strong);
+  --anim-surface: oklch(98.5% 0.014 218 / 0.84);
+  --anim-surface-raised: oklch(99% 0.012 220 / 0.92);
+  --anim-surface-hover: oklch(92% 0.045 213 / 0.6);
+  --anim-cell: oklch(99% 0.012 220 / 0.8);
+  --anim-preview: oklch(58% 0.1 228 / 0.12);
+  --anim-accent: var(--aqua-wave-strong);
+  --anim-accent-soft: var(--aqua-wash);
+  --anim-shadow: var(--aqua-shadow-card);
+}
+
+/* sessions page rides its own --session-* system */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-sessions-page {
+  --session-ink: var(--aqua-ink);
+  --session-muted: var(--aqua-muted);
+  --session-faint: var(--aqua-faint);
+  --session-line: var(--aqua-line);
+  --session-line-strong: var(--aqua-line-strong);
+  --session-surface: oklch(98.5% 0.014 218 / 0.84);
+  --session-surface-raised: oklch(99% 0.012 220 / 0.94);
+  --session-surface-hover: oklch(93% 0.04 213 / 0.5);
+  --session-surface-active: var(--aqua-wash);
+  --session-active-line: oklch(56% 0.125 232 / 0.45);
+  --session-control-bg: oklch(99% 0.012 220 / 0.84);
+  --session-control-hover: oklch(92% 0.045 213 / 0.7);
+  --session-focus: oklch(56% 0.125 232 / 0.45);
+  --session-accent: var(--aqua-wave-strong);
+  --session-accent-hover: var(--aqua-wave-deep);
+  --session-accent-ink: oklch(98.5% 0.012 220);
+  --session-success: var(--aqua-success);
+  --session-danger: var(--aqua-danger);
+  --session-info: var(--aqua-pink-strong);
+  --session-tool: oklch(52% 0.09 295);
+  --session-message-text: var(--aqua-ink-soft);
+  --session-scrollbar: oklch(62% 0.1 220 / 0.46);
+  --session-shadow: var(--aqua-shadow-card);
+  --session-error-bg: var(--aqua-danger-wash);
+  color: var(--aqua-ink);
+}
+
+/* provider fullscreen editor and portaled confirm dialogs ride --ccs-editor-* */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-fullscreen-panel,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-confirm-backdrop {
+  --ccs-editor-ink: var(--aqua-ink);
+  --ccs-editor-muted: var(--aqua-muted);
+  --ccs-editor-faint: var(--aqua-faint);
+  --ccs-editor-line: var(--aqua-line);
+  --ccs-editor-line-strong: var(--aqua-line-strong);
+  --ccs-editor-bg: oklch(96% 0.024 214);
+  --ccs-editor-surface: oklch(99% 0.012 220 / 0.95);
+  --ccs-editor-raised: oklch(98% 0.018 216 / 0.85);
+  --ccs-editor-hover: oklch(92% 0.045 213 / 0.7);
+  --ccs-editor-focus: oklch(56% 0.125 232 / 0.5);
+  --ccs-editor-primary: var(--aqua-navy);
+  --ccs-editor-primary-hover: var(--aqua-navy-2);
+  --ccs-editor-primary-ink: oklch(98.5% 0.012 220);
+  --ccs-editor-shadow: var(--aqua-shadow-float);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-fullscreen-panel .ccs-provider-form input:focus,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-fullscreen-panel .ccs-provider-form select:focus,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-fullscreen-panel .ccs-provider-form textarea:focus {
+  box-shadow: 0 0 0 3px var(--aqua-wash);
+}
+
+/* ---------- cards & panels ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .group-card,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .panel-group-card,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .workbench-section,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-activity-board,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-overview-block,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-sessions-page,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resources-page,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-panel {
+  border-color: var(--aqua-line);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.92), oklch(96.5% 0.026 215 / 0.8));
+  box-shadow: var(--aqua-shadow-card);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hook-setup-card,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-provider-board {
+  border-color: oklch(56% 0.11 230 / 0.32);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.94), oklch(96% 0.03 214 / 0.82));
+  box-shadow: var(--aqua-shadow-card);
+}
+
+/* page head: navy identity block on the left, robust at any width */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head > div:first-child {
+  align-self: stretch;
+  align-content: center;
+  padding: 8px 14px;
+  border: 1px solid oklch(76% 0.095 213 / 0.4);
+  border-radius: 8px;
+  background: linear-gradient(160deg, var(--aqua-navy-2), var(--aqua-navy));
+  box-shadow: inset 0 1px 0 oklch(99% 0.012 220 / 0.16);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head > div:first-child > span {
+  color: var(--aqua-wave);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head h2 {
+  color: oklch(98% 0.014 220);
+}
+
+/* grouped sub-surfaces inside cards */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .settings-group,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .theme-settings-group,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stat-item,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heatmap-summary,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-table,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-project-list,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-daily-bars,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-workbench .tool-rank-list {
+  border-color: oklch(58% 0.09 228 / 0.22);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.8), oklch(95% 0.032 213 / 0.55));
+}
+
+/* ---------- selected navigation = navy pill ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .settings-subtabs,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .theme-switch,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .segmented,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-range-switch {
+  border-color: oklch(58% 0.09 228 / 0.22);
+  background: oklch(93% 0.036 213 / 0.5);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .settings-subtab.active,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .theme-switch-option.active,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .segmented button.active,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-range-switch button.active,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-subtabs.compact .claude-resource-subtab.active {
+  color: oklch(98% 0.014 220);
+  border-color: oklch(76% 0.095 213 / 0.5);
+  background: linear-gradient(180deg, var(--aqua-navy-2), var(--aqua-navy));
+  box-shadow: 0 6px 14px oklch(30% 0.1 252 / 0.18), inset 0 0 0 1px oklch(99% 0.012 220 / 0.14);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .settings-subtab.active svg,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .theme-switch-option.active svg,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-subtabs.compact .claude-resource-subtab.active svg {
+  color: var(--aqua-pink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-subtabs.compact .claude-resource-subtab.active em {
+  color: oklch(88% 0.03 218 / 0.85);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-subtabs.compact .claude-resource-subtab.active small {
+  color: var(--aqua-pink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-subtabs.compact .claude-resource-subtab small {
+  color: var(--aqua-wave-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .theme-switch-system .theme-switch-liquid {
+  background: linear-gradient(135deg, var(--aqua-wave), var(--aqua-pink));
+  box-shadow: 0 8px 18px oklch(56% 0.12 230 / 0.18);
+}
+
+/* ---------- identity icon chips ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .group-card-header svg,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .workbench-section-head > svg,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-disclosure-chevron,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-disclosure-chevron {
+  color: var(--aqua-wave-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-panel-icon,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-icon {
+  color: var(--aqua-pink-strong);
+  border-color: oklch(72% 0.13 348 / 0.32);
+  background: linear-gradient(135deg, oklch(99% 0.012 220 / 0.8), var(--aqua-pink-wash));
+}
+
+/* ---------- toggles & sliders ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page button.toggle.on > svg {
+  color: var(--aqua-wave-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page button.toggle.on i {
+  border-color: oklch(56% 0.125 232 / 0.45);
+  background: var(--aqua-wash);
+}
+
+/* knob wears the twin-tail gradient */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page button.toggle.on i::after,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page input[type="range"]::-webkit-slider-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .range-track input[type="range"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, var(--aqua-pink), var(--aqua-wave-strong));
+  box-shadow: 0 4px 10px oklch(42% 0.12 235 / 0.24);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .toggle-row .toggle.on {
+  border-color: oklch(56% 0.125 232 / 0.45);
+  background: var(--aqua-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .toggle-row .toggle.on .toggle-knob {
+  background: linear-gradient(135deg, var(--aqua-pink), var(--aqua-wave-strong));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page input[type="range"],
+[data-theme="pet"][data-pet-theme="minato-aqua"] .range-track::before {
+  background: linear-gradient(to right, var(--aqua-wave-strong) var(--slider-fill, 0%), oklch(66% 0.07 228 / 0.22) var(--slider-fill, 0%));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-page .range-track::before {
+  background: oklch(66% 0.07 228 / 0.2);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .range-fill,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .stats-workbench .tool-rank-fill,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-daily-bar-row > div span {
+  background: linear-gradient(90deg, var(--aqua-wave), var(--aqua-wave-strong));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-more-btn:hover {
+  background: var(--aqua-navy);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-switch.on {
+  border-color: oklch(56% 0.125 232 / 0.45);
+  background: var(--aqua-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-switch.on .animation-switch-knob {
+  background: var(--aqua-wave-strong);
+}
+
+/* ---------- pet theme cards (settings) ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .pet-theme-card {
+  border-color: oklch(58% 0.09 228 / 0.24);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.92), oklch(95% 0.032 214 / 0.7));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .pet-theme-card.active {
+  border-color: oklch(56% 0.125 232 / 0.6);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.95), oklch(91% 0.055 213 / 0.7));
+  box-shadow: var(--aqua-shadow-card), inset 0 0 0 1px oklch(80% 0.11 348 / 0.3);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .pet-theme-card-copy strong {
+  color: var(--aqua-navy);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .pet-theme-card-copy small {
+  color: var(--aqua-pink-strong);
+}
+
+/* ---------- about page ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-about-portrait {
+  border-color: oklch(72% 0.13 348 / 0.4);
+  box-shadow: 0 18px 44px oklch(45% 0.09 348 / 0.22);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-about-portrait-fallback {
+  color: var(--aqua-pink-strong);
+  background: linear-gradient(135deg, oklch(99% 0.012 220), var(--aqua-pink-wash));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-about-name {
+  color: var(--aqua-navy);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-about-version {
+  color: var(--aqua-pink-strong);
+  border-color: oklch(72% 0.13 348 / 0.34);
+  background: var(--aqua-pink-wash);
+}
+
+/* ---------- overview: status & states ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .overview-state-badge.good { color: var(--aqua-success); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .overview-state-badge.wait { color: var(--aqua-gold-deep); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .overview-state-badge.bad { color: var(--aqua-danger); }
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .status-card.good svg { color: var(--aqua-success); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .status-card.bad svg { color: var(--aqua-danger); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .status-card.wait svg { color: var(--aqua-gold-deep); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .status-card.neutral svg { color: var(--aqua-wave-strong); }
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .connection-error {
+  color: var(--aqua-danger);
+  border-color: oklch(58% 0.13 24 / 0.32);
+  background: var(--aqua-danger-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .connection-pill.connected {
+  color: oklch(40% 0.09 175);
+  background: var(--aqua-success-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .connection-pill.waiting {
+  color: var(--aqua-gold-deep);
+  background: var(--aqua-warn-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .onboarding-step.active .onboarding-step-num {
+  background: var(--aqua-navy);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .onboarding-step.done .onboarding-step-num {
+  background: var(--aqua-success);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .hook-setup-card.install-success {
+  border-color: oklch(60% 0.095 175 / 0.5);
+  box-shadow: 0 14px 36px oklch(60% 0.095 175 / 0.16);
+}
+
+/* ---------- data page: token KPI cards wear the uniform ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card {
+  border-color: oklch(76% 0.095 213 / 0.4);
+  background: linear-gradient(160deg, var(--aqua-navy-2), var(--aqua-navy-deep));
+  box-shadow: 0 12px 30px oklch(28% 0.1 255 / 0.2), inset 0 1px 0 oklch(99% 0.012 220 / 0.14);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card strong {
+  color: oklch(98.5% 0.012 220);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card small {
+  color: oklch(86% 0.04 216 / 0.8);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card .token-kpi-icon {
+  border-color: oklch(99% 0.012 220 / 0.24);
+  background: oklch(99% 0.012 220 / 0.12);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card.mint .token-kpi-icon { color: var(--aqua-wave); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card.honey .token-kpi-icon { color: var(--aqua-gold); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card.steel .token-kpi-icon { color: oklch(88% 0.04 216); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-kpi-card.coral .token-kpi-icon { color: var(--aqua-pink); }
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-breakdown-strip span {
+  color: var(--aqua-muted);
+  border-color: oklch(58% 0.09 228 / 0.24);
+  background: oklch(96% 0.026 214 / 0.7);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-breakdown-strip span b {
+  color: var(--aqua-ink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-disclosure-trigger {
+  border-color: oklch(58% 0.09 228 / 0.24);
+  background: oklch(98% 0.018 216 / 0.7);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-disclosure-trigger:hover {
+  background: oklch(93% 0.04 213 / 0.6);
+}
+
+/* heatmap: one sequential water ramp, foam -> deep sea */
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell {
+  background: oklch(92% 0.02 218 / 0.85);
+  border-color: oklch(58% 0.09 228 / 0.2);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell.level-1 { background: oklch(82% 0.07 214); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell.level-2 { background: oklch(70% 0.1 220); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell.level-3 { background: oklch(58% 0.125 228); }
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell.level-4 { background: oklch(43% 0.125 246); }
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heat-cell:hover {
+  box-shadow: 0 0 0 2px oklch(56% 0.125 232 / 0.5);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-table-header {
+  color: var(--aqua-faint);
+  border-color: oklch(58% 0.09 228 / 0.2);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-table-row {
+  border-color: oklch(58% 0.09 228 / 0.14);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-project-row {
+  background: oklch(99% 0.012 220 / 0.55);
+}
+
+/* ---------- sessions: the few bits vars cannot reach ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-search svg,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-toolbar > button svg {
+  color: var(--aqua-wave-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-empty {
+  background:
+    radial-gradient(140px 90px at 30% 34%, oklch(76% 0.095 213 / 0.14), transparent 70%),
+    radial-gradient(120px 80px at 72% 62%, oklch(77% 0.115 348 / 0.1), transparent 70%);
+}
+
+/* ---------- plugins & resources ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-empty {
+  color: var(--aqua-muted);
+  background:
+    radial-gradient(160px 100px at 28% 30%, oklch(76% 0.095 213 / 0.14), transparent 70%),
+    radial-gradient(130px 90px at 74% 66%, oklch(77% 0.115 348 / 0.1), transparent 70%),
+    var(--resource-surface);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .empty {
+  color: var(--aqua-muted);
+  background:
+    radial-gradient(160px 100px at 28% 30%, oklch(76% 0.095 213 / 0.14), transparent 70%),
+    radial-gradient(130px 90px at 74% 66%, oklch(77% 0.115 348 / 0.1), transparent 70%),
+    var(--settings-surface-raised);
+}
+
+/* ---------- animation page ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-page .sprite-selected-mark {
+  color: oklch(99% 0.012 220);
+  border-color: oklch(88% 0.07 348 / 0.5);
+  background: var(--aqua-pink-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .animation-page .sprite-preview-frame,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .idle-sprite-figure {
+  background:
+    radial-gradient(circle at 50% 88%, oklch(80% 0.09 214 / 0.2), transparent 40%),
+    oklch(99% 0.012 220 / 0.7);
+}
+
+/* ---------- settings feature panels ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .sound-file-pill.default {
+  color: var(--aqua-wave-deep);
+  border-color: oklch(56% 0.125 232 / 0.34);
+  background: var(--aqua-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .sound-file-pill.custom {
+  color: var(--aqua-pink-strong);
+  border-color: oklch(72% 0.13 348 / 0.34);
+  background: var(--aqua-pink-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page .notification-rules-head {
+  color: var(--aqua-faint);
+  background: oklch(95% 0.03 213 / 0.6);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .management-action-card.warning {
+  border-color: oklch(70% 0.11 80 / 0.4);
+  background: var(--aqua-warn-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .event-row em {
+  color: var(--aqua-wave-deep);
+  background: var(--aqua-wash);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .mapping-row em {
+  color: oklch(98% 0.014 220);
+  background: var(--aqua-navy-2);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .beta-badge {
+  color: var(--aqua-pink-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .code-card {
+  border-color: oklch(76% 0.095 213 / 0.3);
+  background: linear-gradient(180deg, oklch(30% 0.095 258 / 0.97), oklch(24% 0.085 262 / 0.98));
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .code-card-head {
+  color: oklch(90% 0.045 214);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .code-card pre {
+  color: oklch(92% 0.035 214);
+}
+
+/* ---------- pet overlays inside the shell ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .bubble,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .thought-bubble,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .tool-ribbon,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .permission-card {
+  color: var(--aqua-ink);
+  border-color: oklch(56% 0.11 230 / 0.34);
+  background: linear-gradient(180deg, oklch(99% 0.012 220 / 0.96), oklch(95.5% 0.03 214 / 0.9));
+  box-shadow: var(--aqua-shadow-float);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .bubble-state,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .perm-card-title {
+  color: var(--aqua-wave-strong);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .git-toast {
+  color: oklch(94% 0.024 216);
+  border-color: oklch(76% 0.095 213 / 0.4);
+  background: linear-gradient(180deg, oklch(33% 0.1 255 / 0.97), oklch(26% 0.09 262 / 0.98));
+  box-shadow: var(--aqua-shadow-float);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .git-toast-title {
+  color: var(--aqua-pink);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .git-toast-message {
+  color: oklch(94% 0.024 216);
+}
+
+/* ---------- scrollbars ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .section-content::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-list::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-detail::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-message-list::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-table::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heatmap-scroll::-webkit-scrollbar,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-provider-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .section-content::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-list::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-detail::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-message-list::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-table::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heatmap-scroll::-webkit-scrollbar-thumb,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-provider-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: oklch(62% 0.1 220 / 0.5);
+  background-clip: padding-box;
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .section-content::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-list::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-viewer-detail::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .session-message-list::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .claude-resource-table::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .token-heatmap-scroll::-webkit-scrollbar-track,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .ccs-provider-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- selection & focus ---------- */
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] ::selection {
+  color: var(--aqua-ink);
+  background: oklch(76% 0.095 213 / 0.35);
+}
+
+[data-theme="pet"][data-pet-theme="minato-aqua"] .window-actions button:focus-visible,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .version-link:focus-visible,
+[data-theme="pet"][data-pet-theme="minato-aqua"] .update-btn:focus-visible {
+  outline: 2px solid var(--aqua-wave-strong);
+  outline-offset: 1px;
+}
+
+/* ---------- liquid glass interplay ---------- */
+
+[data-ui-style="liquid"][data-theme="pet"][data-pet-theme="minato-aqua"] .tab-bar,
+[data-ui-style="liquid"][data-theme="pet"][data-pet-theme="minato-aqua"] .version-bar {
+  background: oklch(98% 0.016 218 / 0.6);
+  backdrop-filter: blur(22px) saturate(1.15);
+}
+
+/* ---------- narrow window ---------- */
+
+@media (max-width: 720px) {
+  [data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head {
+    grid-template-columns: 1fr;
+  }
+
+  [data-theme="pet"][data-pet-theme="minato-aqua"] .settings-page-head .settings-subtabs {
+    justify-self: start;
+  }
+
+  [data-theme="pet"][data-pet-theme="minato-aqua"] .window-title::before {
+    display: none;
+  }
+}

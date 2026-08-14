@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+out/
+release/
+# build/ doubles as electron-builder's buildResources dir; ignore its contents
+# (not the dir itself — an excluded dir can't have children re-included) so the
+# app icon that gets baked into the exe stays tracked.
+build/*
+!build/icon.png
+!build/installer.nsh
+
+# Tool caches
+.vite/
+.cache/
+.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+graphify-out/
+
+# Local app/runtime data
+.claude/
+sources/
+HANDOFF.md
+PRODUCT.md
+DESIGN.md
+
+# Logs and diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.heapsnapshot
+
+# Temporary files
+temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+artifacts/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+.playwright-mcp/

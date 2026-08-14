@@ -1,0 +1,1268 @@
+/* === App Chrome Refresh === */
+.settings-shell {
+  grid-template-rows: 36px 42px minmax(0, 1fr) auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.window-bar {
+  height: 36px;
+  padding: 0 0 0 14px;
+  background: oklch(97% 0.006 78 / 0.9);
+  border-bottom: 1px solid oklch(34% 0.012 75 / 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.window-title {
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: oklch(26% 0.012 75);
+}
+
+.window-title svg {
+  flex: 0 0 auto;
+  color: oklch(68% 0.12 82);
+}
+
+.update-hint-btn {
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: oklch(45% 0.08 245);
+  background: oklch(60% 0.08 245 / 0.12);
+  animation: none;
+}
+
+.window-actions {
+  height: 100%;
+  gap: 0;
+  align-self: stretch;
+}
+
+.window-actions button {
+  width: 44px;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  color: oklch(48% 0.01 75);
+  background: transparent;
+  box-shadow: none;
+}
+
+.window-actions button:hover,
+.window-actions button:active {
+  color: oklch(24% 0.012 75);
+  background: oklch(91% 0.006 78 / 0.76);
+  transform: none;
+}
+
+.window-actions .close:hover {
+  color: oklch(98% 0.006 78);
+  background: oklch(56% 0.14 31 / 0.88);
+  border-color: transparent;
+}
+
+.tab-bar {
+  min-height: 42px;
+  padding: 0 16px;
+  gap: 4px;
+  background: oklch(96% 0.006 78 / 0.86);
+  border-bottom: 1px solid oklch(34% 0.012 75 / 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.tab-item {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: oklch(48% 0.01 75);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.tab-item svg {
+  color: currentColor;
+  opacity: 0.86;
+}
+
+.tab-item:hover {
+  color: oklch(25% 0.012 75);
+  background: oklch(91% 0.008 78 / 0.82);
+}
+
+.tab-item.active {
+  color: oklch(32% 0.062 82);
+  background: oklch(93% 0.032 82 / 0.88);
+  box-shadow: inset 0 0 0 1px oklch(70% 0.08 82 / 0.36);
+}
+
+.version-bar {
+  min-height: 40px;
+  padding: 7px 18px;
+  background: oklch(97% 0.006 78 / 0.9);
+  border-top: 1px solid oklch(34% 0.012 75 / 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.version-left,
+.version-right {
+  gap: 8px;
+}
+
+.version-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: oklch(27% 0.012 75);
+}
+
+.version-link {
+  min-height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+}
+
+.update-btn {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+}
+
+.update-refresh-btn {
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 6px;
+}
+
+[data-theme=dark] .window-bar {
+  background: oklch(15% 0.006 75 / 0.94);
+  border-bottom-color: oklch(30% 0.006 75);
+}
+
+[data-theme=dark] .window-title {
+  color: oklch(89% 0.011 78);
+}
+
+[data-theme=dark] .window-title svg {
+  color: oklch(78% 0.1 82);
+}
+
+[data-theme=dark] .window-actions button {
+  color: oklch(62% 0.009 78);
+}
+
+[data-theme=dark] .window-actions button:hover,
+[data-theme=dark] .window-actions button:active {
+  color: oklch(91% 0.012 78);
+  background: oklch(24% 0.007 75);
+}
+
+[data-theme=dark] .window-actions .close:hover {
+  color: oklch(96% 0.01 78);
+  background: oklch(54% 0.13 31 / 0.9);
+}
+
+[data-theme=dark] .tab-bar {
+  background: oklch(14.5% 0.006 75 / 0.94);
+  border-bottom-color: oklch(30% 0.006 75);
+}
+
+[data-theme=dark] .tab-bar .tab-item {
+  color: oklch(63% 0.009 78);
+}
+
+[data-theme=dark] .tab-bar .tab-item:hover {
+  color: oklch(90% 0.011 78);
+  background: oklch(24% 0.007 75);
+}
+
+[data-theme=dark] .tab-bar .tab-item.active {
+  color: oklch(82% 0.105 82);
+  background: oklch(24% 0.03 82 / 0.78);
+  box-shadow: inset 0 0 0 1px oklch(62% 0.055 82 / 0.36);
+}
+
+[data-theme=dark] .version-bar {
+  background: oklch(15% 0.006 75 / 0.94);
+  border-top-color: oklch(30% 0.006 75);
+}
+
+[data-theme=dark] .version-label {
+  color: oklch(88% 0.011 78);
+}
+
+[data-ui-style=liquid] .window-bar,
+[data-ui-style=liquid] .tab-bar,
+[data-ui-style=liquid] .version-bar {
+  background: oklch(98% 0.008 230 / 0.54);
+  backdrop-filter: blur(20px) saturate(1.18);
+}
+
+[data-ui-style=liquid][data-theme=dark] .window-bar,
+[data-ui-style=liquid][data-theme=dark] .tab-bar,
+[data-ui-style=liquid][data-theme=dark] .version-bar {
+  background: oklch(18% 0.012 250 / 0.7);
+}
+
+@media (max-width: 640px) {
+  .settings-shell {
+    grid-template-rows: 36px 40px minmax(0, 1fr) auto;
+  }
+
+  .window-actions button {
+    width: 38px;
+  }
+
+  .tab-bar {
+    min-height: 40px;
+    padding-inline: 10px;
+  }
+
+  .tab-item {
+    height: 28px;
+    padding-inline: 9px;
+  }
+}
+
+/* === Animation Workbench Refresh === */
+.animation-page {
+  --anim-ink: oklch(22% 0.01 75);
+  --anim-muted: oklch(50% 0.011 75);
+  --anim-faint: oklch(61% 0.01 75);
+  --anim-line: oklch(34% 0.012 75 / 0.16);
+  --anim-line-strong: oklch(34% 0.012 75 / 0.28);
+  --anim-surface: oklch(98% 0.008 78 / 0.82);
+  --anim-surface-raised: oklch(99% 0.006 78 / 0.92);
+  --anim-surface-hover: oklch(95% 0.01 78 / 0.9);
+  --anim-cell: oklch(97% 0.008 78 / 0.72);
+  --anim-preview: oklch(18% 0.006 75 / 0.08);
+  --anim-accent: oklch(74% 0.112 82);
+  --anim-accent-soft: oklch(80% 0.105 82 / 0.16);
+  --anim-shadow: 0 18px 44px oklch(14% 0.006 75 / 0.1);
+  width: 100%;
+  max-width: 1180px;
+  display: grid;
+  gap: 12px;
+  color: var(--anim-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+[data-theme=dark] .animation-page {
+  --anim-ink: oklch(91% 0.012 78);
+  --anim-muted: oklch(64% 0.01 78);
+  --anim-faint: oklch(51% 0.009 78);
+  --anim-line: oklch(78% 0.009 78 / 0.14);
+  --anim-line-strong: oklch(78% 0.009 78 / 0.24);
+  --anim-surface: oklch(17.5% 0.006 75);
+  --anim-surface-raised: oklch(20% 0.007 75);
+  --anim-surface-hover: oklch(22.5% 0.008 75);
+  --anim-cell: oklch(19% 0.006 75);
+  --anim-preview: oklch(13% 0.006 75);
+  --anim-accent: oklch(78% 0.105 82);
+  --anim-accent-soft: oklch(78% 0.105 82 / 0.13);
+  --anim-shadow: 0 18px 44px oklch(10% 0.006 75 / 0.28);
+}
+
+.animation-page-secondary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.animation-panel {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--anim-line);
+  border-radius: 9px;
+  background: var(--anim-surface);
+  box-shadow: var(--anim-shadow);
+  overflow: clip;
+}
+
+.animation-panel-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.animation-panel-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.animation-panel-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--anim-accent);
+  border: 1px solid var(--anim-line);
+  border-radius: 7px;
+  background: var(--anim-accent-soft);
+}
+
+.animation-panel-title h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--anim-ink);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.animation-panel-meta {
+  color: var(--anim-faint);
+  font-size: 11px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.animation-page .idle-anim-settings {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.animation-page .animation-master-row {
+  min-height: 58px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.animation-page .animation-master-copy {
+  gap: 3px;
+}
+
+.animation-page .animation-master-copy strong {
+  color: var(--anim-ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.animation-page .animation-master-copy span {
+  color: var(--anim-muted);
+  font-size: 12px;
+}
+
+.animation-page .animation-summary-row {
+  border-color: var(--anim-line);
+  border-radius: 9px;
+  background: var(--anim-surface-raised);
+}
+
+.animation-page .animation-stat {
+  min-height: 58px;
+  border-right-color: var(--anim-line);
+  padding: 10px 12px;
+}
+
+.animation-page .animation-stat-icon {
+  color: var(--anim-accent);
+}
+
+.animation-page .animation-stat > span:not(.animation-stat-icon) {
+  color: var(--anim-faint);
+}
+
+.animation-page .animation-stat strong {
+  color: var(--anim-ink);
+}
+
+.animation-page .idle-anim-settings > .animation-section-block,
+.animation-page .idle-anim-settings > .animation-ranges {
+  grid-column: auto;
+}
+
+.animation-page .animation-section-block {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.animation-page .animation-section-head {
+  min-height: 24px;
+}
+
+.animation-page .animation-section-head .panel-subtitle {
+  margin: 0;
+  color: var(--anim-ink);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.animation-page .animation-section-head > span {
+  color: var(--anim-faint);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.animation-page .idle-sprite-grid,
+.animation-page .state-anim-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--anim-line);
+  border-radius: 9px;
+  background: var(--anim-line);
+  overflow: hidden;
+}
+
+.animation-page .idle-anim-settings > .animation-section-block .idle-sprite-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+}
+
+.animation-page .idle-sprite-preview {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 20px;
+  grid-template-rows: 1fr;
+  justify-items: stretch;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 0;
+  color: var(--anim-muted);
+  background: var(--anim-cell);
+  box-shadow: none;
+}
+
+.animation-page .idle-sprite-preview:hover {
+  color: var(--anim-ink);
+  background: var(--anim-surface-hover);
+  box-shadow: none;
+}
+
+.animation-page .idle-sprite-preview.checked {
+  color: var(--anim-ink);
+  background: var(--anim-accent-soft);
+  box-shadow: inset 0 0 0 1px oklch(74% 0.105 82 / 0.34);
+}
+
+.animation-page .sprite-preview-box {
+  width: 54px;
+  height: 54px;
+  border-color: var(--anim-line);
+  border-radius: 7px;
+  background:
+    conic-gradient(from 90deg, var(--anim-preview) 25%, transparent 0 50%, var(--anim-preview) 0 75%, transparent 0) 0 0 / 12px 12px,
+    var(--anim-surface-raised);
+}
+
+.animation-page .sprite-preview-box.random,
+.animation-page .sprite-reset-mark {
+  color: var(--anim-accent);
+  background: var(--anim-accent-soft);
+}
+
+.animation-page .idle-sprite-label {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 720;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.animation-page .sprite-selected-mark {
+  position: static;
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  color: var(--anim-accent);
+  border-color: oklch(74% 0.105 82 / 0.4);
+  background: var(--anim-surface-raised);
+}
+
+.animation-page .animation-ranges {
+  display: grid;
+  gap: 0;
+  padding-top: 2px;
+  border-top: 1px solid var(--anim-line);
+}
+
+.animation-page .range-slider-row {
+  min-height: 56px;
+  grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
+  padding: 10px 0;
+  border-bottom-color: var(--anim-line);
+}
+
+.animation-page .range-slider-copy > span {
+  color: var(--anim-muted);
+}
+
+.animation-page .range-slider-copy > b {
+  color: var(--anim-ink);
+}
+
+.animation-page .range-track::before {
+  background: oklch(52% 0.006 75 / 0.2);
+}
+
+.animation-page .range-fill {
+  background: var(--anim-accent);
+}
+
+.animation-page .range-track input[type="range"]::-webkit-slider-thumb {
+  border-color: var(--anim-surface);
+  background: var(--anim-accent);
+  box-shadow: 0 0 0 1px oklch(74% 0.105 82 / 0.36), 0 5px 14px oklch(14% 0.006 75 / 0.18);
+}
+
+.animation-page .animation-switch {
+  border-color: var(--anim-line-strong);
+  background: oklch(52% 0.006 75 / 0.18);
+}
+
+.animation-page .animation-switch-knob {
+  background: var(--anim-faint);
+}
+
+.animation-page .animation-switch.on {
+  border-color: oklch(74% 0.105 82 / 0.54);
+  background: var(--anim-accent-soft);
+}
+
+.animation-page .animation-switch.on .animation-switch-knob {
+  background: var(--anim-accent);
+}
+
+.animation-page .state-anim-list {
+  border-color: var(--anim-line);
+  border-radius: 9px;
+  background: var(--anim-line);
+}
+
+.animation-page .state-anim-row {
+  min-height: 64px;
+  grid-template-columns: minmax(170px, 1fr) minmax(176px, 230px);
+  border-bottom-color: var(--anim-line);
+  background: var(--anim-cell);
+}
+
+.animation-page .state-anim-meta strong {
+  color: var(--anim-ink);
+}
+
+.animation-page .state-anim-meta span {
+  color: var(--anim-faint);
+}
+
+.animation-page .animation-assignment-button {
+  min-height: 42px;
+  grid-template-columns: 38px minmax(0, 1fr) 15px;
+  border-color: var(--anim-line);
+  border-radius: 7px;
+  color: var(--anim-ink);
+  background: var(--anim-surface-raised);
+}
+
+.animation-page .animation-assignment-button:hover,
+.animation-page .animation-assignment-button.open {
+  border-color: var(--anim-line-strong);
+  background: var(--anim-surface-hover);
+}
+
+.animation-page .animation-assignment-button.open {
+  box-shadow: inset 0 0 0 1px oklch(74% 0.105 82 / 0.24);
+}
+
+.animation-page .animation-assignment-button .sprite-preview-box {
+  width: 38px;
+  height: 38px;
+}
+
+.animation-page .animation-assignment-button > span:not(.sprite-preview-box) {
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.animation-page .animation-assignment-button svg:last-child {
+  color: var(--anim-faint);
+}
+
+.animation-page .state-anim-picker {
+  gap: 10px;
+  padding: 10px;
+  border-color: var(--anim-line);
+  border-radius: 9px;
+  background: var(--anim-surface-raised);
+}
+
+.animation-page .state-anim-picker-title {
+  color: var(--anim-ink);
+  font-size: 12px;
+}
+
+.animation-page .state-anim-picker-close {
+  color: var(--anim-muted);
+  border-color: var(--anim-line);
+  background: var(--anim-cell);
+}
+
+.animation-page .state-anim-picker-close:hover {
+  color: var(--anim-ink);
+  border-color: var(--anim-line-strong);
+  background: var(--anim-surface-hover);
+}
+
+.animation-page .state-anim-picker-grid .idle-sprite-preview,
+.animation-page .animation-test-grid .idle-sprite-preview {
+  min-height: 64px;
+  grid-template-rows: 1fr;
+}
+
+.animation-page .state-anim-picker-grid .idle-sprite-preview .sprite-preview-box {
+  width: 50px;
+  height: 50px;
+}
+
+.animation-page .animation-test-actions {
+  justify-content: flex-start;
+}
+
+.animation-page .animation-test-stop {
+  min-height: 30px;
+  padding: 0 11px;
+  border-color: var(--anim-line);
+  border-radius: 7px;
+  color: var(--anim-muted);
+  background: var(--anim-surface-raised);
+}
+
+.animation-page .animation-test-stop:hover:not(:disabled) {
+  color: var(--anim-ink);
+  border-color: var(--anim-line-strong);
+  background: var(--anim-surface-hover);
+}
+
+.animation-page .animation-test-stop:disabled {
+  opacity: 0.42;
+}
+
+.animation-page .idle-sprite-preview.reset {
+  grid-template-rows: 1fr;
+}
+
+.animation-page .sprite-reset-mark {
+  width: 38px;
+  height: 38px;
+  border-color: oklch(74% 0.105 82 / 0.28);
+}
+
+[data-ui-style=liquid] .animation-page .animation-panel,
+[data-ui-style=liquid] .animation-page .state-anim-picker {
+  background: oklch(98% 0.008 230 / 0.58);
+  backdrop-filter: blur(20px) saturate(1.15);
+}
+
+[data-ui-style=liquid][data-theme=dark] .animation-page .animation-panel,
+[data-ui-style=liquid][data-theme=dark] .animation-page .state-anim-picker {
+  background: oklch(19% 0.012 250 / 0.7);
+}
+
+@media (max-width: 980px) {
+  .animation-page .idle-anim-settings > .animation-section-block .idle-sprite-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .animation-panel {
+    padding: 12px;
+  }
+
+  .animation-page .idle-sprite-grid,
+  .animation-page .state-anim-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  }
+
+  .animation-page .state-anim-row,
+  .animation-page .range-slider-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === Light Theme Alignment for Migrated Workbenches === */
+.claude-sessions-page {
+  --session-ink: oklch(23% 0.011 75);
+  --session-muted: oklch(50% 0.011 75);
+  --session-faint: oklch(62% 0.01 75);
+  --session-line: oklch(34% 0.012 75 / 0.16);
+  --session-line-strong: oklch(34% 0.012 75 / 0.28);
+  --session-surface: oklch(98% 0.008 78 / 0.84);
+  --session-surface-raised: oklch(99% 0.006 78 / 0.92);
+  --session-surface-hover: oklch(95% 0.01 78 / 0.9);
+  --session-surface-active: oklch(94% 0.018 82 / 0.82);
+  --session-active-line: oklch(64% 0.065 82 / 0.42);
+  --session-control-bg: oklch(99% 0.006 78 / 0.78);
+  --session-control-hover: oklch(96% 0.012 78 / 0.95);
+  --session-focus: oklch(64% 0.065 82 / 0.42);
+  --session-accent: oklch(73% 0.115 82);
+  --session-accent-hover: oklch(78% 0.12 82);
+  --session-accent-ink: oklch(24% 0.01 75);
+  --session-success: oklch(62% 0.09 154);
+  --session-danger: oklch(60% 0.11 32);
+  --session-info: oklch(54% 0.075 250);
+  --session-tool: oklch(58% 0.08 300);
+  --session-message-text: oklch(34% 0.012 75);
+  --session-scrollbar: oklch(68% 0.01 75 / 0.58);
+  --session-shadow: 0 18px 44px oklch(34% 0.012 75 / 0.1);
+  --session-error-bg: oklch(76% 0.08 32 / 0.1);
+  color: var(--session-ink);
+}
+
+[data-theme=dark] .claude-sessions-page {
+  --session-ink: oklch(91% 0.012 78);
+  --session-muted: oklch(61% 0.009 78);
+  --session-faint: oklch(55% 0.009 78);
+  --session-line: oklch(27% 0.006 75);
+  --session-line-strong: oklch(33% 0.012 75);
+  --session-surface: oklch(17.5% 0.006 75);
+  --session-surface-raised: oklch(20% 0.006 75);
+  --session-surface-hover: oklch(20.5% 0.007 75);
+  --session-surface-active: oklch(22% 0.009 76);
+  --session-active-line: oklch(41% 0.028 76);
+  --session-control-bg: oklch(20% 0.006 75);
+  --session-control-hover: oklch(25% 0.007 75);
+  --session-focus: oklch(58% 0.05 78 / 0.75);
+  --session-accent: oklch(77% 0.105 82);
+  --session-accent-hover: oklch(82% 0.11 82);
+  --session-accent-ink: oklch(18% 0.006 75);
+  --session-success: oklch(72% 0.07 154);
+  --session-danger: oklch(74% 0.08 32);
+  --session-info: oklch(70% 0.045 210);
+  --session-tool: oklch(70% 0.065 300);
+  --session-message-text: oklch(74% 0.011 78);
+  --session-scrollbar: oklch(43% 0.008 78);
+  --session-shadow: 0 18px 44px rgba(0,0,0,.28);
+  --session-error-bg: oklch(23% 0.025 33 / 0.58);
+}
+
+.session-viewer-search,
+.session-viewer-toolbar > button,
+.session-viewer-list,
+.session-viewer-detail,
+.session-viewer-meta,
+.session-message-list {
+  border-color: var(--session-line);
+  background: var(--session-surface);
+}
+
+.session-viewer-search,
+.session-viewer-toolbar > button {
+  background: var(--session-control-bg);
+}
+
+.session-viewer-search:focus-within {
+  border-color: var(--session-focus);
+  background: var(--session-surface-raised);
+}
+
+.session-viewer-search svg,
+.session-viewer-toolbar > button {
+  color: var(--session-faint);
+}
+
+.claude-sessions-page .session-viewer-search input {
+  color: var(--session-ink);
+}
+
+.claude-sessions-page .session-viewer-search input::placeholder,
+.session-viewer-search > span,
+.session-viewer-row footer,
+.session-viewer-meta span,
+.session-viewer-empty {
+  color: var(--session-faint);
+}
+
+.session-viewer-toolbar > button:hover:not(:disabled),
+.session-viewer-actions button:hover:not(:disabled) {
+  color: var(--session-ink);
+  border-color: var(--session-line-strong);
+  background: var(--session-control-hover);
+}
+
+.session-viewer-toolbar > button:focus-visible,
+.session-viewer-actions button:focus-visible {
+  outline-color: var(--session-focus);
+}
+
+.session-viewer-error {
+  color: var(--session-danger);
+  border-color: oklch(57% 0.09 33 / 0.35);
+  background: var(--session-error-bg);
+}
+
+.session-viewer-list,
+.session-viewer-detail {
+  box-shadow: var(--session-shadow);
+}
+
+.session-viewer-list::-webkit-scrollbar-thumb,
+.session-viewer-detail::-webkit-scrollbar-thumb,
+.session-message-list::-webkit-scrollbar-thumb {
+  border-color: var(--session-surface);
+  background: var(--session-scrollbar);
+}
+
+.session-viewer-list::-webkit-scrollbar-corner,
+.session-viewer-detail::-webkit-scrollbar-corner,
+.session-message-list::-webkit-scrollbar-corner {
+  background: var(--session-surface);
+}
+
+.session-viewer-row {
+  color: var(--session-ink);
+  border-bottom-color: var(--session-line);
+}
+
+.session-viewer-row:hover,
+.session-message-row:hover {
+  background: var(--session-surface-hover);
+}
+
+.session-viewer-row.active {
+  background: var(--session-surface-active);
+  box-shadow: inset 0 0 0 1px var(--session-active-line);
+}
+
+.session-viewer-row strong,
+.session-viewer-detail h2,
+.session-viewer-meta strong {
+  color: var(--session-ink);
+}
+
+.session-viewer-row p.session-viewer-project-path,
+.session-viewer-detail p,
+.session-message-row > div time {
+  color: var(--session-muted);
+}
+
+.session-viewer-row em.valid,
+.session-message-row.user > div {
+  color: var(--session-accent);
+}
+
+.session-viewer-row em.empty,
+.session-message-row.system > div {
+  color: var(--session-faint);
+}
+
+.session-viewer-row em.corrupt {
+  color: var(--session-danger);
+}
+
+.session-viewer-actions button {
+  color: var(--session-muted);
+  border-color: var(--session-line);
+  background: var(--session-control-bg);
+}
+
+.session-viewer-actions .session-resume-button {
+  color: var(--session-accent-ink);
+  border-color: var(--session-accent);
+  background: var(--session-accent);
+}
+
+.session-viewer-actions .session-resume-button:hover:not(:disabled) {
+  color: var(--session-accent-ink);
+  border-color: var(--session-accent-hover);
+  background: var(--session-accent-hover);
+}
+
+.session-viewer-meta {
+  background: var(--session-surface-raised);
+}
+
+.session-viewer-meta div,
+.session-message-row {
+  border-color: var(--session-line);
+}
+
+.session-message-list {
+  background: var(--session-surface);
+}
+
+.session-message-row > div {
+  color: var(--session-faint);
+}
+
+.session-message-row.assistant > div {
+  color: var(--session-info);
+}
+
+.session-message-row.tool > div {
+  color: var(--session-tool);
+}
+
+.session-message-row p {
+  color: var(--session-message-text);
+}
+
+.session-toast {
+  color: var(--session-ink);
+  border-color: var(--session-line);
+  background: var(--session-surface-raised);
+  box-shadow: var(--session-shadow);
+}
+
+@media (max-width: 920px) {
+  .session-viewer-meta div {
+    border-bottom-color: var(--session-line);
+  }
+}
+
+@media (max-width: 620px) {
+  .session-viewer-meta div:nth-last-child(-n+2) {
+    border-bottom-color: var(--session-line);
+  }
+}
+
+.claude-resources-page-dark {
+  --resource-ink: oklch(23% 0.011 75);
+  --resource-muted: oklch(50% 0.011 75);
+  --resource-faint: oklch(62% 0.01 75);
+  --resource-line: oklch(34% 0.012 75 / 0.16);
+  --resource-line-strong: oklch(34% 0.012 75 / 0.28);
+  --resource-surface: oklch(98% 0.008 78 / 0.84);
+  --resource-surface-raised: oklch(99% 0.006 78 / 0.92);
+  --resource-surface-hover: oklch(95% 0.01 78 / 0.9);
+  --resource-surface-active: oklch(94% 0.018 82 / 0.82);
+  --resource-control-bg: oklch(99% 0.006 78 / 0.78);
+  --resource-control-hover: oklch(96% 0.012 78 / 0.95);
+  --resource-focus: oklch(64% 0.065 82 / 0.42);
+  --resource-accent: oklch(73% 0.115 82);
+  --resource-success: oklch(62% 0.09 154);
+  --resource-idle: oklch(58% 0.12 82);
+  --resource-missing: oklch(55% 0.14 24);
+  --resource-scrollbar: oklch(68% 0.01 75 / 0.58);
+  --resource-shadow: 0 18px 44px oklch(34% 0.012 75 / 0.1);
+  color: var(--resource-ink);
+}
+
+[data-theme=dark] .claude-resources-page-dark {
+  --resource-ink: oklch(91% 0.012 78);
+  --resource-muted: oklch(65% 0.009 78);
+  --resource-faint: oklch(58% 0.009 78);
+  --resource-line: oklch(27% 0.006 75);
+  --resource-line-strong: oklch(41% 0.028 76);
+  --resource-surface: oklch(17.5% 0.006 75);
+  --resource-surface-raised: oklch(20% 0.006 75);
+  --resource-surface-hover: oklch(20.5% 0.007 75);
+  --resource-surface-active: oklch(22.5% 0.009 76);
+  --resource-control-bg: oklch(20% 0.006 75);
+  --resource-control-hover: oklch(21% 0.008 75);
+  --resource-focus: oklch(58% 0.05 78 / 0.75);
+  --resource-accent: oklch(74% 0.015 82);
+  --resource-success: oklch(72% 0.07 154);
+  --resource-idle: oklch(78% 0.11 88);
+  --resource-missing: oklch(72% 0.12 24);
+  --resource-scrollbar: oklch(43% 0.008 78);
+  --resource-shadow: none;
+}
+
+.claude-resource-subtabs.compact {
+  border-color: var(--resource-line);
+  background: var(--resource-surface);
+  box-shadow: none;
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab {
+  color: var(--resource-muted);
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab:focus-visible {
+  outline-color: var(--resource-focus);
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab:hover,
+.claude-resource-subtabs.compact .claude-resource-refresh-tab:hover:not(:disabled) {
+  color: var(--resource-ink);
+  background: var(--resource-control-hover);
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab.active {
+  color: var(--resource-ink);
+  border-color: var(--resource-line-strong);
+  background: var(--resource-surface-active);
+  box-shadow: none;
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab em,
+.claude-resource-list-toolbar > span,
+.claude-resource-row-origin span,
+.claude-resource-row code,
+.claude-resource-empty,
+.claude-resource-path-note.dark {
+  color: var(--resource-faint);
+}
+
+.claude-resource-subtabs.compact .claude-resource-subtab small {
+  color: var(--resource-accent);
+}
+
+.claude-resource-search.dark {
+  border-color: var(--resource-line);
+  background: var(--resource-control-bg);
+}
+
+.claude-resource-search.dark:focus-within {
+  border-color: var(--resource-focus);
+  background: var(--resource-surface-raised);
+}
+
+.claude-resource-search.dark svg {
+  color: var(--resource-faint);
+}
+
+.claude-resources-page-dark .claude-resource-search.dark input {
+  color: var(--resource-ink);
+}
+
+.claude-resources-page-dark .claude-resource-search.dark input::placeholder {
+  color: var(--resource-faint);
+}
+
+.claude-resource-table {
+  border-color: var(--resource-line);
+  background: var(--resource-surface);
+  box-shadow: var(--resource-shadow);
+}
+
+.claude-resource-table::-webkit-scrollbar-thumb {
+  border-color: var(--resource-surface);
+  background: var(--resource-scrollbar);
+}
+
+.claude-resource-table-head {
+  color: var(--resource-faint);
+  border-bottom-color: var(--resource-line);
+  background: var(--resource-surface-raised);
+}
+
+.claude-resource-row {
+  border-bottom-color: var(--resource-line);
+}
+
+.claude-resource-row:hover {
+  background: var(--resource-surface-hover);
+}
+
+.claude-resource-name-line strong,
+.claude-resource-row-origin strong {
+  color: var(--resource-ink);
+}
+
+.claude-resource-row p {
+  color: var(--resource-muted);
+}
+
+.claude-resource-status {
+  color: var(--resource-muted);
+}
+
+.claude-resource-status.active {
+  color: var(--resource-success);
+}
+
+.claude-resource-status.idle {
+  color: var(--resource-idle);
+}
+
+.claude-resource-status.missing {
+  color: var(--resource-missing);
+}
+
+.claude-profile-live-state.active {
+  color: var(--resource-success);
+}
+
+.claude-profile-live-state.idle {
+  color: var(--resource-idle);
+}
+
+.claude-profile-live-state.missing {
+  color: var(--resource-missing);
+}
+
+.claude-profile-resource-action {
+  color: var(--resource-muted);
+  border-color: var(--resource-line-strong);
+  background: var(--resource-control-bg);
+}
+
+.claude-profile-resource-action:hover:not(:disabled) {
+  color: var(--resource-ink);
+  border-color: var(--resource-focus);
+  background: var(--resource-control-hover);
+}
+
+.claude-profile-resource-action:focus-visible {
+  outline-color: var(--resource-focus);
+}
+
+.claude-profile-resource-unavailable {
+  color: var(--resource-faint);
+}
+
+.claude-resource-empty {
+  background: var(--resource-surface);
+}
+
+/* Confirm dialogs portal to <body>, so they need the same token scope. */
+.ccs-fullscreen-panel,
+.ccs-confirm-backdrop {
+  --ccs-editor-ink: oklch(23% 0.011 75);
+  --ccs-editor-muted: oklch(50% 0.011 75);
+  --ccs-editor-faint: oklch(62% 0.01 75);
+  --ccs-editor-line: oklch(34% 0.012 75 / 0.16);
+  --ccs-editor-line-strong: oklch(34% 0.012 75 / 0.28);
+  --ccs-editor-bg: oklch(96% 0.008 78);
+  --ccs-editor-surface: oklch(99% 0.006 78 / 0.94);
+  --ccs-editor-raised: oklch(98% 0.008 78 / 0.86);
+  --ccs-editor-hover: oklch(95% 0.01 78 / 0.9);
+  --ccs-editor-focus: oklch(64% 0.065 82 / 0.42);
+  --ccs-editor-primary: oklch(73% 0.115 82);
+  --ccs-editor-primary-hover: oklch(78% 0.12 82);
+  --ccs-editor-primary-ink: oklch(24% 0.01 75);
+  --ccs-editor-shadow: 0 18px 50px oklch(34% 0.012 75 / 0.12);
+}
+
+.ccs-fullscreen-panel {
+  color: var(--ccs-editor-ink);
+  background: var(--ccs-editor-bg);
+}
+
+/* Dark editor palette mirrors the Overview's dark tokens (the screen this
+   panel launches from) — warm near-black surfaces (hue 75) and the app's gold
+   accent (hue 82) — so the editor stops reading as a foreign blue/neutral
+   theme. The light palette above was already harmonized this way; this brings
+   dark to parity. Light and Pet themes are untouched. */
+[data-theme=dark] .ccs-fullscreen-panel,
+[data-theme=dark] .ccs-confirm-backdrop {
+  --ccs-editor-ink: oklch(91% 0.012 78);
+  --ccs-editor-muted: oklch(63% 0.009 78);
+  --ccs-editor-faint: oklch(52% 0.008 78);
+  --ccs-editor-line: oklch(27% 0.006 75);
+  --ccs-editor-line-strong: oklch(32% 0.007 75);
+  --ccs-editor-bg: oklch(15% 0.006 75);
+  --ccs-editor-surface: oklch(17.5% 0.006 75);
+  --ccs-editor-raised: oklch(20% 0.006 75);
+  --ccs-editor-hover: oklch(21.5% 0.007 75);
+  --ccs-editor-focus: oklch(64% 0.065 82 / 0.5);
+  --ccs-editor-primary: oklch(77% 0.105 82);
+  --ccs-editor-primary-hover: oklch(81% 0.11 82);
+  --ccs-editor-primary-ink: oklch(16% 0.006 75);
+  --ccs-editor-shadow: 0 18px 50px oklch(0% 0 0 / 0.42);
+}
+
+.ccs-fullscreen-panel .ccs-fullscreen-header,
+.ccs-fullscreen-panel .ccs-fullscreen-footer {
+  border-color: var(--ccs-editor-line);
+  background: var(--ccs-editor-surface);
+}
+
+.ccs-fullscreen-panel .ccs-fullscreen-title span,
+.ccs-fullscreen-panel .ccs-provider-form label,
+.ccs-fullscreen-panel .ccs-form-section-heading p {
+  color: var(--ccs-editor-muted);
+}
+
+.ccs-fullscreen-panel .ccs-back-button,
+.ccs-fullscreen-panel .ccs-panel-cancel {
+  color: var(--ccs-editor-muted);
+}
+
+.ccs-fullscreen-panel .ccs-back-button:hover,
+.ccs-fullscreen-panel .ccs-panel-cancel:hover {
+  color: var(--ccs-editor-ink);
+  background: var(--ccs-editor-hover);
+}
+
+.ccs-fullscreen-panel .ccs-provider-form {
+  border-color: var(--ccs-editor-line);
+  background: var(--ccs-editor-surface);
+  box-shadow: var(--ccs-editor-shadow);
+}
+
+.ccs-fullscreen-panel .ccs-provider-form label span,
+.ccs-fullscreen-panel .ccs-form-section-heading h3 {
+  color: var(--ccs-editor-ink);
+}
+
+.ccs-fullscreen-panel .ccs-provider-form input,
+.ccs-fullscreen-panel .ccs-provider-form select,
+.ccs-fullscreen-panel .ccs-provider-form textarea {
+  color: var(--ccs-editor-ink);
+  border-color: var(--ccs-editor-line-strong);
+  background: var(--ccs-editor-raised);
+}
+
+/* Replace the native (crooked) select arrow with a clean centered chevron. Must
+   come AFTER the `background` shorthand above, which resets background-image. */
+.ccs-fullscreen-panel .ccs-provider-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23989898' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 15px;
+}
+
+.ccs-fullscreen-panel .ccs-provider-form input:focus,
+.ccs-fullscreen-panel .ccs-provider-form select:focus,
+.ccs-fullscreen-panel .ccs-provider-form textarea:focus {
+  border-color: var(--ccs-editor-focus);
+  box-shadow: 0 0 0 3px oklch(64% 0.065 82 / 0.12);
+}
+
+[data-theme=dark] .ccs-fullscreen-panel .ccs-provider-form input:focus,
+[data-theme=dark] .ccs-fullscreen-panel .ccs-provider-form select:focus,
+[data-theme=dark] .ccs-fullscreen-panel .ccs-provider-form textarea:focus {
+  box-shadow: 0 0 0 3px oklch(64% 0.065 82 / 0.2);
+}
+
+/* The icon-block trigger's hover border hardcodes cc-switch blue; in dark it
+   follows the editor's gold accent instead (light/pet keep their own base). */
+[data-theme=dark] .ccs-fullscreen-panel .ccs-icon-block button:hover {
+  border-color: var(--ccs-editor-primary);
+}
+
+.ccs-fullscreen-panel .ccs-provider-form select option {
+  color: var(--ccs-editor-ink);
+  background: var(--ccs-editor-bg);
+}
+
+.ccs-fullscreen-panel .ccs-panel-cancel {
+  border-color: var(--ccs-editor-line-strong);
+  background: transparent;
+}
+
+.ccs-fullscreen-panel .ccs-save-button {
+  color: var(--ccs-editor-primary-ink);
+  background: var(--ccs-editor-primary);
+}
+
+.ccs-fullscreen-panel .ccs-save-button:hover {
+  background: var(--ccs-editor-primary-hover);
+}
+
+.ccs-fullscreen-panel .ccs-form-card {
+  border-bottom-color: var(--ccs-editor-line);
+}
