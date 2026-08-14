@@ -90,6 +90,7 @@ describe("DSH provider settings", () => {
     expect(listing.providers).toContainEqual(expect.objectContaining({
       id: "team-gateway",
       name: "Team Gateway",
+      apiKey: "sk-private",
       hasCredential: true
     }));
   });

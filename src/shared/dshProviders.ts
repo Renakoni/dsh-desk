@@ -65,6 +65,7 @@ export type DshProvider = DshProviderUiMeta & {
   enabled: boolean;
   runtimeActive: boolean;
   credentialRef?: string;
+  apiKey?: string;
   hasCredential: boolean;
   isOfficial: boolean;
   isDefault: boolean;

@@ -326,6 +326,12 @@
   background: currentColor;
 }
 
+.overview-workbench .ccs-provider-titleline .ccs-provider-state.disabled {
+  color: var(--overview-muted);
+  background: transparent;
+  box-shadow: none;
+}
+
 .overview-workbench .ccs-provider-url {
   max-width: min(420px, 100%);
   min-width: 0;

@@ -241,7 +241,7 @@ export function StatsPanel({ stats, snapshot = null }: {
       { label: zh ? "模型响应耗时" : "Model response time", value: formatPreciseDuration(dshMetrics.llmMs, zh) }
     ],
     [
-      { label: zh ? "平均首字延迟" : "Average first-token latency", value: formatMilliseconds(averageTtft, numberLocale), meta: zh ? `${dshMetrics.ttftSteps} 次采样` : `${dshMetrics.ttftSteps} samples` },
+      { label: zh ? "平均首字延迟" : "Average first-token latency", value: formatMilliseconds(averageTtft, numberLocale) },
       { label: zh ? "生成速度" : "Generation speed", value: decodeRate ? (zh ? `${decodeRate.toFixed(1)} token/秒` : `${decodeRate.toFixed(1)} tok/s`) : "—" }
     ]
   ] : [];

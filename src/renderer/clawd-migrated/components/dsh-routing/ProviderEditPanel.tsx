@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  CircleCheck,
+  CircleX,
   Download,
   Eye,
   EyeOff,
@@ -11,6 +13,7 @@ import {
   Loader2,
   Plus,
   Save,
+  TriangleAlert,
   Trash2
 } from "lucide-react";
 import type {
@@ -64,8 +67,9 @@ function compactInteger(value?: number) {
   return String(value);
 }
 
-function formatI18n(template: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
+function probeTone(result: DshProviderProbeResult): "info" | "warning" | "error" {
+  if (!result.ok) return "error";
+  return (result.latencyMs ?? 0) >= 800 ? "warning" : "info";
 }
 
 const PresetGrid = memo(function PresetGrid({
@@ -154,7 +158,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl ?? "");
   const [protocol, setProtocol] = useState<DshProviderProtocol | "deepseek-chat-completions" | undefined>(provider.protocol);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(provider.apiKey ?? "");
   const [showApiKey, setShowApiKey] = useState(false);
   const [catalogProvider, setCatalogProvider] = useState(provider.catalogProvider === true);
   const [inheritModels, setInheritModels] = useState(provider.inheritModels === true);
@@ -369,14 +373,16 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                   <input
                     type={showApiKey ? "text" : "password"}
                     value={apiKey}
-                    onChange={event => setApiKey(event.target.value)}
-                    placeholder={mode === "edit" ? t("dshProviders.keepKey", "留空则保留现有密钥") : "sk-..."}
+                    onChange={event => { setApiKey(event.target.value); setProbeResult(null); }}
+                    placeholder="sk-..."
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <button type="button" className="ccs-apikey-toggle" onClick={() => setShowApiKey(value => !value)} aria-label={showApiKey ? t("routing.hideApiKey", "隐藏 API Key") : t("routing.showApiKey", "显示 API Key")}>
-                    {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
+                  {apiKey ? (
+                    <button type="button" className="ccs-apikey-toggle" onClick={() => setShowApiKey(value => !value)} aria-label={showApiKey ? t("routing.hideApiKey", "隐藏 API Key") : t("routing.showApiKey", "显示 API Key")}>
+                      {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  ) : null}
                 </div>
                 {apiKeyUrl || websiteUrl ? <button type="button" className="ccs-get-key" onClick={() => void window.companion.openExternal(apiKeyUrl || websiteUrl)}>{t("routing.getApiKey", "获取 API Key")}</button> : null}
               </label>
@@ -390,13 +396,23 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                   </button>
                 </div>
                 <input value={baseUrl} disabled={official || catalogProvider} onChange={event => { setBaseUrl(event.target.value); setProbeResult(null); }} placeholder={catalogProvider ? t("dshProviders.catalogEndpoint", "使用 DSH 目录默认端点") : "https://api.example.com/v1"} spellCheck={false} />
-                {probeResult ? (
-                  <small className={probeResult.ok ? "ccs-field-hint" : "ccs-field-error"}>
-                    {probeResult.ok
-                      ? formatI18n(t("dshProviders.reachable", "连通正常 · {latency} ms · HTTP {status}"), { latency: probeResult.latencyMs ?? 0, status: probeResult.status ?? "-" })
-                      : probeResult.error ?? t("routing.testUnreachable", "无法连通")}
-                  </small>
-                ) : null}
+                {probeResult ? (() => {
+                  const tone = probeTone(probeResult);
+                  const slow = tone === "warning";
+                  const title = probeResult.ok
+                    ? slow ? t("routing.testSlow", "连接成功，响应较慢") : t("routing.testOk", "连接成功")
+                    : t("routing.testUnreachable", "连接失败");
+                  const detail = probeResult.ok
+                    ? `${probeResult.latencyMs ?? 0} ms${probeResult.status ? ` · HTTP ${probeResult.status}` : ""}`
+                    : probeResult.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络");
+                  return (
+                    <div className={`dsh-probe-result ${tone}`} role="status">
+                      {tone === "info" ? <CircleCheck size={15} /> : tone === "warning" ? <TriangleAlert size={15} /> : <CircleX size={15} />}
+                      <strong>{title}</strong>
+                      <span>{detail}</span>
+                    </div>
+                  );
+                })() : null}
               </div>
             </div>
           </section>

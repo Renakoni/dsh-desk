@@ -26,13 +26,15 @@ beforeEach(() => {
         iconColor: "#4D6BFE",
         isDefault: true,
         isOfficial: true,
+        apiKey: "sk-visible",
         hasCredential: true
       }],
       catalogProviders: [],
       runtimeAvailable: true,
       defaultProvider: "deepseek-official",
       defaultModel: "deepseek-v4-flash"
-    }))
+    })),
+    probeDshProvider: vi.fn(async () => ({ ok: true, latencyMs: 180, status: 200 }))
   });
 });
 
@@ -120,6 +122,38 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByText("Upstream protocol")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
     expect((screen.getByRole("checkbox", { name: "Enable reasoning levels" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("reveals the stored key and classifies connection feedback", async () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <OverviewSection
+          settings={{ hideSensitiveContent: false }}
+          connection={{ serverListening: false, error: null }}
+          hookStatus={null}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const apiKey = screen.getAllByLabelText("API Key").find(input => (input as HTMLInputElement).value === "sk-visible") as HTMLInputElement;
+    expect(apiKey).toBeTruthy();
+    expect(apiKey.value).toBe("sk-visible");
+    expect(apiKey.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "Show API Key" }));
+    expect(apiKey.type).toBe("text");
+
+    const speedTest = () => screen.getAllByRole("button", { name: "Test" }).find(button => !(button as HTMLButtonElement).disabled) as HTMLButtonElement;
+    fireEvent.click(speedTest());
+    await waitFor(() => expect(document.querySelector(".dsh-probe-result.info")?.textContent).toContain("180 ms"));
+
+    vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: true, latencyMs: 900, status: 200 });
+    fireEvent.click(speedTest());
+    await waitFor(() => expect(document.querySelector(".dsh-probe-result.warning")?.textContent).toContain("900 ms"));
+
+    vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: false, error: "timeout" });
+    fireEvent.click(speedTest());
+    await waitFor(() => expect(document.querySelector(".dsh-probe-result.error")?.textContent).toContain("timeout"));
   });
 
   it("separates multi-provider enablement from the current provider", async () => {

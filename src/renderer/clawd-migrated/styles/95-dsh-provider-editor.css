@@ -254,6 +254,25 @@
   gap: 8px;
 }
 
+.dsh-probe-result {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dsh-probe-result svg { flex: 0 0 auto; }
+.dsh-probe-result strong { font-weight: 600; }
+.dsh-probe-result span { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsh-probe-result.info { color: oklch(58% 0.14 250); background: oklch(58% 0.14 250 / 0.08); }
+.dsh-probe-result.warning { color: oklch(62% 0.14 82); background: oklch(62% 0.14 82 / 0.09); }
+.dsh-probe-result.error { color: oklch(58% 0.17 28); background: oklch(58% 0.17 28 / 0.08); }
+
 /* Label + "manage & speed test" toggle on one line (cc-switch parity), so the
    candidate list stays tucked away instead of dumped inline. */
 .ccs-field-head {

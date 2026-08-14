@@ -739,12 +739,18 @@ export function installClawdCompat() {
         enabled: input.enabled !== false,
         runtimeActive: input.enabled !== false,
         credentialRef: id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
+        ...(input.apiKey ? { apiKey: input.apiKey } : {}),
         hasCredential: !!input.apiKey,
         isOfficial: id === "deepseek-official",
         isDefault: mockDshProviders.some(provider => provider.id === id && provider.isDefault)
       };
       const index = mockDshProviders.findIndex(provider => provider.id === id);
-      if (index >= 0) mockDshProviders[index] = { ...mockDshProviders[index], ...next, hasCredential: next.hasCredential || mockDshProviders[index].hasCredential };
+      if (index >= 0) mockDshProviders[index] = {
+        ...mockDshProviders[index],
+        ...next,
+        apiKey: next.apiKey || mockDshProviders[index].apiKey,
+        hasCredential: next.hasCredential || mockDshProviders[index].hasCredential
+      };
       else mockDshProviders.push(next);
       return { ok: true, provider: index >= 0 ? mockDshProviders[index] : next };
     },

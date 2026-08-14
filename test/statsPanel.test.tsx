@@ -93,6 +93,7 @@ describe("StatsPanel runtime ranges", () => {
     ]);
     expect(metricValues()).toEqual(["10", "7", "1", "0", "1"]);
     expect(performanceValues()).toEqual(["3", "6", "3 秒", "2 秒", "250 ms", "20.0 token/秒"]);
+    expect(screen.queryByText(/次采样|samples/)).toBeNull();
     expect(screen.queryByText("运行性能")).toBeNull();
     expect(screen.getAllByText("今日")).toHaveLength(1);
     expect(screen.queryByText("最近会话")).toBeNull();

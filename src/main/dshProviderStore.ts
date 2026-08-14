@@ -371,6 +371,7 @@ function providerFromProfile(
     ? profile.api as DshProviderProtocol
     : undefined;
   const credentialRef = typeof profile.apiKeyEnv === "string" ? profile.apiKeyEnv : undefined;
+  const apiKey = credentialRef ? process.env[credentialRef] || credentials.get(credentialRef) : undefined;
   const modelsInherited = !Array.isArray(profile.models);
   const configuredModels = modelList(profile.models);
   return {
@@ -385,7 +386,8 @@ function providerFromProfile(
     enabled,
     runtimeActive: enabled && (runtime?.active ?? false),
     ...(credentialRef ? { credentialRef } : {}),
-    hasCredential: credentialRef ? !!(process.env[credentialRef] || credentials.get(credentialRef)) : false,
+    ...(apiKey ? { apiKey } : {}),
+    hasCredential: !!apiKey,
     isOfficial: false,
     isDefault: defaultProvider === id,
     ...(defaultProvider === id ? { defaultModel } : {})
@@ -412,6 +414,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
     const groupById = new Map(runtime.groups.map(group => [group.id, group]));
     const deepseek = asObject(root["llm-deepseek"]);
     const officialRef = typeof deepseek.apiKeyEnv === "string" ? deepseek.apiKeyEnv : OFFICIAL_CREDENTIAL;
+    const officialApiKey = process.env[officialRef] || credentials.get(officialRef);
     const officialGroup = groupById.get(OFFICIAL_PROVIDER);
     const officialMeta = deskState.providers[OFFICIAL_PROVIDER] ?? {};
     const officialEnabled = officialProviderEnabled(patchDocument.root);
@@ -427,7 +430,8 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       enabled: officialEnabled,
       runtimeActive: officialEnabled && (runtimeById.get(OFFICIAL_PROVIDER)?.active ?? true),
       credentialRef: officialRef,
-      hasCredential: !!(process.env[officialRef] || credentials.get(officialRef)),
+      ...(officialApiKey ? { apiKey: officialApiKey } : {}),
+      hasCredential: !!officialApiKey,
       isOfficial: true,
       icon: "deepseek",
       iconColor: "#4D6BFE",

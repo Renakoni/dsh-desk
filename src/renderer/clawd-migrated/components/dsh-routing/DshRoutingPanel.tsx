@@ -101,6 +101,7 @@ function editDraft(provider: DshProvider): DshProviderSaveInput {
     inheritModels: provider.modelsInherited,
     catalogProvider: provider.catalogProvider,
     enabled: provider.enabled,
+    apiKey: provider.apiKey,
     websiteUrl: provider.websiteUrl,
     apiKeyUrl: provider.apiKeyUrl,
     category: provider.category,
@@ -247,12 +248,17 @@ export function DshRoutingPanel() {
     setTestingId(provider.id);
     try {
       const result = await companion.probeDshProvider({ id: provider.id, mode: "connectivity" });
-      const latency = typeof result.latencyMs === "number" ? ` (${result.latencyMs}ms)` : "";
       if (result.ok) {
-        toast.success(`${provider.name} ${t("routing.testOk", "连通正常")}${latency}`, { closeButton: true });
+        const latency = result.latencyMs ?? 0;
+        const detail = `${latency} ms${result.status ? ` · HTTP ${result.status}` : ""}`;
+        if (latency >= 800) {
+          toast.warning(`${provider.name} · ${t("routing.testSlow", "连接成功，响应较慢")}`, { description: detail, closeButton: true });
+        } else {
+          toast.info(`${provider.name} · ${t("routing.testOk", "连接成功")}`, { description: detail, closeButton: true });
+        }
       } else {
-        toast.error(`${provider.name} ${t("routing.testUnreachable", "无法连通")}: ${result.error ?? ""}`, {
-          description: t("routing.testUnreachableHint", "无法建立连接（DNS / 连接 / TLS / 超时）。请检查请求地址与网络。"),
+        toast.error(`${provider.name} · ${t("routing.testUnreachable", "连接失败")}`, {
+          description: result.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络"),
           duration: 8000,
           closeButton: true
         });
