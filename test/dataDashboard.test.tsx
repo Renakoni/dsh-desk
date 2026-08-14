@@ -132,11 +132,14 @@ describe("data dashboard order and disclosure", () => {
     expect(screen.queryByText("DeepSeek Harness")).toBeNull();
     expect(screen.queryByText("Execution trajectories")).toBeNull();
     expect(screen.queryByText("Latest context pressure")).toBeNull();
+    expect(screen.queryByText("Recent sessions")).toBeNull();
     expect(screen.getAllByText("¥0.02").length).toBeGreaterThan(0);
     expect(screen.queryByText("$0.00")).toBeNull();
 
     const runtimePanel = view.container.querySelector(".dsh-runtime-panel") as HTMLElement;
-    await waitFor(() => expect(Array.from(runtimePanel.querySelectorAll(".stats-range-metric strong"), metric => metric.textContent)).toEqual(["1", "1", "16", "14m 35s", "3m 49s", "3s"]));
+    await waitFor(() => expect(Array.from(runtimePanel.querySelectorAll(".stats-range-block .stats-range-metric strong"), metric => metric.textContent)).toEqual(["64", "46", "1", "1", "2"]));
+    expect(Array.from(runtimePanel.querySelectorAll(".runtime-range-metrics span"), metric => metric.textContent)).toEqual(["Conversation turns", "Execution steps", "Active time", "Model time", "Average TTFT", "Decode rate"]);
+    expect(Array.from(runtimePanel.querySelectorAll(".runtime-range-metrics strong"), metric => metric.textContent)).toEqual(["1", "16", "14m 35s", "3m 49s", "3s", "132.6 tok/s"]);
     expect(within(runtimePanel).getAllByRole("tab")).toHaveLength(3);
 
     const toolPanel = view.container.querySelector(".dsh-tool-stats-panel") as HTMLElement;
@@ -147,17 +150,9 @@ describe("data dashboard order and disclosure", () => {
     fireEvent.click(toolRanking);
     expect(toolPanel.querySelector(".trajectory-tool-row code")?.textContent).toBe("edit");
 
-    const recentSessions = within(runtimePanel).getByRole("button", { name: /Recent sessions/ });
-    expect(recentSessions.getAttribute("aria-expanded")).toBe("false");
-    expect(within(runtimePanel).queryByText("Tool capability investigation")).toBeNull();
-    fireEvent.click(recentSessions);
-    expect(await within(runtimePanel).findByText("Tool capability investigation")).toBeTruthy();
-    fireEvent.click(within(runtimePanel).getByRole("button", { name: "Reveal session log" }));
-    expect(revealDshSession).toHaveBeenLastCalledWith(sessionPath);
-
     const editSection = screen.getByRole("heading", { name: "Recent edits" }).closest(".workbench-section") as HTMLElement;
     fireEvent.click(await within(editSection).findByRole("button", { name: "Reveal session log" }));
-    expect(revealDshSession).toHaveBeenCalledTimes(2);
+    expect(revealDshSession).toHaveBeenCalledTimes(1);
     expect(revealDshSession).toHaveBeenLastCalledWith(sessionPath);
   });
 });

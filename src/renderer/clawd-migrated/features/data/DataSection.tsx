@@ -4,7 +4,7 @@ import { Code2, FolderOpen, Gauge, HardDrive, History, Trash2, Wrench } from "lu
 import type { DshAnalyticsSnapshot } from "../../../../shared/dshAnalytics";
 import type { DisplayCurrency } from "../../../../shared/currency";
 import { useI18n } from "../../useI18n";
-import { StatsPanel } from "../../components/StatsPanel";
+import { dshAnalyticsToAppStats, StatsPanel } from "../../components/StatsPanel";
 import { TokenPanel } from "./TokenPanel";
 import { DshToolStatsPanel } from "./DshTrajectoryPanel";
 import { RecentEditsPanel } from "./RecentEditsPanel";
@@ -26,6 +26,7 @@ function DataSectionInner({ persistedStats, hideSensitiveContent, displayCurrenc
   const [dshAnalyticsLoading, setDshAnalyticsLoading] = useState(false);
   const [dshAnalyticsError, setDshAnalyticsError] = useState<string | null>(null);
   const totalStatEvents = useMemo(() => Object.values(persistedStats?.eventTypeCounts ?? {}).reduce((sum: number, count) => sum + Number(count || 0), 0), [persistedStats]);
+  const runtimeStats = useMemo(() => dshAnalytics ? dshAnalyticsToAppStats(dshAnalytics) : null, [dshAnalytics]);
 
   useEffect(() => {
     void window.companion.getDataDirectory().then(setDataDirectory).catch(() => setDataDirectory(""));
@@ -89,14 +90,12 @@ function DataSectionInner({ persistedStats, hideSensitiveContent, displayCurrenc
           </div>
           <Gauge size={18} />
         </header>
-        <StatsPanel
-          snapshot={dshAnalytics}
-          loading={dshAnalyticsLoading}
-          error={dshAnalyticsError}
-          onRefresh={force => void loadDshAnalytics(force)}
-          hideSensitiveContent={hideSensitiveContent}
-          onRevealSession={filePath => void revealDshSession(filePath)}
-        />
+        {runtimeStats ? (
+          <StatsPanel
+            stats={runtimeStats}
+            snapshot={dshAnalytics}
+          />
+        ) : <p className="note">{dshAnalyticsError ? `${zh ? "扫描失败" : "Scan failed"}: ${dshAnalyticsError}` : t("common.loading", "加载中...")}</p>}
       </section>
 
       <section className="workbench-section data-token-section">
