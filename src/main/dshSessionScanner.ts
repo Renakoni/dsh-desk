@@ -1,5 +1,4 @@
 import { readFile, readdir, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import type { ParsedEditRecord } from "./claudeEditLog";
@@ -11,15 +10,17 @@ import {
   type DshToolMetric,
   type DshTrajectoryDay
 } from "../shared/dshAnalytics";
+import { resolveDshHome } from "./dshPaths";
 
 type JsonObject = Record<string, unknown>;
 
-export function isDshSessionLogPath(filePath: string, dshHome = join(homedir(), ".dsh")): boolean {
+export function isDshSessionLogPath(filePath: string, dshHome = resolveDshHome()): boolean {
   if (typeof filePath !== "string" || !filePath) return false;
   const sessionRoot = resolve(dshHome, "sessions");
   const target = resolve(filePath);
   const fromRoot = relative(sessionRoot, target);
-  return basename(target).toLowerCase() === "session.jsonl.zstd"
+  const filename = basename(target).toLowerCase();
+  return (filename === "session.jsonl" || filename === "session.jsonl.zstd")
     && fromRoot !== ""
     && fromRoot !== ".."
     && !fromRoot.startsWith(`..${sep}`)
@@ -66,7 +67,7 @@ type ToolCall = {
   args: JsonObject | null;
 };
 
-type DayState = Omit<DshTrajectoryDay, "sessions"> & {
+type DayState = Omit<DshTrajectoryDay, "sessions" | "ttftMs" | "ttftSteps" | "decodeMs" | "decodeTokens"> & {
   sessionIds: Set<string>;
   hourlyActivity: number[];
   toolUsage: Record<string, number>;
@@ -684,6 +685,30 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
     for (const tool of scan.tools.values()) mergeTool(tools, tool);
   }
   const sessions = scans.map(scan => scan.session).sort((left, right) => right.lastActivity - left.lastActivity);
+  const sessionMetricsByDay = new Map<string, {
+    sessions: number;
+    ttftMs: number;
+    ttftSteps: number;
+    decodeMs: number;
+    decodeTokens: number;
+  }>();
+  for (const session of sessions) {
+    const key = dateKey(session.lastActivity);
+    const metrics = sessionMetricsByDay.get(key) ?? {
+      sessions: 0,
+      ttftMs: 0,
+      ttftSteps: 0,
+      decodeMs: 0,
+      decodeTokens: 0
+    };
+    metrics.sessions++;
+    metrics.ttftMs += session.ttftMs;
+    metrics.ttftSteps += session.ttftSteps;
+    metrics.decodeMs += session.decodeMs;
+    metrics.decodeTokens += session.decodeTokens;
+    sessionMetricsByDay.set(key, metrics);
+    if (!days.has(key)) days.set(key, createDay(key));
+  }
   const daily = [...days.values()].sort((left, right) => left.date.localeCompare(right.date));
   const hourlyActivity = new Array(24).fill(0);
   daily.forEach(day => day.hourlyActivity.forEach((count, hour) => { hourlyActivity[hour] += count; }));
@@ -721,21 +746,28 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
       decodeMs: 0,
       decodeTokens: 0
     }),
-    daily: daily.map(day => ({
-      date: day.date,
-      events: day.events,
-      sessions: day.sessionIds.size,
-      turns: day.turns,
-      steps: day.steps,
-      toolCalls: day.toolCalls,
-      failedToolCalls: day.failedToolCalls,
-      permissionRequests: day.permissionRequests,
-      permissionApproved: day.permissionApproved,
-      permissionDenied: day.permissionDenied,
-      totalTokens: day.totalTokens,
-      llmMs: day.llmMs,
-      toolMs: day.toolMs
-    })),
+    daily: daily.map(day => {
+      const sessionMetrics = sessionMetricsByDay.get(day.date);
+      return {
+        date: day.date,
+        events: day.events,
+        sessions: sessionMetrics?.sessions ?? 0,
+        turns: day.turns,
+        steps: day.steps,
+        toolCalls: day.toolCalls,
+        failedToolCalls: day.failedToolCalls,
+        permissionRequests: day.permissionRequests,
+        permissionApproved: day.permissionApproved,
+        permissionDenied: day.permissionDenied,
+        totalTokens: day.totalTokens,
+        llmMs: day.llmMs,
+        toolMs: day.toolMs,
+        ttftMs: sessionMetrics?.ttftMs ?? 0,
+        ttftSteps: sessionMetrics?.ttftSteps ?? 0,
+        decodeMs: sessionMetrics?.decodeMs ?? 0,
+        decodeTokens: sessionMetrics?.decodeTokens ?? 0
+      };
+    }),
     tools: [...tools.values()].sort((left, right) => right.calls - left.calls || right.durationMs - left.durationMs || left.name.localeCompare(right.name)),
     sessions: sessions.slice(0, 100),
     hourlyActivity,
@@ -765,7 +797,7 @@ export class DshSessionScanner {
   private lastSignature = "";
   private lastResult: DshSessionScanResult | null = null;
 
-  constructor(private readonly dshHome = join(homedir(), ".dsh")) {}
+  constructor(private readonly dshHome = resolveDshHome()) {}
 
   async scan(force = false): Promise<DshSessionScanResult> {
     const sessionRoot = join(this.dshHome, "sessions");

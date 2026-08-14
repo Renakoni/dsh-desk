@@ -33,7 +33,7 @@ function analyticsSnapshot() {
   const today = new Date().toLocaleDateString("en-CA");
   return {
     totals: { events: 64, sessions: 1, turns: 1, steps: 16, toolCalls: 46, failedToolCalls: 2, permissionRequests: 1, permissionApproved: 1, permissionDenied: 0, llmMs: 228_611, toolMs: 646_116, ttftMs: 42_147, ttftSteps: 16, decodeMs: 186_464, decodeTokens: 24_725 },
-    daily: [{ date: today, events: 64, sessions: 1, turns: 1, steps: 16, toolCalls: 46, failedToolCalls: 2, permissionRequests: 1, permissionApproved: 1, permissionDenied: 0, totalTokens: 600_047, llmMs: 228_611, toolMs: 646_116 }],
+    daily: [{ date: today, events: 64, sessions: 1, turns: 1, steps: 16, toolCalls: 46, failedToolCalls: 2, permissionRequests: 1, permissionApproved: 1, permissionDenied: 0, totalTokens: 600_047, llmMs: 228_611, toolMs: 646_116, ttftMs: 42_147, ttftSteps: 16, decodeMs: 186_464, decodeTokens: 24_725 }],
     tools: [{ name: "edit", calls: 46, errors: 2, durationMs: 92_000 }],
     sessions: [{
       sessionId: "session-one",

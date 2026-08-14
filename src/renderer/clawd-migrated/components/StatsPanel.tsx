@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from "react";
-import type { DshAnalyticsSnapshot, DshSessionMetric } from "../../../shared/dshAnalytics";
+import type { DshAnalyticsSnapshot } from "../../../shared/dshAnalytics";
 import type { AppStats } from "../../shared/events";
 import { useI18n } from "../useI18n";
 
@@ -105,15 +105,6 @@ function activeDayKeys(stats: AppStats): string[] {
     .map(([key]) => key);
 }
 
-function rangeSessionMetrics(sessions: DshSessionMetric[]) {
-  return sessions.reduce((total, session) => ({
-    ttftMs: total.ttftMs + session.ttftMs,
-    ttftSteps: total.ttftSteps + session.ttftSteps,
-    decodeMs: total.decodeMs + session.decodeMs,
-    decodeTokens: total.decodeTokens + session.decodeTokens
-  }), { ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 });
-}
-
 export function StatsPanel({ stats, snapshot = null }: {
   stats: AppStats;
   snapshot?: DshAnalyticsSnapshot | null;
@@ -164,29 +155,39 @@ export function StatsPanel({ stats, snapshot = null }: {
       const keyList = range === "today" ? [localDateKey()] : recentDateKeys(7);
       const keys = new Set(keyList);
       const selectedDays = snapshot.daily.filter(day => keys.has(day.date));
-      const selectedSessions = snapshot.sessions.filter(session => keys.has(localDateKey(session.lastActivity)));
-      const performance = rangeSessionMetrics(selectedSessions);
       const metrics = selectedDays.reduce((total, day) => ({
         ...total,
         events: total.events + day.events,
+        sessions: total.sessions + day.sessions,
         turns: total.turns + day.turns,
         steps: total.steps + day.steps,
         toolCalls: total.toolCalls + day.toolCalls,
         failedToolCalls: total.failedToolCalls + day.failedToolCalls,
         permissionRequests: total.permissionRequests + day.permissionRequests,
+        permissionApproved: total.permissionApproved + day.permissionApproved,
+        permissionDenied: total.permissionDenied + day.permissionDenied,
         llmMs: total.llmMs + day.llmMs,
-        toolMs: total.toolMs + day.toolMs
+        toolMs: total.toolMs + day.toolMs,
+        ttftMs: total.ttftMs + day.ttftMs,
+        ttftSteps: total.ttftSteps + day.ttftSteps,
+        decodeMs: total.decodeMs + day.decodeMs,
+        decodeTokens: total.decodeTokens + day.decodeTokens
       }), {
         events: 0,
-        sessions: selectedSessions.length,
+        sessions: 0,
         turns: 0,
         steps: 0,
         toolCalls: 0,
         failedToolCalls: 0,
         permissionRequests: 0,
+        permissionApproved: 0,
+        permissionDenied: 0,
         llmMs: 0,
         toolMs: 0,
-        ...performance
+        ttftMs: 0,
+        ttftSteps: 0,
+        decodeMs: 0,
+        decodeTokens: 0
       });
       const hourlyBuckets = mergeHourlyBuckets(snapshot.dailyHourlyActivity, keyList);
       return {

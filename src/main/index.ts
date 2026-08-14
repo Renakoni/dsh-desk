@@ -78,6 +78,7 @@ import { aggregateRecentEdits, editFromToolUseResult, emptyRecentEditsSnapshot, 
 import { aggregateUsageRankings, countToolUseBlocks, countUserCommands, createUsageCounts, emptyUsageRankingsSnapshot, type UsageCounts, type UsageRankingsSnapshot } from "./claudeUsageStats";
 import { DshUsageStore, normalizeDshUsageRecord } from "./dshUsage";
 import { DshSessionScanner, isDshSessionLogPath } from "./dshSessionScanner";
+import { resolveDshHome } from "./dshPaths";
 import { findNpxExecutable, getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, type DshPluginManagerOptions } from "./dshPluginManager";
 import {
   deleteDshProvider,
@@ -2000,7 +2001,7 @@ function getDshUsageStore() {
 }
 
 function getDshSessionScanner() {
-  dshSessionScanner ??= new DshSessionScanner(join(homedir(), ".dsh"));
+  dshSessionScanner ??= new DshSessionScanner(resolveDshHome());
   return dshSessionScanner;
 }
 
@@ -3605,7 +3606,7 @@ function getSessionHistory() {
 
 function dshPluginManagerOptions(): DshPluginManagerOptions {
   return {
-    profilesRoot: join(homedir(), ".dsh", "profiles"),
+    profilesRoot: join(resolveDshHome(), "profiles"),
     pluginPath: resolveBundledDshPluginPath(app.getAppPath(), process.resourcesPath ?? "", app.isPackaged),
     npxPath: findNpxExecutable()
   };
@@ -3974,7 +3975,7 @@ app.whenReady().then(() => {
     return error ? { ok: false, error } : { ok: true };
   });
   ipcMain.handle("companion:reveal-dsh-session", (_, filePath: string) => {
-    if (!isDshSessionLogPath(filePath) || !existsSync(filePath)) return false;
+    if (!isDshSessionLogPath(filePath, resolveDshHome()) || !existsSync(filePath)) return false;
     shell.showItemInFolder(filePath);
     return true;
   });

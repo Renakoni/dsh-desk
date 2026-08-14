@@ -42,10 +42,10 @@ function projectionCache() {
 }
 
 describe("DSH native session scanning", () => {
-  it("only accepts compressed session logs below the DSH session root", () => {
+  it("accepts plaintext and compressed session logs only below the DSH session root", () => {
     const dshHome = join(tmpdir(), "dsh-desk-path-check");
     expect(isDshSessionLogPath(join(dshHome, "sessions", "--demo--", "session-one", "session.jsonl.zstd"), dshHome)).toBe(true);
-    expect(isDshSessionLogPath(join(dshHome, "sessions", "--demo--", "session-one", "session.jsonl"), dshHome)).toBe(false);
+    expect(isDshSessionLogPath(join(dshHome, "sessions", "--demo--", "session-one", "session.jsonl"), dshHome)).toBe(true);
     expect(isDshSessionLogPath(join(dshHome, "storages", "session.jsonl.zstd"), dshHome)).toBe(false);
     expect(isDshSessionLogPath(join(dshHome, "sessions", "..", "outside", "session.jsonl.zstd"), dshHome)).toBe(false);
   });
@@ -99,7 +99,7 @@ describe("DSH native session scanning", () => {
     expect(result.analytics.totals).toMatchObject({ events: 11, sessions: 1, turns: 1, steps: 1, toolCalls: 1, permissionRequests: 1, permissionApproved: 1, permissionDenied: 0, llmMs: 1_000, toolMs: 300, ttftSteps: 1 });
     expect(result.analytics.sessions[0]).toMatchObject({ title: "Projected title", projectedTokens: 180 });
     expect(result.analytics.tools).toEqual([expect.objectContaining({ name: "edit", calls: 1, durationMs: 300 })]);
-    expect(result.analytics.daily).toEqual([expect.objectContaining({ sessions: 1, turns: 1, steps: 1, toolCalls: 1, totalTokens: 170 })]);
+    expect(result.analytics.daily).toEqual([expect.objectContaining({ sessions: 1, turns: 1, steps: 1, toolCalls: 1, totalTokens: 170, ttftMs: 200, ttftSteps: 1, decodeMs: 800, decodeTokens: 20 })]);
     expect(result.analytics.hourlyActivity.reduce((sum, count) => sum + count, 0)).toBe(11);
     expect(Object.values(result.analytics.dailyToolUsage)[0]).toEqual({ edit: 1 });
     expect(Object.values(result.analytics.dailyTools)[0]).toEqual([expect.objectContaining({ name: "edit", calls: 1, errors: 0, durationMs: 300 })]);
@@ -123,5 +123,40 @@ describe("DSH native session scanning", () => {
     writeFileSync(projectionPath, JSON.stringify(updated));
 
     expect((await scanner.scan()).analytics.sessions[0].title).toBe("Updated projected title");
+  });
+
+  it("keeps complete range aggregates while limiting session details to 100 rows", async () => {
+    const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-range-"));
+    const storageDir = join(dshHome, "storages");
+    mkdirSync(storageDir, { recursive: true });
+    const now = Date.now();
+    const projectedSessions: Record<string, unknown> = {};
+    for (let index = 0; index < 101; index++) {
+      const sessionId = `session-${index}`;
+      const sessionDir = join(dshHome, "sessions", "--demo--", sessionId);
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(join(sessionDir, "session.jsonl"), [
+        JSON.stringify({ type: "session", id: sessionId, createdAt: now, cwd: "C:\\work\\demo" }),
+        JSON.stringify({ type: "session/title", seq: 0, time: now + index, data: { title: sessionId } }),
+        ""
+      ].join("\n"));
+      projectedSessions[sessionId] = {
+        rows: {
+          sessionStats: { val: { ttftMs: 100, ttftSteps: 1, decodeMs: 200, decodeTokens: 10 } }
+        }
+      };
+    }
+    writeFileSync(join(storageDir, "session_projcache.json"), JSON.stringify({ tables: { sessions: projectedSessions } }));
+
+    const analytics = (await new DshSessionScanner(dshHome).scan()).analytics;
+    expect(analytics.sessions).toHaveLength(100);
+    expect(analytics.totals.sessions).toBe(101);
+    expect(analytics.daily).toEqual([expect.objectContaining({
+      sessions: 101,
+      ttftMs: 10_100,
+      ttftSteps: 101,
+      decodeMs: 20_200,
+      decodeTokens: 1_010
+    })]);
   });
 });

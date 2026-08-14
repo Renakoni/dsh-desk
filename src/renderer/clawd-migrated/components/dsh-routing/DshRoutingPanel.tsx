@@ -231,7 +231,9 @@ export function DshRoutingPanel() {
   }, [companion, refresh, t]);
 
   const handleSwitch = useCallback(async (provider: DshProvider) => {
-    const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing?.defaultModel;
+    const model = provider.modelsInherited
+      ? listing?.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
+      : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing?.defaultModel;
     const result = await companion.switchDshProvider(provider.id, model);
     if (!result.ok) {
       toast.error(result.error ?? t("routing.applyFailed", "切换失败"));

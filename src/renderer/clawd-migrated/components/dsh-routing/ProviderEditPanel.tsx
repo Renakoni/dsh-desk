@@ -160,7 +160,12 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [inheritModels, setInheritModels] = useState(provider.inheritModels === true);
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
-  const [reasoningEnabled, setReasoningEnabled] = useState(() => !(provider.models?.length && provider.models.every(model => model.reasoningEfforts === false)));
+  const [reasoningEnabled, setReasoningEnabled] = useState<boolean | undefined>(() => {
+    if (typeof provider.reasoningEnabled === "boolean") return provider.reasoningEnabled;
+    if (mode === "add") return true;
+    if (!provider.models?.some(model => model.reasoningEfforts !== undefined)) return undefined;
+    return !provider.models.every(model => model.reasoningEfforts === false);
+  });
   const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -257,8 +262,8 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     const normalizedModels = models.map(model => {
       const normalized = { ...model, id: model.id.trim() };
       if (!managesReasoning) return normalized;
-      if (!reasoningEnabled) return { ...normalized, reasoningEfforts: false as const };
-      return normalized.reasoningEfforts === undefined
+      if (reasoningEnabled === false) return { ...normalized, reasoningEfforts: false as const };
+      return reasoningEnabled === true && normalized.reasoningEfforts === undefined
         ? { ...normalized, reasoningEfforts: { ...DEFAULT_DSH_REASONING_EFFORTS } }
         : normalized;
     }).filter(model => model.id);
@@ -274,7 +279,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       inheritModels,
       catalogProvider,
       enabled: provider.enabled !== false,
-      ...(managesReasoning ? { reasoningEnabled } : {}),
+      ...(managesReasoning && reasoningEnabled !== undefined ? { reasoningEnabled } : {}),
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
@@ -444,7 +449,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
 
                   {!official && !catalogProvider && !inheritModels && protocol !== "anthropic-messages" ? (
                     <label className="ccs-inline-check-row">
-                      <input type="checkbox" checked={reasoningEnabled} onChange={event => setReasoningEnabled(event.target.checked)} />
+                      <input type="checkbox" checked={reasoningEnabled === true} onChange={event => setReasoningEnabled(event.target.checked)} />
                       <span>{t("dshProviders.reasoningEfforts", "启用思考强度")}</span>
                     </label>
                   ) : null}

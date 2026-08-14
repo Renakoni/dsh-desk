@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { Document, parseDocument } from "yaml";
 import {
@@ -19,6 +18,7 @@ import {
   type DshProviderSwitchResult,
   type DshProviderUiMeta
 } from "../shared/dshProviders";
+import { resolveDshHome } from "./dshPaths";
 
 const OFFICIAL_PROVIDER = "deepseek-official";
 const OFFICIAL_BASE_URL = "https://api.deepseek.com";
@@ -72,7 +72,7 @@ type RuntimeSnapshot = {
 };
 
 function dshHome(options?: DshProviderStoreOptions) {
-  return options?.dshHome ?? process.env.DSH_HOME ?? join(homedir(), ".dsh");
+  return resolveDshHome(options?.dshHome);
 }
 
 function settingsPath(options?: DshProviderStoreOptions) {
@@ -97,6 +97,10 @@ function isObject(value: unknown): value is JsonObject {
 
 function asObject(value: unknown): JsonObject {
   return isObject(value) ? value : {};
+}
+
+function hasOwn(object: object, key: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 function errorMessage(error: unknown) {
@@ -530,17 +534,16 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   if (apiKey && (!/^[\x21-\x7E]+$/.test(apiKey) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(apiKey))) {
     throw new Error("API key must be a printable value, not an environment assignment");
   }
-  const meta: DshProviderUiMeta = {
-    ...(input.websiteUrl?.trim() ? { websiteUrl: input.websiteUrl.trim() } : {}),
-    ...(input.apiKeyUrl?.trim() ? { apiKeyUrl: input.apiKeyUrl.trim() } : {}),
-    ...(input.category?.trim() ? { category: input.category.trim() } : {}),
-    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-    ...(input.icon?.trim() ? { icon: input.icon.trim() } : {}),
-    ...(input.iconColor?.trim() ? { iconColor: input.iconColor.trim() } : {}),
-    ...(typeof input.createdAt === "number" ? { createdAt: input.createdAt } : {}),
-    ...(typeof input.sortIndex === "number" ? { sortIndex: input.sortIndex } : {}),
-    ...(input.preferredModel?.trim() ? { preferredModel: input.preferredModel.trim() } : {})
-  };
+  const meta: DshProviderUiMeta = {};
+  if (hasOwn(input, "websiteUrl")) meta.websiteUrl = input.websiteUrl?.trim() || undefined;
+  if (hasOwn(input, "apiKeyUrl")) meta.apiKeyUrl = input.apiKeyUrl?.trim() || undefined;
+  if (hasOwn(input, "category")) meta.category = input.category?.trim() || undefined;
+  if (hasOwn(input, "notes")) meta.notes = input.notes?.trim() || undefined;
+  if (hasOwn(input, "icon")) meta.icon = input.icon?.trim() || undefined;
+  if (hasOwn(input, "iconColor")) meta.iconColor = input.iconColor?.trim() || undefined;
+  if (typeof input.createdAt === "number") meta.createdAt = input.createdAt;
+  if (typeof input.sortIndex === "number") meta.sortIndex = input.sortIndex;
+  if (hasOwn(input, "preferredModel")) meta.preferredModel = input.preferredModel?.trim() || undefined;
   return {
     id,
     name,
@@ -550,7 +553,7 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
     catalogProvider,
     enabled: input.enabled !== false,
-    reasoningEnabled: input.reasoningEnabled !== false,
+    reasoningEnabled: input.reasoningEnabled,
     apiKey,
     meta
   };
@@ -579,6 +582,8 @@ function piProviderProfile(
 ) {
   const managesReasoning = !normalized.catalogProvider
     && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses");
+  const reasoningEnabled = normalized.reasoningEnabled
+    ?? (Object.keys(current).length === 0 ? true : undefined);
   const next: JsonObject = {
     ...current,
     displayName: normalized.name,
@@ -589,12 +594,12 @@ function piProviderProfile(
   else delete next.api;
   if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
   else delete next.baseURL;
-  if (managesReasoning && normalized.reasoningEnabled && next.reasoning === undefined) next.reasoning = "high";
-  else if (managesReasoning && !normalized.reasoningEnabled) delete next.reasoning;
+  if (managesReasoning && reasoningEnabled === true && next.reasoning === undefined) next.reasoning = "high";
+  else if (managesReasoning && reasoningEnabled === false) delete next.reasoning;
   if (normalized.inheritModels) delete next.models;
   else next.models = serializeModels(
     normalized.models,
-    managesReasoning && normalized.reasoningEnabled
+    managesReasoning && reasoningEnabled === true
   );
   return next;
 }
@@ -610,10 +615,12 @@ function updateDeskProviderMeta(state: DshDeskState, id: string, meta: DshProvid
 }
 
 function fallbackSelection(providers: DshProvider[], excludingId: string) {
-  const provider = providers.find(item => item.id !== excludingId && item.enabled);
-  if (!provider) return undefined;
-  const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id;
-  return model ? { provider: provider.id, model } : undefined;
+  for (const provider of providers) {
+    if (provider.id === excludingId || !provider.enabled) continue;
+    const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id;
+    if (model) return { provider: provider.id, model };
+  }
+  return undefined;
 }
 
 async function setCredential(ref: string, value: string, options?: DshProviderStoreOptions) {
@@ -694,12 +701,15 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
     const target = listing.providers.find(provider => provider.id === id);
     if (!target) throw new Error("Provider not found");
     if (target.enabled === enabled) return { ok: true, provider: target };
+    const fallback = !enabled && listing.defaultProvider === id
+      ? fallbackSelection(listing.providers, id)
+      : undefined;
+    if (!enabled && listing.defaultProvider === id && !fallback) {
+      throw new Error("Cannot disable the default provider because no other enabled provider has a usable model");
+    }
     const settingsFile = settingsPath(options);
     if (id === OFFICIAL_PROVIDER) {
-      if (!enabled && listing.defaultProvider === id) {
-        const fallback = fallbackSelection(listing.providers, id);
-        if (fallback) await mutateYaml(settingsFile, document => document.setIn(["agent-default-model"], fallback));
-      }
+      if (fallback) await mutateYaml(settingsFile, document => document.setIn(["agent-default-model"], fallback));
       await mutatePatchYaml(homePatchPath(options), (document, rows) => {
         setOfficialProviderPatch(document, rows, enabled);
       });
@@ -727,10 +737,7 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
       });
       await mutateYaml(settingsFile, document => {
         document.deleteIn(["llm-pi-ai", "providers", id]);
-        if (listing.defaultProvider === id) {
-          const fallback = fallbackSelection(listing.providers, id);
-          if (fallback) document.setIn(["agent-default-model"], fallback);
-        }
+        if (fallback) document.setIn(["agent-default-model"], fallback);
       });
     }
     const updated = await listDshProviders(options);
@@ -747,14 +754,21 @@ export async function deleteDshProvider(id: string, options?: DshProviderStoreOp
     const listing = await listDshProviders(options);
     const target = listing.providers.find(provider => provider.id === id);
     if (!target) throw new Error("Provider not found");
+    const fallback = listing.defaultProvider === id ? fallbackSelection(listing.providers, id) : undefined;
+    if (listing.defaultProvider === id && !fallback) {
+      throw new Error("Cannot delete the default provider because no other enabled provider has a usable model");
+    }
     await mutateYaml(settingsPath(options), document => {
       document.deleteIn(["llm-pi-ai", "providers", id]);
-      if (listing.defaultProvider === id) {
-        document.setIn(["agent-default-model"], { provider: OFFICIAL_PROVIDER, model: DEFAULT_MODELS[0].id });
-      }
+      if (fallback) document.setIn(["agent-default-model"], fallback);
     });
     const ownedRef = target.credentialRef === deriveDshCredentialRef(id) ? target.credentialRef : undefined;
-    if (ownedRef) await mutateYaml(credentialsPath(options), document => document.deleteIn([ownedRef]), true);
+    const credentialStillUsed = ownedRef
+      ? listing.providers.some(provider => provider.id !== id && provider.credentialRef === ownedRef)
+      : false;
+    if (ownedRef && !credentialStillUsed) {
+      await mutateYaml(credentialsPath(options), document => document.deleteIn([ownedRef]), true);
+    }
     await mutateDeskState(options, state => {
       delete state.providers[id];
       delete state.disabledProviders[id];
@@ -781,10 +795,13 @@ export async function duplicateDshProvider(id: string, options?: DshProviderStor
   try {
     if (id === OFFICIAL_PROVIDER) throw new Error("The official DeepSeek provider is already available through its native route");
     const filePath = settingsPath(options);
-    const [{ root }, deskState] = await Promise.all([
+    const credentialFile = credentialsPath(options);
+    const [{ root }, deskState, credentialDocument] = await Promise.all([
       readOptional(filePath).then(text => parseYaml(text, filePath)),
-      readDeskState(options)
+      readDeskState(options),
+      readOptional(credentialFile).then(text => parseYaml(text, credentialFile, true))
     ]);
+    const credentials = credentialMap(credentialDocument.root, credentialFile);
     const providers = asObject(asObject(root["llm-pi-ai"]).providers);
     const configured = asObject(providers[id]);
     const stored = deskState.disabledProviders[id];
@@ -793,7 +810,14 @@ export async function duplicateDshProvider(id: string, options?: DshProviderStor
     if (Object.keys(source).length === 0) throw new Error("Provider not found");
     const nextId = copyId(id, new Set([...Object.keys(providers), ...Object.keys(deskState.disabledProviders)]));
     const sourceName = typeof source.displayName === "string" && source.displayName ? source.displayName : id;
-    const nextProfile = { ...source, displayName: `${sourceName} Copy` };
+    const nextProfile: JsonObject = { ...source, displayName: `${sourceName} Copy` };
+    const sourceRef = typeof source.apiKeyEnv === "string" ? source.apiKeyEnv : undefined;
+    const storedCredential = sourceRef === deriveDshCredentialRef(id) ? credentials.get(sourceRef) : undefined;
+    if (storedCredential) {
+      const nextRef = deriveDshCredentialRef(nextId);
+      nextProfile.apiKeyEnv = nextRef;
+      await setCredential(nextRef, storedCredential, options);
+    }
     if (sourceEnabled) {
       await mutateYaml(filePath, document => {
         document.setIn(["llm-pi-ai", "providers", nextId], nextProfile);
@@ -843,7 +867,10 @@ export async function switchDshProvider(id: string, model?: string, options?: Ds
     const provider = listing.providers.find(item => item.id === id);
     if (!provider) throw new Error("Provider not found");
     if (!provider.enabled) throw new Error("Provider is disabled");
-    const selectedModel = model?.trim() || provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing.defaultModel;
+    const selectedModel = model?.trim()
+      || (provider.modelsInherited
+        ? listing.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
+        : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing.defaultModel);
     if (!selectedModel) throw new Error("No model is selected. Enter a model ID or choose one from the DSH catalog first");
     await mutateYaml(settingsPath(options), document => {
       document.setIn(["agent-default-model"], { provider: id, model: selectedModel });

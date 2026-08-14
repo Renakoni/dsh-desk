@@ -528,7 +528,11 @@ export function installClawdCompat() {
         permissionDenied: index === 22 ? 1 : 0,
         totalTokens: index % 5 === 0 ? 0 : 12_000 + index * 1_700,
         llmMs: index % 5 === 0 ? 0 : 18_000 + index * 400,
-        toolMs: index % 5 === 0 ? 0 : 9_000 + index * 700
+        toolMs: index % 5 === 0 ? 0 : 9_000 + index * 700,
+        ttftMs: index % 5 === 0 ? 0 : 1_800 + index * 25,
+        ttftSteps: index % 5 === 0 ? 0 : 3 + (index % 8),
+        decodeMs: index % 5 === 0 ? 0 : 16_200 + index * 375,
+        decodeTokens: index % 5 === 0 ? 0 : 1_500 + index * 120
       })),
       tools: [
         { name: "pwsh", calls: 21, errors: 0, durationMs: 87_000 },

@@ -12,6 +12,10 @@ export type DshTrajectoryDay = {
   totalTokens: number;
   llmMs: number;
   toolMs: number;
+  ttftMs: number;
+  ttftSteps: number;
+  decodeMs: number;
+  decodeTokens: number;
 };
 
 export type DshToolMetric = {

@@ -300,15 +300,38 @@ describe("DSH provider settings", () => {
     expect(readFileSync(join(dshHome, "cordis.patch.yml"), "utf8")).toMatch(/id: llm-deepseek[\s\S]*disabled: false/);
   });
 
-  it("allows the official adapter to be disabled when no fallback exists", async () => {
+  it("rejects disabling the default provider when no usable fallback exists", async () => {
     const dshHome = home();
     const result = await setDshProviderEnabled("deepseek-official", false, { dshHome });
 
     expect(result).toEqual(expect.objectContaining({
-      ok: true,
-      provider: expect.objectContaining({ enabled: false, isDefault: true })
+      ok: false,
+      error: expect.stringContaining("no other enabled provider")
     }));
-    expect(readFileSync(join(dshHome, "cordis.patch.yml"), "utf8")).toContain("disabled: true");
+    expect((await listDshProviders({ dshHome })).providers[0]).toEqual(expect.objectContaining({
+      id: "deepseek-official",
+      enabled: true,
+      isDefault: true
+    }));
+  });
+
+  it("skips enabled providers without usable models when selecting a fallback", async () => {
+    const dshHome = home();
+    await saveDshProvider({ id: "empty-catalog", name: "Empty", inheritModels: true, catalogProvider: true }, { dshHome });
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    await reorderDshProviders(["empty-catalog", "team-gateway", "deepseek-official"], { dshHome });
+
+    expect((await setDshProviderEnabled("deepseek-official", false, { dshHome })).ok).toBe(true);
+    expect(await listDshProviders({ dshHome })).toEqual(expect.objectContaining({
+      defaultProvider: "team-gateway",
+      defaultModel: "team-model"
+    }));
   });
 
   it("edits a disabled provider without enabling it", async () => {
@@ -451,6 +474,98 @@ describe("DSH provider settings", () => {
     ]);
   });
 
+  it("keeps a duplicated provider credential after deleting its source", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "beta",
+      name: "Beta",
+      baseUrl: "https://beta.example/v1",
+      protocol: "openai-completions",
+      apiKey: "sk-beta",
+      models: [{ id: "beta-model" }]
+    }, { dshHome });
+
+    expect((await duplicateDshProvider("beta", { dshHome })).provider).toEqual(expect.objectContaining({
+      id: "beta-copy",
+      credentialRef: deriveDshCredentialRef("beta-copy"),
+      hasCredential: true
+    }));
+    expect((await deleteDshProvider("beta", { dshHome })).ok).toBe(true);
+    expect((await listDshProviders({ dshHome })).providers).toContainEqual(expect.objectContaining({
+      id: "beta-copy",
+      hasCredential: true
+    }));
+    const credentials = readFileSync(join(dshHome, ".credentials.yaml"), "utf8");
+    expect(credentials).toContain(`${deriveDshCredentialRef("beta-copy")}: sk-beta`);
+    expect(credentials).not.toContain(`${deriveDshCredentialRef("beta")}:`);
+  });
+
+  it("preserves an existing provider without reasoning declarations on a no-op save", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "llm-pi-ai:",
+      "  providers:",
+      "    legacy-gateway:",
+      "      displayName: Legacy",
+      "      api: openai-completions",
+      "      baseURL: https://legacy.example/v1",
+      "      models:",
+      "        - id: legacy-model",
+      ""
+    ].join("\n"));
+
+    expect((await saveDshProvider({
+      id: "legacy-gateway",
+      name: "Legacy",
+      baseUrl: "https://legacy.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "legacy-model" }]
+    }, { dshHome })).ok).toBe(true);
+
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).not.toContain("reasoning: high");
+    expect(settings).not.toContain("reasoningEfforts");
+  });
+
+  it("clears optional provider metadata when the editor submits empty values", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }],
+      notes: "Internal route",
+      websiteUrl: "https://example.com",
+      apiKeyUrl: "https://example.com/key",
+      icon: "server",
+      iconColor: "#123456",
+      preferredModel: "team-model"
+    }, { dshHome });
+
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }],
+      notes: "",
+      websiteUrl: "",
+      apiKeyUrl: "",
+      icon: "",
+      iconColor: "",
+      preferredModel: ""
+    }, { dshHome });
+
+    const provider = (await listDshProviders({ dshHome })).providers.find(item => item.id === "team-gateway");
+    expect(provider).not.toHaveProperty("notes");
+    expect(provider).not.toHaveProperty("websiteUrl");
+    expect(provider).not.toHaveProperty("apiKeyUrl");
+    expect(provider).not.toHaveProperty("icon");
+    expect(provider).not.toHaveProperty("iconColor");
+    expect(provider).not.toHaveProperty("preferredModel");
+  });
+
   it("keeps the current DSH model when switching to an inherited catalog route", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
@@ -461,7 +576,15 @@ describe("DSH provider settings", () => {
     ].join("\n"));
     await saveDshProvider({ id: "openai", name: "OpenAI", inheritModels: true, catalogProvider: true }, { dshHome });
 
-    expect(await switchDshProvider("openai", undefined, { dshHome })).toEqual({
+    const runtimeOptions = {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: runtimeFetch({
+        "llm.providers": { providers: [{ provider: "openai", displayName: "OpenAI", active: true, declared: false }] },
+        "llm.models": { groups: [{ id: "openai", name: "OpenAI", models: [{ id: "first-runtime-model" }] }] }
+      })
+    };
+    expect(await switchDshProvider("openai", undefined, runtimeOptions)).toEqual({
       ok: true,
       provider: "openai",
       model: "current-unlisted-model"

@@ -23,7 +23,7 @@ function snapshot(overrides: Partial<DshAnalyticsSnapshot> = {}): DshAnalyticsSn
   const totals = { events: 10, sessions: 2, turns: 5, steps: 9, toolCalls: 7, failedToolCalls: 1, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, llmMs: 2_000, toolMs: 1_000, ttftMs: 500, ttftSteps: 2, decodeMs: 1_000, decodeTokens: 20 };
   return {
     totals,
-    daily: [{ date: today, events: 10, sessions: 1, turns: 3, steps: 6, toolCalls: 7, failedToolCalls: 1, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, totalTokens: 100, llmMs: 2_000, toolMs: 1_000 }],
+    daily: [{ date: today, events: 10, sessions: 1, turns: 3, steps: 6, toolCalls: 7, failedToolCalls: 1, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, totalTokens: 100, llmMs: 2_000, toolMs: 1_000, ttftMs: 500, ttftSteps: 2, decodeMs: 1_000, decodeTokens: 20 }],
     tools: [],
     sessions: [{ sessionId: "one", title: "Today", filePath: "one", projectName: "demo", provider: "deepseek", model: "flash", createdAt: now - 1_000, lastActivity: now, durationMs: 1_000, turns: 3, steps: 6, toolCalls: 7, failedToolCalls: 1, llmMs: 2_000, toolMs: 1_000, ttftMs: 500, ttftSteps: 2, decodeMs: 1_000, decodeTokens: 20, inputTokens: 80, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 }],
     hourlyActivity: new Array(24).fill(0),
