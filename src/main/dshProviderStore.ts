@@ -415,20 +415,19 @@ function normalizeOptionalUrl(value: string | undefined) {
 }
 
 function normalizeSaveInput(input: DshProviderSaveInput) {
-  const id = input.id.trim();
-  if (id !== OFFICIAL_PROVIDER && !/^[a-z][a-z0-9-]{0,63}$/.test(id)) {
-    throw new Error("Provider ID must start with a lowercase letter and contain only lowercase letters, numbers, or hyphens");
-  }
+  const id = input.id?.trim() || `route-${randomUUID()}`;
   const name = input.name.trim();
   if (!name) throw new Error("Provider name is required");
-  const baseUrl = normalizeOptionalUrl(input.baseUrl);
-  if (id === OFFICIAL_PROVIDER && input.protocol !== undefined && input.protocol !== "deepseek-chat-completions") {
+  const catalogProvider = input.catalogProvider === true && id !== OFFICIAL_PROVIDER;
+  const baseUrl = catalogProvider ? "" : normalizeOptionalUrl(input.baseUrl);
+  const protocol = catalogProvider ? undefined : input.protocol;
+  if (id === OFFICIAL_PROVIDER && protocol !== undefined && protocol !== "deepseek-chat-completions") {
     throw new Error("The official route uses the DeepSeek Chat Completions adapter");
   }
-  if (id !== OFFICIAL_PROVIDER && input.protocol !== undefined && !DSH_PROVIDER_PROTOCOLS.includes(input.protocol as DshProviderProtocol)) {
+  if (id !== OFFICIAL_PROVIDER && protocol !== undefined && !DSH_PROVIDER_PROTOCOLS.includes(protocol as DshProviderProtocol)) {
     throw new Error("Unsupported DeepSeek Harness provider protocol");
   }
-  const models = modelList(input.models);
+  const models = catalogProvider ? [] : modelList(input.models);
   if (new Set(models.map(model => model.id)).size !== models.length) throw new Error("Model IDs must be unique");
   const apiKey = input.apiKey?.trim();
   if (apiKey && (!/^[\x21-\x7E]+$/.test(apiKey) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(apiKey))) {
@@ -449,9 +448,9 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     id,
     name,
     baseUrl,
-    protocol: input.protocol,
+    protocol,
     models,
-    inheritModels: input.inheritModels === true || input.models === undefined,
+    inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
     apiKey,
     meta
   };

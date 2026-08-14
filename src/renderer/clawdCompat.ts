@@ -721,19 +721,21 @@ export function installClawdCompat() {
       defaultModel: mockDshProviders.find(provider => provider.isDefault)?.defaultModel ?? "deepseek-v4-flash"
     }),
     saveDshProvider: async input => {
+      const id = input.id?.trim() || `route-${Date.now().toString(36)}`;
       const next: DshProvider = {
         ...input,
+        id,
         baseUrl: input.baseUrl ?? "",
         models: input.models ?? [],
         modelsInherited: input.inheritModels === true || input.models === undefined,
         catalogProvider: input.catalogProvider === true,
         runtimeActive: true,
-        credentialRef: input.id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${input.id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
+        credentialRef: id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
         hasCredential: !!input.apiKey,
-        isOfficial: input.id === "deepseek-official",
-        isDefault: mockDshProviders.some(provider => provider.id === input.id && provider.isDefault)
+        isOfficial: id === "deepseek-official",
+        isDefault: mockDshProviders.some(provider => provider.id === id && provider.isDefault)
       };
-      const index = mockDshProviders.findIndex(provider => provider.id === input.id);
+      const index = mockDshProviders.findIndex(provider => provider.id === id);
       if (index >= 0) mockDshProviders[index] = { ...mockDshProviders[index], ...next, hasCredential: next.hasCredential || mockDshProviders[index].hasCredential };
       else mockDshProviders.push(next);
       return { ok: true, provider: index >= 0 ? mockDshProviders[index] : next };

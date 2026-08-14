@@ -26,7 +26,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { IconPicker } from "./IconPicker";
 import { getIconMetadata } from "./icons/metadata";
 import { ProviderIcon } from "./ProviderIcon";
-import { catalogProviderPresets, type DshProviderPreset } from "./presets";
+import { dshProviderPresets, type DshProviderPreset } from "./presets";
 
 type EditorMode = "add" | "edit";
 
@@ -81,7 +81,7 @@ const PresetGrid = memo(function PresetGrid({
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [sorted, setSorted] = useState(false);
-  const presets = useMemo(() => catalogProviderPresets(catalogProviders), [catalogProviders]);
+  const presets = useMemo(() => dshProviderPresets(catalogProviders), [catalogProviders]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = needle
@@ -142,7 +142,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
 }: ProviderEditContentProps) {
   const { t } = useI18n();
   const originalId = provider.id;
-  const [id, setId] = useState(provider.id);
+  const [id, setId] = useState(provider.id ?? "");
   const [name, setName] = useState(provider.name);
   const [notes, setNotes] = useState(provider.notes ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(provider.websiteUrl ?? "");
@@ -160,8 +160,8 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
-  const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id : "custom");
-  const [advancedOpen, setAdvancedOpen] = useState(Boolean(provider.protocol || !provider.inheritModels));
+  const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<DshProviderProbeResult | null>(null);
   const [discovering, setDiscovering] = useState(false);
@@ -170,19 +170,17 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [softIssues, setSoftIssues] = useState<string[] | null>(null);
   const official = id === "deepseek-official";
   const formId = `dsh-provider-${mode}-${originalId || "new"}`;
-  const modelsListId = `${formId}-models`;
-  const selectableModels = inheritModels ? catalogModels : models;
 
   function applyPreset(preset: DshProviderPreset) {
     setActivePreset(preset.id);
-    setId(preset.id);
+    setId(preset.providerId ?? "");
     setName(preset.name);
     setCategory(preset.category);
-    setCatalogProvider(true);
-    setInheritModels(true);
-    setModels([]);
+    setCatalogProvider(preset.catalogProvider);
+    setInheritModels(preset.inheritModels);
+    setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
-    setPreferredModel("");
+    setPreferredModel(preset.preferredModel ?? preset.models[0]?.id ?? "");
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
     setWebsiteUrl(preset.websiteUrl ?? "");
@@ -249,12 +247,16 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   }
 
   function buildDraft(): DshProviderSaveInput {
+    const normalizedModels = models.map(model => ({ ...model, id: model.id.trim() })).filter(model => model.id);
+    const normalizedPreferredModel = inheritModels
+      ? preferredModel
+      : normalizedModels.some(model => model.id === preferredModel) ? preferredModel : normalizedModels[0]?.id;
     return {
-      id: id.trim(),
+      id: id.trim() || undefined,
       name: name.trim(),
       baseUrl: baseUrl.trim(),
       protocol,
-      ...(inheritModels ? {} : { models: models.map(model => ({ ...model, id: model.id.trim() })).filter(model => model.id) }),
+      ...(inheritModels ? {} : { models: normalizedModels }),
       inheritModels,
       catalogProvider,
       apiKey,
@@ -266,7 +268,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       iconColor: iconColor || undefined,
       createdAt: provider.createdAt,
       sortIndex: provider.sortIndex,
-      preferredModel: preferredModel || undefined
+      preferredModel: normalizedPreferredModel || undefined
     };
   }
 
@@ -274,10 +276,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setHardError("");
     if (!name.trim()) {
       setHardError(t("routing.nameRequired", "请填写供应商名称"));
-      return;
-    }
-    if (!/^[a-z][a-z0-9-]{0,63}$/.test(id.trim())) {
-      setHardError(t("dshProviders.idInvalid", "Provider ID 只能包含小写字母、数字和连字符，并以字母开头"));
       return;
     }
     if (baseUrl.trim()) {
@@ -332,10 +330,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                 <input value={name} disabled={official} onChange={event => setName(event.target.value)} placeholder="OpenRouter" />
               </label>
               <label>
-                <span>Provider ID</span>
-                <input value={id} disabled={mode === "edit" || official} onChange={event => setId(event.target.value.toLowerCase())} placeholder="openrouter" spellCheck={false} />
-              </label>
-              <label>
                 <span>{t("routing.notes", "备注")}</span>
                 <input value={notes} onChange={event => setNotes(event.target.value)} placeholder={t("routing.notesPlaceholder", "例如：公司专用账号")} />
               </label>
@@ -374,7 +368,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                     {t("routing.speedTest", "测速")}
                   </button>
                 </div>
-                <input value={baseUrl} disabled={official} onChange={event => { setBaseUrl(event.target.value); setProbeResult(null); }} placeholder={catalogProvider ? t("dshProviders.catalogEndpoint", "留空使用 DSH 目录默认端点") : "https://api.example.com/v1"} spellCheck={false} />
+                <input value={baseUrl} disabled={official || catalogProvider} onChange={event => { setBaseUrl(event.target.value); setProbeResult(null); }} placeholder={catalogProvider ? t("dshProviders.catalogEndpoint", "使用 DSH 目录默认端点") : "https://api.example.com/v1"} spellCheck={false} />
                 {probeResult ? (
                   <small className={probeResult.ok ? "ccs-field-hint" : "ccs-field-error"}>
                     {probeResult.ok
@@ -393,30 +387,16 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
             </button>
             {advancedOpen ? (
               <div className="ccs-advanced-body">
-                <div className="ccs-form-grid two">
+                {!catalogProvider && !official ? <div className="ccs-form-grid">
                   <label>
-                    <span>{t("routing.apiFormat", "API 格式")}</span>
-                    <select value={protocol ?? ""} disabled={official} onChange={event => setProtocol((event.target.value || undefined) as DshProviderProtocol | undefined)}>
-                      <option value="">{t("dshProviders.catalogDefault", "使用 DSH 目录默认协议")}</option>
+                    <span>{t("dshProviders.protocol", "接口协议")}</span>
+                    <select value={protocol ?? ""} onChange={event => setProtocol((event.target.value || undefined) as DshProviderProtocol | undefined)}>
                       <option value="openai-completions">OpenAI Chat Completions</option>
                       <option value="openai-responses">OpenAI Responses</option>
                       <option value="anthropic-messages">Anthropic Messages</option>
                     </select>
                   </label>
-                  <label>
-                    <span>{t("dshProviders.preferredModel", "默认模型")}</span>
-                    <input
-                      value={preferredModel}
-                      list={modelsListId}
-                      onChange={event => setPreferredModel(event.target.value)}
-                      placeholder={t("dshProviders.firstAvailable", "留空则沿用当前 DSH 模型")}
-                      spellCheck={false}
-                    />
-                    <datalist id={modelsListId}>
-                      {selectableModels.map(model => <option key={model.id} value={model.id}>{model.name || model.id}</option>)}
-                    </datalist>
-                  </label>
-                </div>
+                </div> : null}
 
                 <div className="ccs-model-mapping">
                   <div className="ccs-model-mapping-head">

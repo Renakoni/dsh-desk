@@ -61,7 +61,7 @@ export type DshProviderListResult = {
 };
 
 export type DshProviderSaveInput = DshProviderUiMeta & {
-  id: string;
+  id?: string;
   name: string;
   baseUrl?: string;
   protocol?: DshProviderProtocol | "deepseek-chat-completions";

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OverviewSection } from "../src/renderer/clawd-migrated/features/overview/OverviewSection";
@@ -95,5 +95,24 @@ describe("DSH model routing placement", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Models" })).toBeNull();
+  });
+
+  it("keeps internal route details out of the add-provider form", async () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <OverviewSection
+          settings={{ hideSensitiveContent: false }}
+          connection={{ serverListening: false, error: null }}
+          hookStatus={null}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Add Provider/i }));
+    expect(await screen.findByRole("heading", { name: /Add Provider/i })).toBeTruthy();
+    expect(screen.getByText("PatewayAI")).toBeTruthy();
+    expect(screen.queryByText("Provider ID")).toBeNull();
+    expect(screen.queryByText("Default model")).toBeNull();
+    expect(screen.queryByText("Upstream protocol")).toBeNull();
   });
 });

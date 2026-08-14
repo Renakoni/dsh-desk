@@ -83,6 +83,27 @@ describe("DSH provider settings", () => {
     }));
   });
 
+  it("allocates an internal route ID when the UI does not provide one", async () => {
+    const dshHome = home();
+    const result = await saveDshProvider({
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({
+        id: expect.stringMatching(/^route-[0-9a-f-]{36}$/),
+        name: "Team Gateway"
+      })
+    }));
+    const id = result.provider?.id;
+    expect(id).toBeTruthy();
+    expect(readFileSync(join(dshHome, "settings.yaml"), "utf8")).toContain(`${id}:`);
+  });
+
   it("preserves sibling settings and advanced provider fields", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
@@ -169,6 +190,9 @@ describe("DSH provider settings", () => {
     const result = await saveDshProvider({
       id: "openai",
       name: "OpenAI",
+      baseUrl: "https://stale.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "stale-model" }],
       inheritModels: true,
       catalogProvider: true
     }, { dshHome });
