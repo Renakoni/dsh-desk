@@ -1,11 +1,11 @@
 // @ts-nocheck
-import React, { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { AlertCircle, ChevronDown, FolderOpen } from "lucide-react";
 import type { DshAnalyticsSnapshot, DshSessionMetric, DshTrajectoryDay } from "../../../../shared/dshAnalytics";
 import { useI18n } from "../../useI18n";
 
 const DAY_MS = 86_400_000;
-const HEATMAP_DAYS = 84;
+const RECENT_DAYS = 14;
 const COLLAPSED_SESSIONS = 8;
 
 function localDateKey(timestamp: number): string {
@@ -41,20 +41,13 @@ function sessionContext(session: DshSessionMetric): { value: number; percent: nu
   return { value, percent: session.contextWindow ? Math.min(100, (value / session.contextWindow) * 100) : 0 };
 }
 
-function heatmapDays(daily: DshTrajectoryDay[]): Array<DshTrajectoryDay & { level: number }> {
+function recentTrajectoryDays(daily: DshTrajectoryDay[]): DshTrajectoryDay[] {
   const byDate = new Map(daily.map(day => [day.date, day]));
   const end = new Date();
   end.setHours(0, 0, 0, 0);
-  const values = Array.from({ length: HEATMAP_DAYS }, (_, index) => {
-    const timestamp = end.getTime() - (HEATMAP_DAYS - 1 - index) * DAY_MS;
-    return byDate.get(localDateKey(timestamp)) ?? { date: localDateKey(timestamp), sessions: 0, turns: 0, steps: 0, toolCalls: 0, failedToolCalls: 0, totalTokens: 0, llmMs: 0, toolMs: 0 };
-  });
-  const max = Math.max(1, ...values.map(day => day.steps + day.toolCalls));
-  return values.map(day => {
-    const activity = day.steps + day.toolCalls;
-    const ratio = activity / max;
-    const level = activity === 0 ? 0 : ratio <= 0.2 ? 1 : ratio <= 0.45 ? 2 : ratio <= 0.7 ? 3 : 4;
-    return { ...day, level };
+  return Array.from({ length: RECENT_DAYS }, (_, index) => {
+    const timestamp = end.getTime() - (RECENT_DAYS - 1 - index) * DAY_MS;
+    return byDate.get(localDateKey(timestamp)) ?? { date: localDateKey(timestamp), events: 0, sessions: 0, turns: 0, steps: 0, toolCalls: 0, failedToolCalls: 0, permissionRequests: 0, permissionApproved: 0, permissionDenied: 0, totalTokens: 0, llmMs: 0, toolMs: 0 };
   });
 }
 
@@ -77,31 +70,22 @@ function ContextComposition({ session, zh, locale }: { session: DshSessionMetric
   );
 }
 
-export function DshTrajectoryPanel({ hideSensitiveContent = false }: { hideSensitiveContent?: boolean }) {
+export function DshTrajectoryPanel({ snapshot, loading = false, error = null, onRefresh, hideSensitiveContent = false, onRevealSession }: {
+  snapshot: DshAnalyticsSnapshot | null;
+  loading?: boolean;
+  error?: string | null;
+  onRefresh?: (force: boolean) => void;
+  hideSensitiveContent?: boolean;
+  onRevealSession?: (filePath: string) => void;
+}) {
   const { locale } = useI18n();
   const zh = locale === "zh";
   const numberLocale = zh ? "zh-CN" : "en-US";
-  const [snapshot, setSnapshot] = useState<DshAnalyticsSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
-  const load = async (force = false) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSnapshot(await window.companion.getDshAnalytics(force));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { void load(false); }, []);
-
-  const days = useMemo(() => heatmapDays(snapshot?.daily ?? []), [snapshot]);
-  const recentDays = days.slice(-14);
+  const recentDays = useMemo(() => recentTrajectoryDays(snapshot?.daily ?? []), [snapshot]);
   const maxRecentActivity = Math.max(1, ...recentDays.map(day => day.steps + day.toolCalls));
   const totals = snapshot?.totals;
   const averageTtft = totals?.ttftSteps ? totals.ttftMs / totals.ttftSteps : 0;
@@ -122,7 +106,7 @@ export function DshTrajectoryPanel({ hideSensitiveContent = false }: { hideSensi
             ? `${snapshot.totals.sessions.toLocaleString(numberLocale)} ${zh ? "个会话" : "sessions"} · ${formatWhen(snapshot.lastScannedAt, zh)}`
             : (zh ? "暂无本地轨迹" : "No local trajectories")}
         </p>
-        <button className="ghost-btn" onClick={() => void load(true)} disabled={loading}>{loading ? (zh ? "扫描中…" : "Scanning…") : (zh ? "刷新" : "Refresh")}</button>
+        <button className="ghost-btn" onClick={() => onRefresh?.(true)} disabled={loading}>{loading ? (zh ? "扫描中…" : "Scanning…") : (zh ? "刷新" : "Refresh")}</button>
       </div>
 
       {snapshot && totals && totals.sessions > 0 ? (
@@ -138,10 +122,7 @@ export function DshTrajectoryPanel({ hideSensitiveContent = false }: { hideSensi
 
           <div className="trajectory-visual-grid">
             <section className="trajectory-activity-section">
-              <header><h3>{zh ? "活跃轨迹" : "Activity"}</h3><span>{zh ? "近 12 周" : "Last 12 weeks"}</span></header>
-              <div className="trajectory-heatmap" role="img" aria-label={zh ? "近 12 周轨迹活跃度" : "Trajectory activity over 12 weeks"}>
-                {days.map(day => <i key={day.date} className={`level-${day.level}`} title={`${day.date} · ${day.steps} steps · ${day.toolCalls} calls`} />)}
-              </div>
+              <header><h3>{zh ? "活跃轨迹" : "Activity"}</h3><span>{zh ? "近 14 日" : "Last 14 days"}</span></header>
               <div className="trajectory-bars" aria-label={zh ? "近 14 日 step 与工具调用" : "Steps and tool calls over 14 days"}>
                 {recentDays.map(day => {
                   const activity = day.steps + day.toolCalls;
@@ -180,48 +161,65 @@ export function DshTrajectoryPanel({ hideSensitiveContent = false }: { hideSensi
             </section>
           </div>
 
-          <section className="trajectory-tools-section">
-            <header><h3>{zh ? "工具性能" : "Tool performance"}</h3><span>{snapshot.tools.length} tools</span></header>
-            <div className="trajectory-tool-list">
-              {snapshot.tools.slice(0, 8).map(tool => (
-                <div className="trajectory-tool-row" key={tool.name}>
-                  <code>{tool.name}</code>
-                  <span>{tool.calls.toLocaleString(numberLocale)} {zh ? "次" : "calls"}</span>
-                  <span>{zh ? "平均" : "avg"} {formatDuration(tool.calls ? tool.durationMs / tool.calls : 0, zh)}</span>
-                  <b className={tool.errors ? "bad" : ""}>{tool.errors ? <AlertCircle size={12} /> : null}{tool.errors}</b>
-                </div>
-              ))}
-            </div>
+          <section className={`trajectory-tools-section stats-disclosure ${toolsOpen ? "open" : ""}`}>
+            <button type="button" className="stats-disclosure-trigger" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
+              <ChevronDown size={15} className="stats-disclosure-chevron" aria-hidden="true" />
+              <span><strong>{zh ? "工具性能" : "Tool performance"}</strong><small>{snapshot.tools.length} tools</small></span>
+            </button>
+            {toolsOpen ? (
+              <div className="trajectory-tool-list">
+                {snapshot.tools.slice(0, 8).map(tool => (
+                  <div className="trajectory-tool-row" key={tool.name}>
+                    <code>{tool.name}</code>
+                    <span>{tool.calls.toLocaleString(numberLocale)} {zh ? "次" : "calls"}</span>
+                    <span>{zh ? "平均" : "avg"} {formatDuration(tool.calls ? tool.durationMs / tool.calls : 0, zh)}</span>
+                    <b className={tool.errors ? "bad" : ""}>{tool.errors ? <AlertCircle size={12} /> : null}{tool.errors}</b>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </section>
 
-          <section className="trajectory-sessions-section">
-            <header><h3>{zh ? "最近轨迹" : "Recent trajectories"}</h3><span>{snapshot.sessions.length}</span></header>
-            <div className="trajectory-session-table">
-              <div className="trajectory-session-header" aria-hidden="true">
-                <span>{zh ? "会话" : "Session"}</span><span>{zh ? "路由" : "Route"}</span><span>{zh ? "工作量" : "Workload"}</span><span>{zh ? "性能" : "Performance"}</span><span>{zh ? "上下文" : "Context"}</span><span>{zh ? "最近" : "Latest"}</span>
-              </div>
-              {visibleSessions.map((session, index) => {
-                const context = sessionContext(session);
-                return (
-                  <div className="trajectory-session-row" key={session.sessionId}>
-                    <div className="trajectory-session-title">
-                      <strong title={hideSensitiveContent ? undefined : session.title}>{hideSensitiveContent ? `${zh ? "轨迹" : "Trajectory"} ${index + 1}` : session.title}</strong>
-                      <small title={hideSensitiveContent ? undefined : session.projectPath}>{hideSensitiveContent ? (zh ? "详情已隐藏" : "Details hidden") : session.projectName}</small>
-                    </div>
-                    <div className="trajectory-session-route"><strong>{session.model}</strong><small>{session.provider}</small></div>
-                    <div className="trajectory-session-numbers"><strong>{session.steps} steps · {session.toolCalls} calls</strong><small>{session.turns} turns · {formatCompact(session.inputTokens + session.outputTokens + session.cacheReadTokens + session.cacheWriteTokens, numberLocale)} tok</small></div>
-                    <div className="trajectory-session-numbers"><strong>LLM {formatDuration(session.llmMs, zh)}</strong><small>Tools {formatDuration(session.toolMs, zh)} · TTFT {formatDuration(session.ttftSteps ? session.ttftMs / session.ttftSteps : 0, zh)}</small></div>
-                    <div className="trajectory-session-context"><strong>{session.contextWindow ? `${context.percent.toFixed(1)}%` : "n/a"}</strong><span><i style={{ width: `${context.percent}%` }} /></span></div>
-                    <time>{formatWhen(session.lastActivity, zh)}</time>
+          <section className={`trajectory-sessions-section stats-disclosure ${sessionsOpen ? "open" : ""}`}>
+            <button type="button" className="stats-disclosure-trigger" aria-expanded={sessionsOpen} onClick={() => setSessionsOpen(value => !value)}>
+              <ChevronDown size={15} className="stats-disclosure-chevron" aria-hidden="true" />
+              <span><strong>{zh ? "最近轨迹" : "Recent trajectories"}</strong><small>{snapshot.sessions.length}</small></span>
+            </button>
+            {sessionsOpen ? (
+              <>
+                <div className="trajectory-session-table">
+                  <div className="trajectory-session-header" aria-hidden="true">
+                    <span>{zh ? "会话" : "Session"}</span><span>{zh ? "路由" : "Route"}</span><span>{zh ? "工作量" : "Workload"}</span><span>{zh ? "性能" : "Performance"}</span><span>{zh ? "上下文" : "Context"}</span><span>{zh ? "最近" : "Latest"}</span><span />
                   </div>
-                );
-              })}
-            </div>
-            {snapshot.sessions.length > COLLAPSED_SESSIONS ? (
-              <button type="button" className="trajectory-expand" onClick={() => setExpanded(value => !value)}>
-                {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {expanded ? (zh ? "收起" : "Collapse") : `${zh ? "查看全部" : "Show all"} ${snapshot.sessions.length}`}
-              </button>
+                  {visibleSessions.map((session, index) => {
+                    const context = sessionContext(session);
+                    return (
+                      <div className="trajectory-session-row" key={session.sessionId}>
+                        <div className="trajectory-session-title">
+                          <strong title={hideSensitiveContent ? undefined : session.title}>{hideSensitiveContent ? `${zh ? "轨迹" : "Trajectory"} ${index + 1}` : session.title}</strong>
+                          <small title={hideSensitiveContent ? undefined : session.projectPath}>{hideSensitiveContent ? (zh ? "详情已隐藏" : "Details hidden") : session.projectName}</small>
+                        </div>
+                        <div className="trajectory-session-route"><strong>{session.model}</strong><small>{session.provider}</small></div>
+                        <div className="trajectory-session-numbers"><strong>{session.steps} steps · {session.toolCalls} calls</strong><small>{session.turns} turns · {formatCompact(session.inputTokens + session.outputTokens + session.cacheReadTokens + session.cacheWriteTokens, numberLocale)} tok</small></div>
+                        <div className="trajectory-session-numbers"><strong>LLM {formatDuration(session.llmMs, zh)}</strong><small>Tools {formatDuration(session.toolMs, zh)} · TTFT {formatDuration(session.ttftSteps ? session.ttftMs / session.ttftSteps : 0, zh)}</small></div>
+                        <div className="trajectory-session-context"><strong>{session.contextWindow ? `${context.percent.toFixed(1)}%` : "n/a"}</strong><span><i style={{ width: `${context.percent}%` }} /></span></div>
+                        <time>{formatWhen(session.lastActivity, zh)}</time>
+                        {onRevealSession ? (
+                          <button type="button" className="trajectory-session-reveal" title={zh ? "定位会话日志" : "Reveal session log"} aria-label={zh ? "定位会话日志" : "Reveal session log"} onClick={() => onRevealSession(session.filePath)}>
+                            <FolderOpen size={14} />
+                          </button>
+                        ) : <span />}
+                      </div>
+                    );
+                  })}
+                </div>
+                {snapshot.sessions.length > COLLAPSED_SESSIONS ? (
+                  <button type="button" className="trajectory-expand" onClick={() => setExpanded(value => !value)}>
+                    <ChevronDown size={14} className={expanded ? "rotated" : undefined} />
+                    {expanded ? (zh ? "收起" : "Collapse") : `${zh ? "查看全部" : "Show all"} ${snapshot.sessions.length}`}
+                  </button>
+                ) : null}
+              </>
             ) : null}
           </section>
         </>

@@ -25,7 +25,6 @@
     },
     "subtabs": {
       "general": "General",
-      "models": "Models",
       "pet": "Pet",
       "notifications": "Notifications",
       "diagnostics": "Diagnostics",
@@ -84,11 +83,11 @@
     "noData": "No data"
   },
   "dshProviders": {
-    "title": "Models and providers",
+    "title": "DSH model routing",
     "noDefault": "No default model selected",
     "add": "Add provider",
     "edit": "Edit provider",
-    "editorSubtitle": "Writes to the local DeepSeek Harness configuration",
+    "editorSubtitle": "DeepSeek Harness model routing",
     "name": "Provider name",
     "id": "Provider ID",
     "endpoint": "API endpoint",
@@ -100,7 +99,7 @@
     "protocolNote": "DSH converts its unified session requests to this upstream protocol.",
     "protocolAnthropicNote": "DSH converts to Anthropic Messages; this protocol has no OpenAI /models discovery endpoint.",
     "keepKey": "Leave blank to keep the existing key",
-    "models": "models",
+    "models": "Model catalog",
     "displayName": "Display name",
     "context": "Context",
     "output": "Max output",
@@ -128,7 +127,23 @@
     "test": "Test model endpoint",
     "saved": "Provider saved",
     "deleteTitle": "Delete provider",
-    "deleteMessage": "Delete {name} and its DSH Desk-managed key?"
+    "deleteMessage": "Delete {name} and its DSH Desk-managed key?",
+    "catalog": "DSH catalog",
+    "custom": "Custom",
+    "noEndpointToTest": "This catalog route has no custom endpoint",
+    "switchedTo": "Switched to {name} · {model}",
+    "idInvalid": "Provider ID must start with a lowercase letter and contain only lowercase letters, numbers, or hyphens",
+    "catalogEndpoint": "Leave blank to use the DSH catalog endpoint",
+    "catalogDefault": "Use the DSH catalog protocol",
+    "preferredModel": "Default model",
+    "firstAvailable": "Leave blank to keep the current DSH model",
+    "catalogInherited": "Provided by the built-in DSH catalog and not written as a model mapping",
+    "catalogExplicit": "Only enter models when overriding the DSH catalog",
+    "useCatalog": "Use the built-in DSH model catalog",
+    "catalogLoadHint": "DSH resolves this provider catalog after saving, or you can load it now.",
+    "reachable": "Connected · {latency} ms · HTTP {status}",
+    "customNeedsEndpoint": "A manually declared route normally needs an endpoint",
+    "customNeedsProtocol": "A manually declared route normally needs an upstream protocol"
   },
   "pet": {
     "idle": "Idle",
@@ -608,7 +623,6 @@
     "runtimeStats": "Runtime stats",
     "recentEvents": "Recent events",
     "tokenUsage": "Token usage",
-    "usageRankings": "Usage rankings",
     "recentEdits": "Recent edits",
     "configManagement": "Configuration",
     "dataManagement": "Data management"

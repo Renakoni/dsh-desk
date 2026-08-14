@@ -76,9 +76,17 @@ import { loadScanCache, saveScanCache, type CachedScan } from "./scanCachePersis
 import { aggregateRecentEdits, editFromToolUseResult, emptyRecentEditsSnapshot, type ParsedEditRecord, type RecentEditsSnapshot } from "./claudeEditLog";
 import { aggregateUsageRankings, countToolUseBlocks, countUserCommands, createUsageCounts, emptyUsageRankingsSnapshot, type UsageCounts, type UsageRankingsSnapshot } from "./claudeUsageStats";
 import { DshUsageStore, normalizeDshUsageRecord } from "./dshUsage";
-import { DshSessionScanner } from "./dshSessionScanner";
+import { DshSessionScanner, isDshSessionLogPath } from "./dshSessionScanner";
 import { findNpxExecutable, getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, type DshPluginManagerOptions } from "./dshPluginManager";
-import { deleteDshProvider, listDshProviders, probeDshProvider, saveDshProvider, switchDshProvider } from "./dshProviderStore";
+import {
+  deleteDshProvider,
+  duplicateDshProvider,
+  listDshProviders,
+  probeDshProvider,
+  reorderDshProviders,
+  saveDshProvider,
+  switchDshProvider
+} from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
@@ -3822,8 +3830,10 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-providers-list", () => listDshProviders());
   ipcMain.handle("companion:dsh-providers-save", (_, provider: DshProviderSaveInput) => saveDshProvider(provider));
   ipcMain.handle("companion:dsh-providers-delete", (_, id: string) => deleteDshProvider(id));
+  ipcMain.handle("companion:dsh-providers-duplicate", (_, id: string) => duplicateDshProvider(id));
+  ipcMain.handle("companion:dsh-providers-reorder", (_, ids: string[]) => reorderDshProviders(ids));
   ipcMain.handle("companion:dsh-providers-switch", (_, id: string, model?: string) => switchDshProvider(id, model));
-  ipcMain.handle("companion:dsh-providers-probe", (_, payload: { id?: string; baseUrl?: string; apiKey?: string }) => probeDshProvider(payload));
+  ipcMain.handle("companion:dsh-providers-probe", (_, payload: { id?: string; baseUrl?: string; apiKey?: string; mode?: "connectivity" | "models" }) => probeDshProvider(payload));
   ipcMain.handle("companion:get-update-status", () => getUpdateStatus());
   ipcMain.handle("companion:check-for-updates", () => checkForUpdates());
   ipcMain.handle("companion:install-update", () => installUpdate());
@@ -3868,6 +3878,11 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:open-data-directory", async () => {
     const error = await shell.openPath(app.getPath("userData"));
     return error ? { ok: false, error } : { ok: true };
+  });
+  ipcMain.handle("companion:reveal-dsh-session", (_, filePath: string) => {
+    if (!isDshSessionLogPath(filePath) || !existsSync(filePath)) return false;
+    shell.showItemInFolder(filePath);
+    return true;
   });
   ipcMain.handle("companion:pet-pack-pick-file", async () => {
     const options: Electron.OpenDialogOptions = {

@@ -1,0 +1,99 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OverviewSection } from "../src/renderer/clawd-migrated/features/overview/OverviewSection";
+import { SettingsSection } from "../src/renderer/clawd-migrated/features/settings/SettingsSection";
+import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
+import { defaultSettings } from "../src/renderer/shared/events";
+
+beforeEach(() => {
+  Reflect.set(window, "companion", {
+    listDshProviders: vi.fn(async () => ({
+      ok: true,
+      providers: [{
+        id: "deepseek-official",
+        name: "DeepSeek",
+        baseUrl: "https://api.deepseek.com",
+        protocol: "deepseek-chat-completions",
+        models: [{ id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash" }],
+        defaultModel: "deepseek-v4-flash",
+        modelsInherited: true,
+        catalogProvider: true,
+        runtimeActive: true,
+        isDefault: true,
+        isOfficial: true,
+        hasCredential: true
+      }],
+      catalogProviders: [],
+      runtimeAvailable: true,
+      defaultProvider: "deepseek-official",
+      defaultModel: "deepseek-v4-flash"
+    }))
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  Reflect.deleteProperty(window, "companion");
+});
+
+describe("DSH model routing placement", () => {
+  it("renders routing before connection on Overview", async () => {
+    const view = render(
+      <I18nProvider initialLocale="en">
+        <OverviewSection
+          settings={{ hideSensitiveContent: false }}
+          connection={{ serverListening: false, error: null }}
+          hookStatus={{
+            installed: false,
+            configExists: false,
+            configReadError: false,
+            hookCount: 0,
+            requiredCount: 2,
+            missingEvents: ["web", "headless"],
+            commandMatches: false,
+            settingsPath: "C:/users/test/.dsh/profiles",
+            bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: true },
+            npxAvailable: true,
+            profiles: []
+          }}
+        />
+      </I18nProvider>
+    );
+
+    expect(Array.from(view.container.querySelectorAll("h2, h3"), heading => heading.textContent).slice(0, 2)).toEqual([
+      "DSH model routing",
+      "DeepSeek Harness connection"
+    ]);
+    expect(await screen.findByText("1 providers · Current DeepSeek · deepseek-v4-flash")).toBeTruthy();
+    expect(screen.getByText("DSH plugin status")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "One-click install" })).toBeTruthy();
+    expect(screen.queryByText("Install DSH Desk into the DSH Web and Headless profiles.")).toBeNull();
+  });
+
+  it("does not expose a Models subsection under Settings", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <SettingsSection
+          settings={defaultSettings}
+          updateSettings={vi.fn()}
+          connection={{ serverListening: false, error: null }}
+          now={Date.now()}
+          hookStatus={null}
+          activeSettingsSubsection="general"
+          setActiveSettingsSubsection={vi.fn()}
+          sectionContentRef={React.createRef<HTMLDivElement>()}
+          locale="en"
+          setLocale={vi.fn()}
+          appVersion="0.0.0"
+          updateStatus={{}}
+          checkingUpdate={false}
+          handleCheckUpdate={vi.fn()}
+        />
+      </I18nProvider>
+    );
+
+    expect(screen.queryByRole("button", { name: "Models" })).toBeNull();
+  });
+});

@@ -1,4 +1,4 @@
-/* === Claude provider editor (cc-switch parity UI) ===
+/* === DSH provider editor (original Chara Desk routing UI) ===
    Everything inside .ccs-fullscreen-panel rides the --ccs-editor-* variable
    system defined in 160-theme-alignment.css (light/dark) and the Minato Aqua
    theme layer, so no per-theme colors belong here. */
@@ -381,6 +381,11 @@
   gap: 10px;
 }
 
+.ccs-model-mapping-head > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
 .ccs-model-mapping-actions {
   display: inline-flex;
   align-items: center;
@@ -418,6 +423,41 @@
   grid-template-columns: 104px 1fr minmax(0, 1fr) 96px;
   gap: 8px;
   align-items: center;
+}
+
+.dsh-model-table .ccs-model-row {
+  grid-template-columns: minmax(170px, 1.35fr) minmax(150px, 1fr) 96px 96px 32px;
+}
+
+.dsh-model-delete {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--ccs-editor-muted);
+  background: transparent;
+}
+
+.dsh-model-delete:hover {
+  color: oklch(58% 0.13 24);
+  border-color: var(--ccs-editor-line-strong);
+  background: var(--ccs-editor-hover);
+}
+
+.dsh-catalog-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  color: var(--ccs-editor-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dsh-catalog-preview span {
+  overflow-wrap: anywhere;
 }
 
 .ccs-model-row-head {
@@ -462,6 +502,7 @@
 
 @media (max-width: 760px) {
   .ccs-model-row { grid-template-columns: 1fr; }
+  .dsh-model-table .ccs-model-row { grid-template-columns: 1fr; }
   .ccs-model-row-head,
   .ccs-model-onem-empty { display: none; }
 }

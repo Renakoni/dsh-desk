@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zstdCompressSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { DshSessionScanner, parseDshProjectionCache, parseDshSessionRows } from "../src/main/dshSessionScanner";
+import { DshSessionScanner, isDshSessionLogPath, parseDshProjectionCache, parseDshSessionRows } from "../src/main/dshSessionScanner";
 
 const rows = [
   { type: "session", version: 0, id: "session-one", createdAt: 1_000, cwd: "C:\\work\\demo", delegationDepth: 0 },
@@ -12,10 +12,12 @@ const rows = [
   { type: "turn/start", seq: 2, time: 1_030, data: { turn: 1 } },
   { type: "step/start", seq: 3, time: 1_100, data: { turn: 1, step: 1 } },
   { type: "tool/call", seq: 4, time: 1_200, data: { turn: 1, step: 1, callId: "call-1", name: "edit", arguments: JSON.stringify({ file_path: "src/a.ts", old_string: "old", new_string: "new" }) } },
-  { type: "tool/result", seq: 5, time: 1_500, data: { turn: 1, step: 1, message: { source: { kind: "tool-result", callId: "call-1" }, content: [], role: "user", id: "result-1" }, meta: { diffs: [{ path: "src/a.ts", oldText: "a\nold\nz", newText: "a\nnew\nz" }] } } },
-  { type: "assistant/message", seq: 6, time: 2_100, data: { turn: 1, step: 1, message: { role: "assistant", content: [] }, usage: { inputTokens: 50, outputTokens: 20, cacheReadTokens: 100, cacheWriteTokens: 0, reasoningTokens: 8 } } },
-  { type: "step/end", seq: 7, time: 2_110, data: { turn: 1, step: 1 } },
-  { type: "turn/end", seq: 8, time: 2_120, data: { turn: 1, reason: { kind: "completed" } } }
+  { type: "approval/asked", seq: 5, time: 1_300, data: { id: "approval-1", toolName: "edit", callId: "call-1" } },
+  { type: "approval/decided", seq: 6, time: 1_400, data: { id: "approval-1", outcome: "allowed-once" } },
+  { type: "tool/result", seq: 7, time: 1_500, data: { turn: 1, step: 1, message: { source: { kind: "tool-result", callId: "call-1" }, content: [], role: "user", id: "result-1" }, meta: { diffs: [{ path: "src/a.ts", oldText: "a\nold\nz", newText: "a\nnew\nz" }] } } },
+  { type: "assistant/message", seq: 8, time: 2_100, data: { turn: 1, step: 1, message: { role: "assistant", content: [] }, usage: { inputTokens: 50, outputTokens: 20, cacheReadTokens: 100, cacheWriteTokens: 0, reasoningTokens: 8 } } },
+  { type: "step/end", seq: 9, time: 2_110, data: { turn: 1, step: 1 } },
+  { type: "turn/end", seq: 10, time: 2_120, data: { turn: 1, reason: { kind: "completed" } } }
 ];
 
 function projectionCache() {
@@ -40,6 +42,14 @@ function projectionCache() {
 }
 
 describe("DSH native session scanning", () => {
+  it("only accepts compressed session logs below the DSH session root", () => {
+    const dshHome = join(tmpdir(), "dsh-desk-path-check");
+    expect(isDshSessionLogPath(join(dshHome, "sessions", "--demo--", "session-one", "session.jsonl.zstd"), dshHome)).toBe(true);
+    expect(isDshSessionLogPath(join(dshHome, "sessions", "--demo--", "session-one", "session.jsonl"), dshHome)).toBe(false);
+    expect(isDshSessionLogPath(join(dshHome, "storages", "session.jsonl.zstd"), dshHome)).toBe(false);
+    expect(isDshSessionLogPath(join(dshHome, "sessions", "..", "outside", "session.jsonl.zstd"), dshHome)).toBe(false);
+  });
+
   it("pairs DSH events without reading message content", () => {
     const scan = parseDshSessionRows(rows, "C:\\logs\\session.jsonl");
     expect(scan?.session).toMatchObject({
@@ -54,7 +64,7 @@ describe("DSH native session scanning", () => {
       llmMs: 1_000,
       toolMs: 300
     });
-    expect(scan?.requests).toEqual([expect.objectContaining({ id: "session-one:6", inputTokens: 50, outputTokens: 20, cacheReadTokens: 100, totalTokens: 170 })]);
+    expect(scan?.requests).toEqual([expect.objectContaining({ id: "session-one:8", inputTokens: 50, outputTokens: 20, cacheReadTokens: 100, totalTokens: 170 })]);
     expect(scan?.edits).toEqual([expect.objectContaining({ filePath: "C:\\work\\demo\\src\\a.ts", op: "edit", addedLines: 1, removedLines: 1 })]);
     expect(scan?.usage.tools).toEqual({ edit: 1 });
   });
@@ -86,11 +96,13 @@ describe("DSH native session scanning", () => {
 
     const result = await new DshSessionScanner(dshHome).scan();
 
-    expect(result.analytics.totals).toMatchObject({ sessions: 1, turns: 1, steps: 1, toolCalls: 1, llmMs: 1_000, toolMs: 300, ttftSteps: 1 });
+    expect(result.analytics.totals).toMatchObject({ events: 11, sessions: 1, turns: 1, steps: 1, toolCalls: 1, permissionRequests: 1, permissionApproved: 1, permissionDenied: 0, llmMs: 1_000, toolMs: 300, ttftSteps: 1 });
     expect(result.analytics.sessions[0]).toMatchObject({ title: "Projected title", projectedTokens: 180 });
     expect(result.analytics.tools).toEqual([expect.objectContaining({ name: "edit", calls: 1, durationMs: 300 })]);
     expect(result.analytics.daily).toEqual([expect.objectContaining({ sessions: 1, turns: 1, steps: 1, toolCalls: 1, totalTokens: 170 })]);
-    expect(result.requestIds.has("session-one:6")).toBe(true);
+    expect(result.analytics.hourlyActivity.reduce((sum, count) => sum + count, 0)).toBe(11);
+    expect(Object.values(result.analytics.dailyToolUsage)[0]).toEqual({ edit: 1 });
+    expect(result.requestIds.has("session-one:8")).toBe(true);
   });
 
   it("refreshes projections without reparsing an unchanged session log", async () => {

@@ -1,10 +1,43 @@
 // @ts-nocheck
 import React, { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import type { DshAnalyticsSnapshot } from "../../../shared/dshAnalytics";
 import type { AppStats } from "../../shared/events";
 import { useI18n } from "../useI18n";
 
 type StatsRange = "today" | "7d" | "all";
+
+export function dshAnalyticsToAppStats(snapshot: DshAnalyticsSnapshot): AppStats {
+  const toolUsage = Object.fromEntries(snapshot.tools.map(tool => [tool.name, tool.calls]));
+  const events = snapshot.totals.events ?? snapshot.daily.reduce((sum, day) => sum + (day.events ?? 0), 0);
+  const permissionRequests = snapshot.totals.permissionRequests ?? 0;
+  const permissionApproved = snapshot.totals.permissionApproved ?? 0;
+  const permissionDenied = snapshot.totals.permissionDenied ?? 0;
+  const sessionTimes = snapshot.sessions.flatMap(session => [session.createdAt, session.lastActivity]).filter(time => time > 0);
+
+  return {
+    toolUsage,
+    eventTypeCounts: events > 0 ? { dsh: events } : {},
+    totalSessions: snapshot.totals.sessions,
+    dailyStats: Object.fromEntries(snapshot.daily.map(day => [day.date, {
+      events: day.events ?? 0,
+      toolCalls: day.toolCalls,
+      sessions: day.sessions,
+      errors: day.failedToolCalls,
+      permissionRequests: day.permissionRequests ?? 0
+    }])),
+    errorCount: snapshot.totals.failedToolCalls,
+    permissionRequests,
+    permissionApproved,
+    permissionDenied,
+    totalRuntime: snapshot.totals.llmMs + snapshot.totals.toolMs,
+    hourlyActivity: snapshot.hourlyActivity ?? new Array(24).fill(0),
+    dailyHourlyActivity: snapshot.dailyHourlyActivity ?? {},
+    dailyToolUsage: snapshot.dailyToolUsage ?? {},
+    firstStartTime: sessionTimes.length > 0 ? Math.min(...sessionTimes) : snapshot.lastScannedAt,
+    lastEventTime: sessionTimes.length > 0 ? Math.max(...sessionTimes) : 0
+  };
+}
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);

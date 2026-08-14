@@ -23,7 +23,6 @@
     },
     "subtabs": {
       "general": "通用",
-      "models": "模型",
       "pet": "桌宠",
       "notifications": "通知",
       "diagnostics": "诊断",
@@ -84,11 +83,11 @@
     "noData": "暂无数据"
   },
   "dshProviders": {
-    "title": "模型与供应商",
+    "title": "DSH 模型路由",
     "noDefault": "尚未设置默认模型",
     "add": "添加供应商",
     "edit": "编辑供应商",
-    "editorSubtitle": "写入 DeepSeek Harness 的本地配置",
+    "editorSubtitle": "DeepSeek Harness 模型路由",
     "name": "供应商名称",
     "id": "Provider ID",
     "endpoint": "API 端点",
@@ -100,7 +99,7 @@
     "protocolNote": "DSH 会把统一会话请求转换为此上游协议。",
     "protocolAnthropicNote": "DSH 转换为 Anthropic Messages；此协议没有 OpenAI /models 发现接口。",
     "keepKey": "留空则保留现有密钥",
-    "models": "模型",
+    "models": "模型目录",
     "displayName": "显示名称",
     "context": "上下文",
     "output": "最大输出",
@@ -128,7 +127,23 @@
     "test": "检测模型端点",
     "saved": "供应商已保存",
     "deleteTitle": "删除供应商",
-    "deleteMessage": "确定删除 {name} 及其由 DSH Desk 管理的密钥吗？"
+    "deleteMessage": "确定删除 {name} 及其由 DSH Desk 管理的密钥吗？",
+    "catalog": "DSH 目录",
+    "custom": "自定义",
+    "noEndpointToTest": "此目录路由没有自定义端点",
+    "switchedTo": "已切换到 {name} · {model}",
+    "idInvalid": "Provider ID 只能包含小写字母、数字和连字符，并以字母开头",
+    "catalogEndpoint": "留空使用 DSH 目录默认端点",
+    "catalogDefault": "使用 DSH 目录默认协议",
+    "preferredModel": "默认模型",
+    "firstAvailable": "留空则沿用当前 DSH 模型",
+    "catalogInherited": "由 DSH 内置目录提供，不写入模型映射",
+    "catalogExplicit": "只在需要覆盖 DSH 目录时显式填写",
+    "useCatalog": "使用 DSH 内置模型目录",
+    "catalogLoadHint": "保存后 DSH 会解析该供应商目录，也可以先点击获取模型目录。",
+    "reachable": "连通正常 · {latency} ms · HTTP {status}",
+    "customNeedsEndpoint": "手工声明的路由通常需要请求地址",
+    "customNeedsProtocol": "手工声明的路由通常需要指定上游协议"
   },
   "pet": {
     "idle": "待机",
@@ -608,7 +623,6 @@
     "runtimeStats": "运行统计",
     "recentEvents": "最近事件",
     "tokenUsage": "Token 用量",
-    "usageRankings": "使用排行",
     "recentEdits": "最近编辑",
     "configManagement": "配置管理",
     "dataManagement": "数据管理"

@@ -26,8 +26,8 @@ import {
   type ClaudeProfilesSnapshot
 } from "../../../../shared/claudeProfiles";
 import { useI18n } from "../../useI18n";
-import { ConfirmDialog } from "../claude-routing/ConfirmDialog";
-import { RoutingToaster } from "../claude-routing/RoutingToaster";
+import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
+import { RoutingToaster } from "../dsh-routing/RoutingToaster";
 import { ClaudeProfileEditor } from "./ClaudeProfileEditor";
 import {
   filterProfileResources,

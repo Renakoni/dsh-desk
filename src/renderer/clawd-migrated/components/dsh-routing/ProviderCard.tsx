@@ -1,21 +1,20 @@
 import React from "react";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { Activity, Check, Copy, GripVertical, Loader2, Pencil, Play, Terminal, Trash2 } from "lucide-react";
+import { Activity, Check, Copy, GripVertical, Loader2, Pencil, Play, Trash2 } from "lucide-react";
 import { useI18n } from "../../useI18n";
 import { ProviderIcon } from "./ProviderIcon";
-import type { ClaudeProvider, DragHandleProps } from "./types";
+import type { DragHandleProps, DshRouteProvider } from "./types";
 
 type ProviderActionHandlers = {
-  onSwitch: (provider: ClaudeProvider) => void;
-  onEdit: (provider: ClaudeProvider) => void;
-  onDuplicate: (provider: ClaudeProvider) => void;
-  onTest: (provider: ClaudeProvider) => void;
-  onTerminal: (provider: ClaudeProvider) => void;
-  onRemove: (provider: ClaudeProvider) => void;
+  onSwitch: (provider: DshRouteProvider) => void;
+  onEdit: (provider: DshRouteProvider) => void;
+  onDuplicate: (provider: DshRouteProvider) => void;
+  onTest: (provider: DshRouteProvider) => void;
+  onRemove: (provider: DshRouteProvider) => void;
 };
 
-function ProviderIconBlock({ provider }: { provider: ClaudeProvider }) {
+function ProviderIconBlock({ provider }: { provider: DshRouteProvider }) {
   return (
     <div className="ccs-provider-icon">
       <ProviderIcon icon={provider.icon} name={provider.name} color={provider.iconColor} size={20} />
@@ -23,17 +22,24 @@ function ProviderIconBlock({ provider }: { provider: ClaudeProvider }) {
   );
 }
 
-/** Display URL priority ported from cc-switch's extractApiUrl: notes > websiteUrl > base URL. */
-function extractDisplayUrl(provider: ClaudeProvider, fallbackText: string) {
+function extractDisplayUrl(provider: DshRouteProvider, fallbackText: string) {
   const notes = provider.notes?.trim();
-  if (notes) return { text: notes, clickable: false };
-  if (provider.websiteUrl) return { text: provider.websiteUrl, clickable: true };
-  const envBase = provider.settingsConfig?.env?.ANTHROPIC_BASE_URL;
-  if (typeof envBase === "string" && envBase.trim()) return { text: envBase, clickable: true };
-  return { text: fallbackText, clickable: false };
+  if (notes) return { text: notes, url: "" };
+  if (provider.websiteUrl) return { text: provider.websiteUrl, url: provider.websiteUrl };
+  if (provider.baseUrl) return { text: provider.baseUrl, url: provider.baseUrl };
+  return { text: fallbackText, url: "" };
 }
 
-function ClaudeProviderActions({
+function protocolLabel(provider: DshRouteProvider, t: (key: string, fallback: string) => string) {
+  if (provider.isOfficial) return t("dshProviders.official", "官方");
+  if (provider.modelsInherited) return t("dshProviders.catalog", "DSH 目录");
+  if (provider.protocol === "anthropic-messages") return "Anthropic Messages";
+  if (provider.protocol === "openai-responses") return "OpenAI Responses";
+  if (provider.protocol === "openai-completions") return "OpenAI Chat Completions";
+  return t("dshProviders.custom", "自定义");
+}
+
+function DshProviderActions({
   provider,
   isCurrent,
   canRemove,
@@ -42,45 +48,49 @@ function ClaudeProviderActions({
   onEdit,
   onDuplicate,
   onTest,
-  onTerminal,
   onRemove
 }: {
-  provider: ClaudeProvider;
+  provider: DshRouteProvider;
   isCurrent: boolean;
   canRemove: boolean;
   testing?: boolean;
 } & ProviderActionHandlers) {
   const { t } = useI18n();
-  // cc-switch hides connectivity checks for official providers: their
-  // base_url is intentionally empty, so there is nothing to probe.
-  const canTest = provider.category !== "official";
+  const canTest = Boolean(provider.baseUrl);
 
   return (
     <div className="ccs-provider-actions-inner">
       <span className={isCurrent ? "ccs-provider-action-wrap disabled" : "ccs-provider-action-wrap"}>
-        <button className={`ccs-provider-main-action ${isCurrent ? "current" : ""}`} onClick={() => onSwitch(provider)} disabled={isCurrent} title={isCurrent ? t("routing.currentRoute", "当前供应商") : t("routing.switchRoute", "切换到此供应商")}>
+        <button
+          className={`ccs-provider-main-action ${isCurrent ? "current" : ""}`}
+          onClick={() => onSwitch(provider)}
+          disabled={isCurrent}
+          title={isCurrent
+            ? t("routing.currentRoute", "当前供应商")
+            : t("routing.switchRoute", "切换到此供应商")}
+        >
           {isCurrent ? <Check size={16} /> : <Play size={16} />}
           <span>{isCurrent ? t("routing.inUse", "已在用") : t("routing.switch", "启用")}</span>
         </button>
       </span>
       <div className="ccs-provider-icon-actions">
-        <button onClick={() => onEdit(provider)} title={t("common.edit", "编辑")}><Pencil size={16} /></button>
-        <button onClick={() => onDuplicate(provider)} title={t("routing.duplicate", "复制")}><Copy size={16} /></button>
+        <button onClick={() => onEdit(provider)} title={t("common.edit", "编辑")} aria-label={t("common.edit", "编辑")}><Pencil size={16} /></button>
+        <button onClick={() => onDuplicate(provider)} disabled={provider.isOfficial} title={t("routing.duplicate", "复制")} aria-label={t("routing.duplicate", "复制")}><Copy size={16} /></button>
         <button
           onClick={() => { if (canTest) onTest(provider); }}
           disabled={testing || !canTest}
-          title={canTest ? t("routing.testConnection", "检测连通") : t("routing.testOfficialHidden", "官方供应商无需检测")}
+          title={canTest ? t("routing.testConnection", "检测连通") : t("dshProviders.noEndpointToTest", "此目录路由没有自定义端点")}
+          aria-label={t("routing.testConnection", "检测连通")}
         >
           {testing ? <Loader2 size={16} className="ccs-spin" /> : <Activity size={16} />}
         </button>
-        <button onClick={() => onTerminal(provider)} title={t("routing.openTerminal", "打开终端")}><Terminal size={16} /></button>
-        <button className="ccs-provider-delete" onClick={() => onRemove(provider)} disabled={!canRemove} title={t("common.delete", "删除")}><Trash2 size={16} /></button>
+        <button className="ccs-provider-delete" onClick={() => onRemove(provider)} disabled={!canRemove} title={t("common.delete", "删除")} aria-label={t("common.delete", "删除")}><Trash2 size={16} /></button>
       </div>
     </div>
   );
 }
 
-function ClaudeProviderCard({
+function DshProviderCard({
   provider,
   isCurrent,
   canRemove,
@@ -90,28 +100,16 @@ function ClaudeProviderCard({
   onEdit,
   onDuplicate,
   onTest,
-  onTerminal,
   onRemove
 }: {
-  provider: ClaudeProvider;
+  provider: DshRouteProvider;
   isCurrent: boolean;
   canRemove: boolean;
   testing?: boolean;
   dragHandleProps?: DragHandleProps;
 } & ProviderActionHandlers) {
   const { t } = useI18n();
-  const env = provider.settingsConfig?.env ?? {};
-  const isOfficial = provider.category === "official";
-  const { text: displayUrl, clickable: urlClickable } = extractDisplayUrl(provider, t("routing.noEndpoint", "未配置请求地址"));
-  const categoryLabel = isOfficial
-    ? t("routing.categoryOfficial", "官方")
-    : provider.category === "cn_official"
-      ? t("routing.categoryCnOfficial", "国产官方")
-      : provider.category === "aggregator"
-        ? t("routing.categoryAggregator", "聚合平台")
-        : env.ANTHROPIC_BASE_URL
-          ? t("routing.categoryThirdParty", "第三方中转")
-          : t("routing.categoryUnconfigured", "未配置");
+  const display = extractDisplayUrl(provider, t("routing.noEndpoint", "使用 DSH 内置配置"));
 
   return (
     <div className={`ccs-provider-card ${isCurrent ? "active" : ""} ${dragHandleProps?.isDragging ? "dragging" : ""}`}>
@@ -125,19 +123,19 @@ function ClaudeProviderCard({
           <div className="ccs-provider-main">
             <div className="ccs-provider-titleline">
               <h3>{provider.name}</h3>
-              <span>{categoryLabel}</span>
+              <span>{protocolLabel(provider, t)}</span>
             </div>
             <button
-              className={`ccs-provider-url ${urlClickable ? "clickable" : ""}`}
+              className={`ccs-provider-url ${display.url ? "clickable" : ""}`}
               type="button"
-              title={displayUrl}
-              disabled={!urlClickable}
-              onClick={() => { if (urlClickable) void window.companion.openExternal(displayUrl); }}
-            >{displayUrl}</button>
+              title={display.text}
+              disabled={!display.url}
+              onClick={() => { if (display.url) void window.companion.openExternal(display.url); }}
+            >{display.text}</button>
           </div>
         </div>
         <div className="ccs-provider-actions">
-          <ClaudeProviderActions
+          <DshProviderActions
             provider={provider}
             isCurrent={isCurrent}
             canRemove={canRemove}
@@ -146,7 +144,6 @@ function ClaudeProviderCard({
             onEdit={onEdit}
             onDuplicate={onDuplicate}
             onTest={onTest}
-            onTerminal={onTerminal}
             onRemove={onRemove}
           />
         </div>
@@ -155,7 +152,7 @@ function ClaudeProviderCard({
   );
 }
 
-export const SortableClaudeProviderCard = React.memo(function SortableClaudeProviderCard({
+export const SortableDshProviderCard = React.memo(function SortableDshProviderCard({
   provider,
   isCurrent,
   canRemove,
@@ -164,10 +161,9 @@ export const SortableClaudeProviderCard = React.memo(function SortableClaudeProv
   onEdit,
   onDuplicate,
   onTest,
-  onTerminal,
   onRemove
 }: {
-  provider: ClaudeProvider;
+  provider: DshRouteProvider;
   isCurrent: boolean;
   canRemove: boolean;
   testing?: boolean;
@@ -180,7 +176,7 @@ export const SortableClaudeProviderCard = React.memo(function SortableClaudeProv
 
   return (
     <div ref={setNodeRef} style={style}>
-      <ClaudeProviderCard
+      <DshProviderCard
         provider={provider}
         isCurrent={isCurrent}
         canRemove={canRemove}
@@ -190,7 +186,6 @@ export const SortableClaudeProviderCard = React.memo(function SortableClaudeProv
         onEdit={onEdit}
         onDuplicate={onDuplicate}
         onTest={onTest}
-        onTerminal={onTerminal}
         onRemove={onRemove}
       />
     </div>

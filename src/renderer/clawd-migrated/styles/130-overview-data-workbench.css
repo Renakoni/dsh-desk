@@ -96,7 +96,6 @@
 
 .data-workbench .workbench-section > .stats-workbench,
 .data-workbench .workbench-section > .token-panel,
-.data-workbench .workbench-section > .usage-rankings-panel,
 .data-workbench .workbench-section > .recent-edits-panel,
 .data-workbench .workbench-section > .note {
   padding: 16px 18px 18px;
@@ -1676,147 +1675,6 @@
   }
 }
 
-/* ---- Usage rankings (data tab) ---- */
-
-.usage-rankings-panel {
-  display: grid;
-  gap: 10px;
-}
-
-.usage-rankings-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.usage-rankings-head .note {
-  margin: 0;
-}
-
-.usage-rankings-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* The scope popup must be able to escape the card (workbench-section clips overflow, and a
-   short rankings area — few tools, many projects — would cut the menu's tail off). Nothing
-   else in this section bleeds to the card edges, so releasing the clip is safe. */
-.data-usage-section {
-  overflow: visible;
-}
-
-/* Custom scope dropdown — a native <select>'s popup is OS-drawn (gray/white system list),
-   so the whole control is self-drawn in the workbench language, mirroring the profile
-   switcher's trigger + listbox pattern. */
-.usage-scope-dropdown {
-  position: relative;
-  min-width: 0;
-}
-
-.usage-scope-trigger {
-  min-width: 150px;
-  max-width: 220px;
-  min-height: 30px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 13px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 9px 0 11px;
-  border: 1px solid var(--workbench-line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 680;
-  cursor: pointer;
-  transition: border-color 160ms ease, background-color 160ms ease;
-}
-
-.usage-scope-trigger > span {
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-scope-trigger > svg {
-  color: var(--workbench-muted);
-}
-
-.usage-scope-trigger:hover,
-.usage-scope-trigger[aria-expanded="true"] {
-  border-color: var(--workbench-muted);
-  background: var(--workbench-subtle);
-}
-
-.usage-scope-options {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 40;
-  min-width: 210px;
-  max-width: 300px;
-  max-height: 288px;
-  display: grid;
-  gap: 2px;
-  padding: 5px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  border: 1px solid var(--workbench-line);
-  border-radius: 9px;
-  background: var(--workbench-surface);
-  box-shadow: 0 14px 30px oklch(12% 0.012 75 / 0.28);
-  backdrop-filter: blur(14px);
-}
-
-.usage-scope-options::-webkit-scrollbar {
-  display: none;
-}
-
-.usage-scope-options > button {
-  width: 100%;
-  min-height: 30px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 14px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  appearance: none;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--workbench-muted);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.usage-scope-options > button > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-scope-options > button:hover,
-.usage-scope-options > button:focus-visible {
-  color: var(--ink);
-  background: var(--workbench-subtle);
-  outline: 0;
-}
-
-.usage-scope-options > button.current {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.usage-scope-options > button svg {
-  justify-self: end;
-  color: var(--mint);
-}
-
 .recent-edits-footer {
   display: flex;
   justify-content: center;
@@ -1825,7 +1683,6 @@
 
 /* token-more-btn is styled as a table-footer row; standalone under these panels it reads as a
    heavy full-width bar. Render it as a quiet centered pill instead. */
-.usage-rankings-panel .token-more-btn,
 .recent-edits-panel .token-more-btn {
   width: auto;
   min-width: 180px;
@@ -1836,99 +1693,9 @@
   background: transparent;
 }
 
-.usage-rankings-panel .token-more-btn:hover,
 .recent-edits-panel .token-more-btn:hover {
   border-color: var(--workbench-muted);
   background: var(--workbench-subtle);
-}
-
-/* One container, three columns split by hairlines — not three stacked boxes. */
-.usage-rank-columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--workbench-line);
-  border-radius: 8px;
-  background: var(--workbench-subtle);
-}
-
-.usage-rank-column {
-  min-width: 0;
-}
-
-.usage-rank-column + .usage-rank-column {
-  border-left: 1px solid var(--workbench-line);
-}
-
-.usage-rank-column > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--workbench-line);
-}
-
-.usage-rank-column > header span {
-  color: var(--workbench-muted);
-  font-size: 11px;
-}
-
-.usage-rank-column > .note {
-  padding: 10px 11px;
-}
-
-.usage-rank-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.usage-rank-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px 44px;
-  gap: 8px;
-  align-items: center;
-  min-height: 31px;
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--workbench-line);
-  font-size: 12px;
-}
-
-.usage-rank-row:last-child {
-  border-bottom: 0;
-}
-
-.usage-rank-name {
-  overflow: hidden;
-  color: var(--ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-rank-bar {
-  overflow: hidden;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--workbench-line);
-}
-
-.usage-rank-bar i {
-  display: block;
-  height: 100%;
-  border-radius: 3px;
-  background: var(--mint);
-}
-
-.usage-rank-row b {
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-@media (max-width: 1100px) {
-  .usage-rank-columns {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ---- Recent edits (data tab) ---- */

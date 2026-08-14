@@ -4,7 +4,7 @@ import { EditorView } from "codemirror";
 import { EditorSelection } from "@codemirror/state";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { JsonConfigEditor } from "../src/renderer/clawd-migrated/components/claude-routing/JsonConfigEditor";
+import { JsonConfigEditor } from "../src/renderer/clawd-migrated/components/dsh-routing/JsonConfigEditor";
 
 // CodeMirror defers layout measurement to requestAnimationFrame, which jsdom
 // lacks; a setTimeout shim lets the view construct. The assertions below are

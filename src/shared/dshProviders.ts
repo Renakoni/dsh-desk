@@ -13,12 +13,34 @@ export type DshProviderModel = {
   maxTokens?: number;
 };
 
-export type DshProvider = {
+export type DshProviderUiMeta = {
+  websiteUrl?: string;
+  apiKeyUrl?: string;
+  category?: string;
+  notes?: string;
+  icon?: string;
+  iconColor?: string;
+  createdAt?: number;
+  sortIndex?: number;
+  preferredModel?: string;
+};
+
+export type DshCatalogProvider = {
+  id: string;
+  name: string;
+  active: boolean;
+  declared?: boolean;
+};
+
+export type DshProvider = DshProviderUiMeta & {
   id: string;
   name: string;
   baseUrl: string;
-  protocol: DshProviderProtocol | "deepseek-chat-completions";
+  protocol?: DshProviderProtocol | "deepseek-chat-completions";
   models: DshProviderModel[];
+  modelsInherited: boolean;
+  catalogProvider: boolean;
+  runtimeActive: boolean;
   credentialRef?: string;
   hasCredential: boolean;
   isOfficial: boolean;
@@ -29,6 +51,8 @@ export type DshProvider = {
 export type DshProviderListResult = {
   ok: boolean;
   providers: DshProvider[];
+  catalogProviders: DshCatalogProvider[];
+  runtimeAvailable: boolean;
   defaultProvider: string;
   defaultModel: string;
   settingsPath?: string;
@@ -36,12 +60,14 @@ export type DshProviderListResult = {
   error?: string;
 };
 
-export type DshProviderSaveInput = {
+export type DshProviderSaveInput = DshProviderUiMeta & {
   id: string;
   name: string;
-  baseUrl: string;
-  protocol: DshProviderProtocol | "deepseek-chat-completions";
-  models: DshProviderModel[];
+  baseUrl?: string;
+  protocol?: DshProviderProtocol | "deepseek-chat-completions";
+  models?: DshProviderModel[];
+  inheritModels?: boolean;
+  catalogProvider?: boolean;
   apiKey?: string;
 };
 
@@ -71,4 +97,5 @@ export type DshProviderProbeInput = {
   baseUrl?: string;
   protocol?: DshProviderProtocol | "deepseek-chat-completions";
   apiKey?: string;
+  mode?: "connectivity" | "models";
 };

@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   deleteDshProvider,
   deriveDshCredentialRef,
+  duplicateDshProvider,
   listDshProviders,
   probeDshProvider,
+  reorderDshProviders,
   saveDshProvider,
   switchDshProvider
 } from "../src/main/dshProviderStore";
@@ -17,6 +19,16 @@ function home() {
   const path = mkdtempSync(join(tmpdir(), "chara-dsh-provider-"));
   homes.push(path);
   return path;
+}
+
+function runtimeFetch(values: Record<string, unknown>): typeof fetch {
+  return (async (_input: string | URL | Request, init?: RequestInit) => {
+    const request = JSON.parse(String(init?.body)) as { rpcId: string; method: string };
+    return new Response(JSON.stringify({
+      rpcId: request.rpcId,
+      result: { ok: true, value: values[request.method] ?? {} }
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
 }
 
 afterEach(() => {
@@ -152,6 +164,112 @@ describe("DSH provider settings", () => {
     expect(result.provider).not.toHaveProperty("credentialRef");
   });
 
+  it("stores a catalog route without forcing endpoint, protocol, or model mappings", async () => {
+    const dshHome = home();
+    const result = await saveDshProvider({
+      id: "openai",
+      name: "OpenAI",
+      inheritModels: true,
+      catalogProvider: true
+    }, { dshHome });
+
+    expect(result.ok).toBe(true);
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).toContain("openai:");
+    expect(settings).not.toContain("baseURL:");
+    expect(settings).not.toContain("api:");
+    expect(settings).not.toContain("models:");
+    expect(result.provider).toEqual(expect.objectContaining({
+      id: "openai",
+      modelsInherited: true,
+      models: []
+    }));
+  });
+
+  it("merges DSH runtime catalog metadata and inherited models", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "llm-pi-ai:",
+      "  providers:",
+      "    openai:",
+      "      displayName: OpenAI Team",
+      ""
+    ].join("\n"));
+    const result = await listDshProviders({
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: runtimeFetch({
+        "llm.providers": { providers: [
+          { provider: "deepseek-official", displayName: "DeepSeek", active: true },
+          { provider: "openai", displayName: "OpenAI", active: true, declared: false },
+          { provider: "anthropic", displayName: "Anthropic", active: false, declared: false }
+        ] },
+        "llm.models": { groups: [
+          { id: "openai", name: "OpenAI", models: [{ id: "gpt-runtime", name: "Runtime GPT" }] }
+        ] }
+      })
+    });
+
+    expect(result.runtimeAvailable).toBe(true);
+    expect(result.catalogProviders).toContainEqual(expect.objectContaining({ id: "anthropic", active: false }));
+    expect(result.providers).toContainEqual(expect.objectContaining({
+      id: "openai",
+      catalogProvider: true,
+      runtimeActive: true,
+      modelsInherited: true,
+      models: [{ id: "gpt-runtime", name: "Runtime GPT" }]
+    }));
+  });
+
+  it("persists provider order and duplicates a route next to its source", async () => {
+    const dshHome = home();
+    for (const [id, name] of [["alpha", "Alpha"], ["beta", "Beta"]] as const) {
+      expect((await saveDshProvider({
+        id,
+        name,
+        baseUrl: `https://${id}.example/v1`,
+        protocol: "openai-completions",
+        models: [{ id: `${id}-model` }]
+      }, { dshHome })).ok).toBe(true);
+    }
+
+    expect((await reorderDshProviders(["beta", "deepseek-official", "alpha"], { dshHome })).ok).toBe(true);
+    expect((await listDshProviders({ dshHome })).providers.map(provider => provider.id)).toEqual([
+      "beta",
+      "deepseek-official",
+      "alpha"
+    ]);
+
+    const duplicated = await duplicateDshProvider("beta", { dshHome });
+    expect(duplicated).toEqual(expect.objectContaining({
+      ok: true,
+      provider: expect.objectContaining({ id: "beta-copy", name: "Beta Copy" })
+    }));
+    expect((await listDshProviders({ dshHome })).providers.map(provider => provider.id)).toEqual([
+      "beta",
+      "beta-copy",
+      "deepseek-official",
+      "alpha"
+    ]);
+  });
+
+  it("keeps the current DSH model when switching to an inherited catalog route", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "agent-default-model:",
+      "  provider: previous-route",
+      "  model: current-unlisted-model",
+      ""
+    ].join("\n"));
+    await saveDshProvider({ id: "openai", name: "OpenAI", inheritModels: true, catalogProvider: true }, { dshHome });
+
+    expect(await switchDshProvider("openai", undefined, { dshHome })).toEqual({
+      ok: true,
+      provider: "openai",
+      model: "current-unlisted-model"
+    });
+  });
+
   it("switches the DSH default selection and resets it when that route is deleted", async () => {
     const dshHome = home();
     await saveDshProvider({
@@ -217,6 +335,6 @@ describe("DSH provider settings", () => {
       baseUrl: "https://anthropic.example/v1",
       protocol: "anthropic-messages"
     }, { dshHome: home(), fetchImpl: fetchImpl as typeof fetch });
-    expect(result).toEqual({ ok: false, error: "Anthropic Messages providers do not expose the OpenAI /models endpoint" });
+    expect(result).toEqual(expect.objectContaining({ ok: false, error: "Anthropic Messages providers do not expose the OpenAI /models endpoint" }));
   });
 });

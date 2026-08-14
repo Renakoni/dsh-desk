@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import type { ParsedEditRecord } from "./claudeEditLog";
 import { createUsageCounts, type UsageCounts } from "./claudeUsageStats";
@@ -13,6 +13,18 @@ import {
 } from "../shared/dshAnalytics";
 
 type JsonObject = Record<string, unknown>;
+
+export function isDshSessionLogPath(filePath: string, dshHome = join(homedir(), ".dsh")): boolean {
+  if (typeof filePath !== "string" || !filePath) return false;
+  const sessionRoot = resolve(dshHome, "sessions");
+  const target = resolve(filePath);
+  const fromRoot = relative(sessionRoot, target);
+  return basename(target).toLowerCase() === "session.jsonl.zstd"
+    && fromRoot !== ""
+    && fromRoot !== ".."
+    && !fromRoot.startsWith(`..${sep}`)
+    && !isAbsolute(fromRoot);
+}
 
 export type DshScannedTokenRequest = {
   id: string;
@@ -54,7 +66,11 @@ type ToolCall = {
   args: JsonObject | null;
 };
 
-type DayState = Omit<DshTrajectoryDay, "sessions"> & { sessionIds: Set<string> };
+type DayState = Omit<DshTrajectoryDay, "sessions"> & {
+  sessionIds: Set<string>;
+  hourlyActivity: number[];
+  toolUsage: Record<string, number>;
+};
 
 type RawSessionScan = {
   session: DshSessionMetric;
@@ -151,7 +167,23 @@ function skillLabel(args: JsonObject | null): string {
 }
 
 function createDay(date: string): DayState {
-  return { date, sessionIds: new Set(), turns: 0, steps: 0, toolCalls: 0, failedToolCalls: 0, totalTokens: 0, llmMs: 0, toolMs: 0 };
+  return {
+    date,
+    events: 0,
+    sessionIds: new Set(),
+    turns: 0,
+    steps: 0,
+    toolCalls: 0,
+    failedToolCalls: 0,
+    permissionRequests: 0,
+    permissionApproved: 0,
+    permissionDenied: 0,
+    totalTokens: 0,
+    llmMs: 0,
+    toolMs: 0,
+    hourlyActivity: new Array(24).fill(0),
+    toolUsage: {}
+  };
 }
 
 class SessionAccumulator {
@@ -190,7 +222,14 @@ class SessionAccumulator {
     const time = finiteValue(row.time);
     if (time > 0) {
       this.lastActivity = Math.max(this.lastActivity, time);
-      if (this.sessionId) this.day(time).sessionIds.add(this.sessionId);
+      if (this.sessionId) {
+        const day = this.day(time);
+        day.sessionIds.add(this.sessionId);
+        if (type !== "assistant/chunk") {
+          day.events++;
+          day.hourlyActivity[new Date(time).getHours()]++;
+        }
+      }
     }
     const data = objectValue(row.data);
     if (!data) return;
@@ -226,6 +265,18 @@ class SessionAccumulator {
     if (type === "command/run") {
       const name = stringValue(data.name).replace(/^\//, "");
       bump(this.usage.skills, name);
+      return;
+    }
+    if (type === "approval/asked") {
+      if (time > 0) this.day(time).permissionRequests++;
+      return;
+    }
+    if (type === "approval/decided") {
+      if (time > 0) {
+        const outcome = stringValue(data.outcome);
+        if (outcome === "allowed-once") this.day(time).permissionApproved++;
+        else this.day(time).permissionDenied++;
+      }
       return;
     }
     if (type === "tool/call") {
@@ -342,7 +393,11 @@ class SessionAccumulator {
     const metric = this.tools.get(name) ?? { name, calls: 0, errors: 0, durationMs: 0 };
     metric.calls++;
     this.tools.set(name, metric);
-    if (time > 0) this.day(time).toolCalls++;
+    if (time > 0) {
+      const day = this.day(time);
+      day.toolCalls++;
+      bump(day.toolUsage, name);
+    }
   }
 
   private consumeToolResult(row: JsonObject, data: JsonObject, time: number): void {
@@ -587,12 +642,20 @@ function mergeDay(target: Map<string, DayState>, incoming: DayState): void {
   const current = target.get(incoming.date) ?? createDay(incoming.date);
   for (const id of incoming.sessionIds) current.sessionIds.add(id);
   current.turns += incoming.turns;
+  current.events += incoming.events;
   current.steps += incoming.steps;
   current.toolCalls += incoming.toolCalls;
   current.failedToolCalls += incoming.failedToolCalls;
+  current.permissionRequests += incoming.permissionRequests;
+  current.permissionApproved += incoming.permissionApproved;
+  current.permissionDenied += incoming.permissionDenied;
   current.totalTokens += incoming.totalTokens;
   current.llmMs += incoming.llmMs;
   current.toolMs += incoming.toolMs;
+  incoming.hourlyActivity.forEach((count, hour) => { current.hourlyActivity[hour] += count; });
+  for (const [tool, count] of Object.entries(incoming.toolUsage)) {
+    current.toolUsage[tool] = (current.toolUsage[tool] ?? 0) + count;
+  }
   target.set(incoming.date, current);
 }
 
@@ -605,33 +668,63 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
     for (const tool of scan.tools.values()) mergeTool(tools, tool);
   }
   const sessions = scans.map(scan => scan.session).sort((left, right) => right.lastActivity - left.lastActivity);
+  const daily = [...days.values()].sort((left, right) => left.date.localeCompare(right.date));
+  const hourlyActivity = new Array(24).fill(0);
+  daily.forEach(day => day.hourlyActivity.forEach((count, hour) => { hourlyActivity[hour] += count; }));
   return {
     totals: sessions.reduce((total, session) => ({
+      events: total.events,
       sessions: total.sessions + 1,
       turns: total.turns + session.turns,
       steps: total.steps + session.steps,
       toolCalls: total.toolCalls + session.toolCalls,
       failedToolCalls: total.failedToolCalls + session.failedToolCalls,
+      permissionRequests: total.permissionRequests,
+      permissionApproved: total.permissionApproved,
+      permissionDenied: total.permissionDenied,
       llmMs: total.llmMs + session.llmMs,
       toolMs: total.toolMs + session.toolMs,
       ttftMs: total.ttftMs + session.ttftMs,
       ttftSteps: total.ttftSteps + session.ttftSteps,
       decodeMs: total.decodeMs + session.decodeMs,
       decodeTokens: total.decodeTokens + session.decodeTokens
-    }), { sessions: 0, turns: 0, steps: 0, toolCalls: 0, failedToolCalls: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 }),
-    daily: [...days.values()].map(day => ({
+    }), {
+      events: daily.reduce((sum, day) => sum + day.events, 0),
+      sessions: 0,
+      turns: 0,
+      steps: 0,
+      toolCalls: 0,
+      failedToolCalls: 0,
+      permissionRequests: daily.reduce((sum, day) => sum + day.permissionRequests, 0),
+      permissionApproved: daily.reduce((sum, day) => sum + day.permissionApproved, 0),
+      permissionDenied: daily.reduce((sum, day) => sum + day.permissionDenied, 0),
+      llmMs: 0,
+      toolMs: 0,
+      ttftMs: 0,
+      ttftSteps: 0,
+      decodeMs: 0,
+      decodeTokens: 0
+    }),
+    daily: daily.map(day => ({
       date: day.date,
+      events: day.events,
       sessions: day.sessionIds.size,
       turns: day.turns,
       steps: day.steps,
       toolCalls: day.toolCalls,
       failedToolCalls: day.failedToolCalls,
+      permissionRequests: day.permissionRequests,
+      permissionApproved: day.permissionApproved,
+      permissionDenied: day.permissionDenied,
       totalTokens: day.totalTokens,
       llmMs: day.llmMs,
       toolMs: day.toolMs
-    })).sort((left, right) => left.date.localeCompare(right.date)),
+    })),
     tools: [...tools.values()].sort((left, right) => right.calls - left.calls || right.durationMs - left.durationMs || left.name.localeCompare(right.name)),
     sessions: sessions.slice(0, 100),
+    hourlyActivity,
+    dailyHourlyActivity: Object.fromEntries(daily.map(day => [day.date, day.hourlyActivity])),
+    dailyToolUsage: Object.fromEntries(daily.map(day => [day.date, day.toolUsage])),
     sessionRoot,
     lastScannedAt: scannedAt
   };
