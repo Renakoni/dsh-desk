@@ -84,7 +84,7 @@
   },
   "dshProviders": {
     "title": "DSH model routing",
-    "providerSummary": "{count} providers · {enabled} enabled · Current {name}",
+    "providerSummary": "{count} providers · {enabled} enabled · Default {name}",
     "noDefault": "No default model selected",
     "add": "Add provider",
     "edit": "Edit provider",
@@ -130,7 +130,7 @@
     "deleteMessage": "Delete {name} and its DSH Desk-managed key?",
     "catalog": "DSH catalog",
     "custom": "Custom",
-    "current": "Current",
+    "defaultProvider": "Default provider",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "enable": "Enable",

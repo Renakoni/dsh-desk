@@ -69,7 +69,7 @@ describe("DSH model routing placement", () => {
       "DSH model routing",
       "DeepSeek Harness connection"
     ]);
-    expect(await screen.findByText("1 providers · 1 enabled · Current DeepSeek · deepseek-v4-flash")).toBeTruthy();
+    expect(await screen.findByText("1 providers · 1 enabled · Default DeepSeek · deepseek-v4-flash")).toBeTruthy();
     expect(view.container.querySelector(".ccs-brand-icon:not(.ccs-brand-icon-fallback)")).toBeTruthy();
     expect(screen.getByText("DSH plugin status")).toBeTruthy();
     expect(screen.getByRole("button", { name: "One-click install" })).toBeTruthy();
@@ -177,11 +177,11 @@ describe("DSH model routing placement", () => {
       </I18nProvider>
     );
 
-    expect(await screen.findByText("2 providers · 1 enabled · Current DeepSeek · deepseek-v4-flash")).toBeTruthy();
+    expect(await screen.findByText("2 providers · 1 enabled · Default DeepSeek · deepseek-v4-flash")).toBeTruthy();
     const enableButton = screen.getByRole("button", { name: "Enable" });
     fireEvent.click(enableButton);
     await waitFor(() => expect(setEnabled).toHaveBeenCalledWith("team-gateway", true));
-    expect(screen.getByRole("button", { name: "Switch to this provider" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Make default provider" }).hasAttribute("disabled")).toBe(true);
     const disableButtons = screen.getAllByRole("button", { name: "Disable" });
     expect(disableButtons).toHaveLength(1);
     fireEvent.click(disableButtons[0]);

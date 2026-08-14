@@ -161,7 +161,7 @@ export function DshRoutingPanel() {
   const currentModel = listing?.defaultModel || currentProvider?.defaultModel || currentProvider?.preferredModel || currentProvider?.models[0]?.id || "";
   const enabledCount = providers.filter(provider => provider.enabled).length;
   const providerSummary = currentProvider
-    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 当前 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
+    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
     : formatI18n(t("routing.providerCount", "{count} 个供应商"), { count: sortedProviders.length });
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {

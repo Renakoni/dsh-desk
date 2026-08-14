@@ -80,8 +80,8 @@ function DshProviderActions({
         <button
           onClick={() => onSwitch(provider)}
           disabled={!provider.enabled || isCurrent}
-          title={isCurrent ? t("routing.currentRoute", "当前供应商") : t("routing.switchRoute", "设为当前供应商")}
-          aria-label={isCurrent ? t("routing.currentRoute", "当前供应商") : t("routing.switchRoute", "设为当前供应商")}
+          title={isCurrent ? t("dshProviders.defaultProvider", "默认供应商") : t("dshProviders.makeDefault", "设为默认供应商")}
+          aria-label={isCurrent ? t("dshProviders.defaultProvider", "默认供应商") : t("dshProviders.makeDefault", "设为默认供应商")}
         >{isCurrent ? <Check size={16} /> : <Play size={16} />}</button>
         <button onClick={() => onEdit(provider)} title={t("common.edit", "编辑")} aria-label={t("common.edit", "编辑")}><Pencil size={16} /></button>
         <button onClick={() => onDuplicate(provider)} disabled={provider.isOfficial} title={t("routing.duplicate", "复制")} aria-label={t("routing.duplicate", "复制")}><Copy size={16} /></button>
@@ -134,7 +134,6 @@ function DshProviderCard({
             <div className="ccs-provider-titleline">
               <h3>{provider.name}</h3>
               <span>{protocolLabel(provider, t)}</span>
-              {isCurrent ? <span className="ccs-provider-state current">{t("dshProviders.current", "当前")}</span> : null}
               {!provider.enabled ? <span className="ccs-provider-state disabled">{t("dshProviders.disabled", "已停用")}</span> : null}
             </div>
             <button

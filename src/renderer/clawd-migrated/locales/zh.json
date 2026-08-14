@@ -84,7 +84,7 @@
   },
   "dshProviders": {
     "title": "DSH 模型路由",
-    "providerSummary": "{count} 个供应商 · {enabled} 个已启用 · 当前 {name}",
+    "providerSummary": "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}",
     "noDefault": "尚未设置默认模型",
     "add": "添加供应商",
     "edit": "编辑供应商",
@@ -130,7 +130,7 @@
     "deleteMessage": "确定删除 {name} 及其由 DSH Desk 管理的密钥吗？",
     "catalog": "DSH 目录",
     "custom": "自定义",
-    "current": "当前",
+    "defaultProvider": "默认供应商",
     "enabled": "已启用",
     "disabled": "已停用",
     "enable": "启用",
