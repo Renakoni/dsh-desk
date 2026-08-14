@@ -6,24 +6,28 @@ import { useI18n } from "../useI18n";
 
 type StatsRange = "today" | "7d" | "all";
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, zh: boolean): string {
   const seconds = Math.floor(ms / 1_000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
+  if (hours > 0) return zh ? `${hours} 小时 ${minutes % 60} 分` : `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return zh ? `${minutes} 分 ${seconds % 60} 秒` : `${minutes}m ${seconds % 60}s`;
+  return zh ? `${seconds} 秒` : `${seconds}s`;
 }
 
 function formatPreciseDuration(value: number, zh: boolean): string {
-  if (!value) return "0s";
-  if (value < 1_000) return `${Math.round(value)}ms`;
+  if (!value) return zh ? "0 秒" : "0s";
+  if (value < 1_000) return `${Math.round(value)} ms`;
   const seconds = Math.round(value / 1_000);
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return zh ? `${seconds} 秒` : `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  if (minutes < 60) return zh ? `${minutes} 分 ${seconds % 60} 秒` : `${minutes}m ${seconds % 60}s`;
   const hours = Math.floor(minutes / 60);
-  return zh ? `${hours}小时 ${minutes % 60}分` : `${hours}h ${minutes % 60}m`;
+  return zh ? `${hours} 小时 ${minutes % 60} 分` : `${hours}h ${minutes % 60}m`;
+}
+
+function formatMilliseconds(value: number, locale: string): string {
+  return value > 0 ? `${Math.round(value).toLocaleString(locale)} ms` : "—";
 }
 
 function localDateKey(timestamp = Date.now()): string {
@@ -71,10 +75,10 @@ function topHoursFromBuckets(buckets: number[]): Array<{ hour: number; count: nu
     .slice(0, 3);
 }
 
-function mergeHourlyBuckets(stats: AppStats, keys: string[]): number[] {
+function mergeHourlyBuckets(dailyHourlyActivity: Record<string, number[]> | undefined, keys: string[]): number[] {
   const buckets = new Array(24).fill(0);
   for (const key of keys) {
-    const daily = stats.dailyHourlyActivity?.[key];
+    const daily = dailyHourlyActivity?.[key];
     if (!Array.isArray(daily)) continue;
     daily.forEach((count, hour) => { buckets[hour] += count || 0; });
   }
@@ -128,19 +132,20 @@ export function StatsPanel({ stats, snapshot = null }: {
   }, [runtimeAnchor]);
 
   const liveTotalRuntime = runtimeAnchor.value + Math.max(0, runtimeNow - runtimeAnchor.capturedAt);
-  const totalToolCalls = useMemo(() => sumRecord(stats.toolUsage), [stats]);
+  const persistedToolCalls = useMemo(() => sumRecord(stats.toolUsage), [stats]);
   const totalEvents = useMemo(() => sumRecord(stats.eventTypeCounts), [stats]);
-  const days = useMemo(() => Object.keys(stats.dailyStats ?? {}).length, [stats]);
-  const activeDays = useMemo(() => activeDayKeys(stats), [stats]);
+  const days = useMemo(() => snapshot
+    ? snapshot.daily.filter(day => day.events > 0 || day.toolCalls > 0 || day.sessions > 0).length
+    : Object.keys(stats.dailyStats ?? {}).length, [snapshot, stats]);
+  const totalToolCalls = snapshot?.totals.toolCalls ?? persistedToolCalls;
   const avgDaily = days > 0 ? Math.round(totalToolCalls / days) : 0;
-  const allMetrics = useMemo(() => ({
+  const persistedAllMetrics = useMemo(() => ({
     events: totalEvents,
-    toolCalls: totalToolCalls,
+    toolCalls: persistedToolCalls,
     sessions: stats.totalSessions ?? 0,
     errors: stats.errorCount ?? 0,
-    permissionRequests: stats.permissionRequests ?? 0,
-    activeDays: days
-  }), [stats, totalEvents, totalToolCalls, days]);
+    permissionRequests: stats.permissionRequests ?? 0
+  }), [persistedToolCalls, stats, totalEvents]);
   const rangeOptions: Array<{ value: StatsRange; label: string }> = [
     { value: "today", label: t("stats.rangeToday", "今日") },
     { value: "7d", label: t("stats.range7d", "近 7 日") },
@@ -148,67 +153,97 @@ export function StatsPanel({ stats, snapshot = null }: {
   ];
 
   const rangeData = useMemo(() => {
+    if (snapshot) {
+      if (range === "all") {
+        return {
+          metrics: snapshot.totals,
+          topHours: topHoursFromBuckets(snapshot.hourlyActivity),
+          hasHourlyDetail: snapshot.hourlyActivity.some(count => count > 0)
+        };
+      }
+      const keyList = range === "today" ? [localDateKey()] : recentDateKeys(7);
+      const keys = new Set(keyList);
+      const selectedDays = snapshot.daily.filter(day => keys.has(day.date));
+      const selectedSessions = snapshot.sessions.filter(session => keys.has(localDateKey(session.lastActivity)));
+      const performance = rangeSessionMetrics(selectedSessions);
+      const metrics = selectedDays.reduce((total, day) => ({
+        ...total,
+        events: total.events + day.events,
+        turns: total.turns + day.turns,
+        steps: total.steps + day.steps,
+        toolCalls: total.toolCalls + day.toolCalls,
+        failedToolCalls: total.failedToolCalls + day.failedToolCalls,
+        permissionRequests: total.permissionRequests + day.permissionRequests,
+        llmMs: total.llmMs + day.llmMs,
+        toolMs: total.toolMs + day.toolMs
+      }), {
+        events: 0,
+        sessions: selectedSessions.length,
+        turns: 0,
+        steps: 0,
+        toolCalls: 0,
+        failedToolCalls: 0,
+        permissionRequests: 0,
+        llmMs: 0,
+        toolMs: 0,
+        ...performance
+      });
+      const hourlyBuckets = mergeHourlyBuckets(snapshot.dailyHourlyActivity, keyList);
+      return {
+        metrics,
+        topHours: topHoursFromBuckets(hourlyBuckets),
+        hasHourlyDetail: hourlyBuckets.some(count => count > 0)
+      };
+    }
+
     if (range === "all") {
       return {
-        label: t("stats.rangeAll", "全部"),
-        metrics: allMetrics,
+        metrics: persistedAllMetrics,
         topHours: topHoursFromBuckets(stats.hourlyActivity ?? new Array(24).fill(0)),
         hasHourlyDetail: (stats.hourlyActivity ?? []).some(count => count > 0)
       };
     }
     const keys = range === "today" ? [localDateKey()] : recentDateKeys(7);
     const dailyTotals = sumDailyRows(stats, keys);
+    const activeDays = activeDayKeys(stats);
     const rangeCoversAllRecordedDays = activeDays.length > 0 && activeDays.every(key => keys.includes(key));
-    const hourlyBuckets = rangeCoversAllRecordedDays ? stats.hourlyActivity ?? new Array(24).fill(0) : mergeHourlyBuckets(stats, keys);
+    const hourlyBuckets = rangeCoversAllRecordedDays ? stats.hourlyActivity ?? new Array(24).fill(0) : mergeHourlyBuckets(stats.dailyHourlyActivity, keys);
     return {
-      label: range === "today" ? t("stats.rangeToday", "今日") : t("stats.range7d", "近 7 日"),
-      metrics: rangeCoversAllRecordedDays ? allMetrics : dailyTotals,
+      metrics: rangeCoversAllRecordedDays ? persistedAllMetrics : dailyTotals,
       topHours: topHoursFromBuckets(hourlyBuckets),
       hasHourlyDetail: hourlyBuckets.some(count => count > 0)
     };
-  }, [activeDays, allMetrics, range, stats, t]);
-
-  const dshRange = useMemo(() => {
-    if (!snapshot) return null;
-    if (range === "all") return snapshot.totals;
-    const keys = new Set(range === "today" ? [localDateKey()] : recentDateKeys(7));
-    const selectedDays = snapshot.daily.filter(day => keys.has(day.date));
-    const sessions = snapshot.sessions.filter(session => keys.has(localDateKey(session.lastActivity)));
-    const performance = rangeSessionMetrics(sessions);
-    const metrics = selectedDays.reduce((total, day) => ({
-      ...total,
-      turns: total.turns + day.turns,
-      steps: total.steps + day.steps,
-      llmMs: total.llmMs + day.llmMs,
-      toolMs: total.toolMs + day.toolMs
-    }), { turns: 0, steps: 0, llmMs: 0, toolMs: 0, ...performance });
-    return metrics;
-  }, [range, snapshot]);
+  }, [persistedAllMetrics, range, snapshot, stats]);
 
   const hoursTitle = range === "all"
     ? t("stats.historicalActiveHours", "历史高频时段")
     : range === "today"
       ? t("stats.todayActiveHours", "今日高频时段")
       : t("stats.sevenDayActiveHours", "7日高频时段");
-  const dshMetrics = dshRange;
+  const dshMetrics = snapshot ? rangeData.metrics : null;
   const averageTtft = dshMetrics?.ttftSteps ? dshMetrics.ttftMs / dshMetrics.ttftSteps : 0;
   const decodeRate = dshMetrics?.decodeMs ? dshMetrics.decodeTokens / (dshMetrics.decodeMs / 1_000) : 0;
-  const runtimeRows = dshMetrics ? [
-    { label: zh ? "对话轮次" : "Conversation turns", value: formatCount(dshMetrics.turns, numberLocale) },
-    { label: zh ? "执行步骤" : "Execution steps", value: formatCount(dshMetrics.steps, numberLocale) },
-    { label: zh ? "活跃耗时" : "Active time", value: formatPreciseDuration(dshMetrics.llmMs + dshMetrics.toolMs, zh), meta: zh ? "模型 + 工具" : "Model + tools" },
-    { label: zh ? "模型耗时" : "Model time", value: formatPreciseDuration(dshMetrics.llmMs, zh) },
-    { label: zh ? "平均首字" : "Average TTFT", value: formatPreciseDuration(averageTtft, zh), meta: zh ? `${dshMetrics.ttftSteps} 次采样` : `${dshMetrics.ttftSteps} samples` },
-    { label: zh ? "解码速度" : "Decode rate", value: decodeRate ? `${decodeRate.toFixed(1)} tok/s` : "—" }
-  ] : [];
-  const rangeRows = [
+  const countRows = [
     { label: t("stats.events", "事件"), value: formatCount(rangeData.metrics.events, numberLocale) },
     { label: t("stats.toolCalls", "工具调用"), value: formatCount(rangeData.metrics.toolCalls, numberLocale) },
     { label: t("stats.sessions", "会话"), value: formatCount(rangeData.metrics.sessions, numberLocale) },
     { label: t("stats.permissionRequests", "权限请求"), value: formatCount(rangeData.metrics.permissionRequests, numberLocale) },
-    { label: t("stats.errors", "错误次数"), value: formatCount(rangeData.metrics.errors, numberLocale) },
-    ...runtimeRows
+    { label: t("stats.errors", "错误次数"), value: formatCount(rangeData.metrics.failedToolCalls ?? rangeData.metrics.errors, numberLocale) }
   ];
+  const performancePairs = dshMetrics ? [
+    [
+      { label: zh ? "对话轮次" : "Conversation turns", value: formatCount(dshMetrics.turns, numberLocale) },
+      { label: zh ? "执行步骤" : "Execution steps", value: formatCount(dshMetrics.steps, numberLocale) }
+    ],
+    [
+      { label: zh ? "处理总耗时" : "Total processing time", value: formatPreciseDuration(dshMetrics.llmMs + dshMetrics.toolMs, zh) },
+      { label: zh ? "模型响应耗时" : "Model response time", value: formatPreciseDuration(dshMetrics.llmMs, zh) }
+    ],
+    [
+      { label: zh ? "平均首字延迟" : "Average first-token latency", value: formatMilliseconds(averageTtft, numberLocale), meta: zh ? `${dshMetrics.ttftSteps} 次采样` : `${dshMetrics.ttftSteps} samples` },
+      { label: zh ? "生成速度" : "Generation speed", value: decodeRate ? (zh ? `${decodeRate.toFixed(1)} token/秒` : `${decodeRate.toFixed(1)} tok/s`) : "—" }
+    ]
+  ] : [];
 
   return (
     <div className="stats-workbench dsh-runtime-panel">
@@ -216,7 +251,7 @@ export function StatsPanel({ stats, snapshot = null }: {
         <header className="stats-board-head">
           <div className="stats-runtime-inline">
             <span>{t("stats.totalRuntime", "累计运行")}</span>
-            <strong>{formatDuration(liveTotalRuntime)}</strong>
+            <strong>{formatDuration(liveTotalRuntime, zh)}</strong>
             <small>{days > 0 ? `${formatCount(days, numberLocale)} ${t("stats.activeDays", "活跃天数")} · ${t("stats.dailyAvg", "日均调用")} ${formatCount(avgDaily, numberLocale)}` : t("stats.noData", "无数据")}</small>
           </div>
         </header>
@@ -230,8 +265,19 @@ export function StatsPanel({ stats, snapshot = null }: {
               ))}
             </div>
           </header>
-          <div className="stats-range-metrics">
-            {rangeRows.map(row => <article key={row.label} className="stats-range-metric"><span>{row.label}</span><strong>{row.value}</strong>{row.meta ? <small>{row.meta}</small> : null}</article>)}
+          <div className="stats-range-dashboard">
+            <div className="stats-range-metrics stats-count-metrics">
+              {countRows.map(row => <article key={row.label} className="stats-range-metric"><span>{row.label}</span><strong>{row.value}</strong></article>)}
+            </div>
+            {performancePairs.length > 0 ? (
+              <div className="stats-performance-metrics">
+                {performancePairs.map((pair, index) => (
+                  <article className="stats-performance-pair" key={index}>
+                    {pair.map(metric => <div className="stats-performance-value" key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong>{metric.meta ? <small>{metric.meta}</small> : null}</div>)}
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 

@@ -34,6 +34,72 @@
   white-space: nowrap;
 }
 
+.dsh-runtime-panel .stats-range-dashboard {
+  min-width: 0;
+}
+
+.dsh-runtime-panel .stats-count-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dsh-runtime-panel .stats-count-metrics::after {
+  display: none;
+}
+
+.stats-performance-metrics {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--workbench-line);
+}
+
+.stats-performance-pair {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stats-performance-pair + .stats-performance-pair {
+  border-left: 1px solid var(--workbench-line);
+}
+
+.stats-performance-value {
+  min-width: 0;
+  min-height: 72px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 11px 14px;
+}
+
+.stats-performance-value + .stats-performance-value {
+  border-left: 1px solid color-mix(in srgb, var(--workbench-line) 68%, transparent);
+}
+
+.stats-performance-value span,
+.stats-performance-value small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--workbench-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-performance-value strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stats-range-metric strong.bad,
 .trajectory-tool-row b.bad {
   color: var(--coral);
@@ -192,4 +258,11 @@
   .trajectory-session-row { grid-template-columns: minmax(150px, 1.4fr) minmax(140px, 1fr) 58px 30px; }
   .trajectory-session-header > span:nth-child(2),
   .trajectory-session-row > div:nth-child(2) { display: none; }
+}
+
+@media (max-width: 720px) {
+  .dsh-runtime-panel .stats-count-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dsh-runtime-panel .stats-count-metrics .stats-range-metric:nth-child(5) { grid-column: 1 / -1; border-left: 0; }
+  .stats-performance-metrics { grid-template-columns: 1fr; }
+  .stats-performance-pair + .stats-performance-pair { border-top: 1px solid var(--workbench-line); border-left: 0; }
 }
