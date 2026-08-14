@@ -68,7 +68,7 @@ export function getDshPluginStatus(options: DshPluginManagerOptions): HookStatus
   };
 }
 
-function defaultRunner(command: string, args: string[]): Promise<void> {
+export function runDshCommand(command: string, args: string[]): Promise<void> {
   const invocation = resolveNpxInvocation(command, args);
   return new Promise((resolve, reject) => {
     execFile(invocation.command, invocation.args, { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 }, error => {
@@ -102,7 +102,7 @@ function operationPreflight(options: DshPluginManagerOptions): HookOperationResu
   return null;
 }
 
-export async function installDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = defaultRunner): Promise<HookOperationResult> {
+export async function installDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const preflight = operationPreflight(options);
   if (preflight) return preflight;
   try {
@@ -116,7 +116,7 @@ export async function installDshPlugin(options: DshPluginManagerOptions, run: Ds
   }
 }
 
-export async function removeDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = defaultRunner): Promise<HookOperationResult> {
+export async function removeDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const statusBefore = getDshPluginStatus(options);
   if (!options.npxPath) {
     return { success: false, errorKind: "npx-missing", error: "npx was not found on PATH", status: statusBefore };

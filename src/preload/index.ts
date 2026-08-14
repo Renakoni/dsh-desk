@@ -9,6 +9,7 @@ import type {
   ClaudeProfilesSnapshot,
   ClaudeResourcesSnapshot
 } from "../shared/claudeProfiles";
+import type { DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput } from "../shared/dshPlugins";
 
 export interface PetSnapshot {
   state: PetState;
@@ -130,6 +131,13 @@ contextBridge.exposeInMainWorld("companion", {
   revealDshSession: (filePath: string) => ipcRenderer.invoke("companion:reveal-dsh-session", filePath),
   getMonitors: () => ipcRenderer.invoke("companion:get-monitors"),
   getPlugins: () => ipcRenderer.invoke("companion:get-plugins"),
+  listDshPlugins: () => ipcRenderer.invoke("companion:dsh-plugins-list"),
+  getDshPluginMarketplace: (force?: boolean) => ipcRenderer.invoke("companion:dsh-plugins-marketplace", force),
+  setDshPluginEnabled: (input: DshPluginStateInput) => ipcRenderer.invoke("companion:dsh-plugins-set-enabled", input),
+  installDshMarketplacePlugin: (input: DshPluginInstallInput) => ipcRenderer.invoke("companion:dsh-plugins-install", input),
+  removeDshPluginPackage: (input: DshPluginRemoveInput) => ipcRenderer.invoke("companion:dsh-plugins-remove", input),
+  listDshSkills: () => ipcRenderer.invoke("companion:dsh-skills-list"),
+  revealDshSkill: (path: string) => ipcRenderer.invoke("companion:dsh-skill-reveal", path),
   getClaudeResources: (force?: boolean) => ipcRenderer.invoke("companion:get-claude-resources", force) as Promise<ClaudeResourcesSnapshot>,
   getClaudeProfiles: (force?: boolean) => ipcRenderer.invoke("companion:get-claude-profiles", force) as Promise<ClaudeProfilesSnapshot>,
   saveClaudeProfile: (input: ClaudeProfileSaveInput) => ipcRenderer.invoke("companion:save-claude-profile", input) as Promise<ClaudeProfileMutationResult>,

@@ -91,8 +91,11 @@ import {
   switchDshProvider
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
+import type { DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput } from "../shared/dshPlugins";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
+import { DshPluginCatalog } from "./dshPluginCatalog";
+import { canRevealDshSkillPath, scanDshSkills } from "./dshSkillCatalog";
 
 type DailyRuntimeStats = {
   events: number;
@@ -3612,6 +3615,14 @@ function dshPluginManagerOptions(): DshPluginManagerOptions {
   };
 }
 
+function dshPluginCatalog() {
+  return new DshPluginCatalog({
+    dshHome: resolveDshHome(),
+    npxPath: findNpxExecutable(),
+    marketplaceCachePath: join(app.getPath("userData"), "awesome-dsh-plugin-cache.json")
+  });
+}
+
 function getHooksStatus(): HookStatus {
   return getDshPluginStatus(dshPluginManagerOptions());
 }
@@ -4014,6 +4025,18 @@ app.whenReady().then(() => {
     discardDownloadedPetPack(String(zipPath ?? ""), petDownloadsDir()));
   ipcMain.handle("companion:get-monitors", () => screen.getAllDisplays().map(display => ({ id: String(display.id), label: display.label || `Display ${display.id}`, bounds: display.bounds, workArea: display.workArea, scaleFactor: display.scaleFactor })));
   ipcMain.handle("companion:get-plugins", () => companionSettings.customPlugins);
+  ipcMain.handle("companion:dsh-plugins-list", () => dshPluginCatalog().snapshot());
+  ipcMain.handle("companion:dsh-plugins-marketplace", (_, force?: boolean) => dshPluginCatalog().marketplace(Boolean(force)));
+  ipcMain.handle("companion:dsh-plugins-set-enabled", (_, input: DshPluginStateInput) => dshPluginCatalog().setEnabled(input));
+  ipcMain.handle("companion:dsh-plugins-install", (_, input: DshPluginInstallInput) => dshPluginCatalog().install(input));
+  ipcMain.handle("companion:dsh-plugins-remove", (_, input: DshPluginRemoveInput) => dshPluginCatalog().remove(input));
+  ipcMain.handle("companion:dsh-skills-list", () => scanDshSkills());
+  ipcMain.handle("companion:dsh-skill-reveal", (_, targetPath: unknown) => {
+    if (typeof targetPath !== "string" || !canRevealDshSkillPath(targetPath)) return false;
+    if (existsSync(targetPath) && statSync(targetPath).isFile()) shell.showItemInFolder(targetPath);
+    else void shell.openPath(targetPath);
+    return true;
+  });
   ipcMain.handle("companion:get-claude-resources", (_, force?: boolean) => getClaudeResourcesSnapshot(Boolean(force)));
   ipcMain.handle("companion:get-claude-profiles", (_, force?: boolean) => getClaudeProfilesSnapshot(Boolean(force)));
   ipcMain.handle("companion:save-claude-profile", (_, input: unknown) => saveClaudeProfileFromRenderer(input));
