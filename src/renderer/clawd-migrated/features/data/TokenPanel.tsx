@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { EMBEDDED_CURRENCY_RATES, formatUsdInCurrency, isDisplayCurrency, type DisplayCurrency } from "../../../../shared/currency";
 import { useI18n } from "../../useI18n";
 
 function localDateKey(timestamp = Date.now()) {
@@ -186,7 +187,7 @@ function writeCachedTokenStats(data: unknown) {
   }
 }
 
-export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveContent?: boolean }) {
+export function TokenPanel({ hideSensitiveContent = false, displayCurrency = "CNY" }: { hideSensitiveContent?: boolean; displayCurrency?: DisplayCurrency }) {
   const { t, locale } = useI18n();
   const zh = locale === "zh";
   const [stats, setStats] = useState<any | null>(() => readCachedTokenStats());
@@ -213,8 +214,10 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
 
   useEffect(() => { void load(false); }, []);
 
+  const currency = isDisplayCurrency(displayCurrency) ? displayCurrency : "CNY";
+  const exchangeRates = stats?.exchangeRates?.rates ?? EMBEDDED_CURRENCY_RATES;
   const fmtTok = (n: number) => n >= 1_000_000_000 ? (n / 1_000_000_000).toFixed(2) + "B" : n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + "M" : n >= 1_000 ? (n / 1_000).toFixed(1) + "K" : String(Math.round(n || 0));
-  const fmtUsd = (n: number) => n > 0 ? `$${n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)}` : "—";
+  const fmtCost = (n: number) => formatUsdInCurrency(n, currency, exchangeRates, zh ? "zh-CN" : "en-US");
   const fmtPct = (n: number) => `${Math.round((n || 0) * 100)}%`;
   const fmtCount = (n: number) => Math.round(n || 0).toLocaleString(zh ? "zh-CN" : "en-US");
 
@@ -275,7 +278,7 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
     ? `${stats.projectTotals.length} ${zh ? "个项目" : "projects"} · ${fmtTok((stats.projectTotals ?? []).reduce((sum: number, project: any) => sum + (project.totalTokens ?? 0), 0))}`
     : t("stats.noData", "无数据");
   const highRequestSummary = highRequestRows.length > 0
-    ? `${highRequestRows.length} ${zh ? "条请求" : "requests"} · ${fmtTok(highRequestRows.reduce((sum: number, request: any) => sum + (request.totalTokens ?? 0), 0))} · ${fmtUsd(highRequestRows.reduce((sum: number, request: any) => sum + (request.costUsd ?? 0), 0))}`
+    ? `${highRequestRows.length} ${zh ? "条请求" : "requests"} · ${fmtTok(highRequestRows.reduce((sum: number, request: any) => sum + (request.totalTokens ?? 0), 0))} · ${fmtCost(highRequestRows.reduce((sum: number, request: any) => sum + (request.costUsd ?? 0), 0))}`
     : t("stats.noData", "无数据");
   const scannedAt = Number.isFinite(Number(stats.lastScannedAt)) ? Number(stats.lastScannedAt) : Date.now();
   const scanSummary = Object.entries({ sessions: stats.totalSessions ?? 0, requests: stats.totalRequests ?? 0, time: new Date(scannedAt).toLocaleString(zh ? "zh-CN" : "en-US") }).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), t("stats.scanSummary", "Scanned {sessions} sessions · {requests} requests · {time}"));
@@ -290,7 +293,10 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
   const pricingUpdated = pricing.updatedAt > 0
     ? new Date(pricing.updatedAt).toLocaleString(zh ? "zh-CN" : "en-US")
     : t("stats.pricingBundled", "随应用提供");
-  const pricingNote = `${t("stats.pricing", "价格")} · ${pricingSourceNames[pricing.source] ?? pricing.source} · ${pricingUpdated}${pricing.stale ? ` · ${t("stats.pricingStale", "使用最后可用价格")}` : ""}`;
+  const exchange = stats.exchangeRates;
+  const exchangeUpdated = exchange?.updatedAt > 0 ? new Date(exchange.updatedAt).toLocaleString(zh ? "zh-CN" : "en-US") : t("stats.pricingBundled", "随应用提供");
+  const exchangeNote = currency === "USD" ? "" : ` · ${zh ? "汇率" : "FX"} ${exchange?.source === "exchange-api" ? "Exchange API" : (zh ? "内置兜底" : "bundled fallback")} · ${exchangeUpdated}${exchange?.stale ? ` · ${t("stats.pricingStale", "使用最后可用价格")}` : ""}`;
+  const pricingNote = `${t("stats.pricing", "价格")} · ${pricingSourceNames[pricing.source] ?? pricing.source} · ${pricingUpdated}${pricing.stale ? ` · ${t("stats.pricingStale", "使用最后可用价格")}` : ""} · ${currency}${exchangeNote}`;
 
   return (
     <div key="token-loaded" className="token-panel token-panel-rich">
@@ -304,11 +310,11 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
 
       <TokenOverviewBlock
         primaryLabel={t("stats.totalSpend", "Total spend")}
-        primaryValue={fmtUsd(stats.totalCostUsd ?? 0)}
+        primaryValue={fmtCost(stats.totalCostUsd ?? 0)}
         primaryMeta={`${fmtTok(stats.totalTokens ?? 0)} ${t("stats.tokens", "Tokens")} · ${fmtCount(stats.totalRequests ?? 0)} ${t("stats.requests", "Requests")}`}
         periodMetrics={[
-          { label: t("stats.tokenToday", "Today"), value: fmtTok(todayTokens), meta: fmtUsd(todayCost) },
-          { label: t("stats.token30d", "30 days"), value: fmtTok(last30), meta: fmtUsd(last30Cost) },
+          { label: t("stats.tokenToday", "Today"), value: fmtTok(todayTokens), meta: fmtCost(todayCost) },
+          { label: t("stats.token30d", "30 days"), value: fmtTok(last30), meta: fmtCost(last30Cost) },
           { label: t("stats.cacheHit", "Cache hit"), value: fmtPct(stats.cacheHitRatio ?? 0) }
         ]}
         breakdownMetrics={[
@@ -348,7 +354,7 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
                     key={cell.date}
                     className={`token-heat-cell level-${cell.level}${cell.future ? " future" : ""}`}
                     style={{ gridColumn: `${cell.week + 1}`, gridRow: `${cell.day + 1}` }}
-                    title={cell.future ? undefined : `${cell.date}: ${cell.requests} ${zh ? "次请求" : "requests"} · ${fmtTok(cell.tokens)} · ${fmtUsd(cell.costUsd)}`}
+                    title={cell.future ? undefined : `${cell.date}: ${cell.requests} ${zh ? "次请求" : "requests"} · ${fmtTok(cell.tokens)} · ${fmtCost(cell.costUsd)}`}
                     aria-label={cell.future ? undefined : `${cell.date}: ${cell.requests} ${zh ? "次请求" : "requests"}`}
                   />
                 ))}
@@ -367,11 +373,11 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
         {last30Entries.length === 0 ? <p className="note">{t("stats.noData", "无数据")}</p> : (
           <div className="token-daily-bars">
             {last30Entries.slice(0, 30).map((d: any) => (
-              <div key={d.date} className="token-daily-bar-row" title={`${d.date}: ${fmtTok(d.totalTokens)} · ${fmtUsd(d.costUsd ?? 0)}`}>
+              <div key={d.date} className="token-daily-bar-row" title={`${d.date}: ${fmtTok(d.totalTokens)} · ${fmtCost(d.costUsd ?? 0)}`}>
                 <time>{d.date.slice(5)}</time>
                 <div><span style={{ width: `${Math.max(3, ((d.totalTokens ?? 0) / maxDailyTokens) * 100)}%` }} /></div>
                 <b>{fmtTok(d.totalTokens ?? 0)}</b>
-                <em>{fmtUsd(d.costUsd ?? 0)}</em>
+                <em>{fmtCost(d.costUsd ?? 0)}</em>
               </div>
             ))}
           </div>
@@ -390,7 +396,7 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
               <div key={m.model} className="token-table-row">
                 <span className="token-model-name" title={m.model}>{m.model}</span>
                 <span>{fmtTok(m.totalTokens)}</span>
-                <span>{m.priced ? fmtUsd(m.costUsd) : "—"}</span>
+                <span>{m.priced ? fmtCost(m.costUsd) : "—"}</span>
                 <span>{m.requestCount}</span>
                 <span>{fmtPct(m.cacheHitRatio)}</span>
               </div>
@@ -407,7 +413,7 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
               <article key={p.projectPath} className="token-project-row">
                 <div><strong title={hideSensitiveContent ? undefined : p.projectName}>{hideSensitiveContent ? `${t("stats.project", "项目")} ${index + 1}` : p.projectName}</strong><p title={hideSensitiveContent ? undefined : p.projectPath}>{hideSensitiveContent ? t("privacy.detailsHidden", "详情已隐藏") : p.projectPath}</p></div>
                 <span>{fmtTok(p.totalTokens)}</span>
-                <span>{fmtUsd(p.costUsd)}</span>
+                <span>{fmtCost(p.costUsd)}</span>
                 <time>{p.lastActivity ? new Date(p.lastActivity).toLocaleDateString(zh ? "zh-CN" : "en-US") : "—"}</time>
               </article>
             ))}
@@ -425,7 +431,7 @@ export function TokenPanel({ hideSensitiveContent = false }: { hideSensitiveCont
                 <span><b>{new Date(r.timestamp).toLocaleString(zh ? "zh-CN" : "en-US")}</b><small title={hideSensitiveContent ? undefined : r.projectName}>{hideSensitiveContent ? t("privacy.detailsHidden", "详情已隐藏") : r.projectName}</small></span>
                 <span className="token-model-name" title={r.model}>{r.model}</span>
                 <span>{fmtTok(r.totalTokens)}</span>
-                <span>{r.priced ? fmtUsd(r.costUsd) : "—"}</span>
+                <span>{r.priced ? fmtCost(r.costUsd) : "—"}</span>
               </div>
             ))}
           </div>

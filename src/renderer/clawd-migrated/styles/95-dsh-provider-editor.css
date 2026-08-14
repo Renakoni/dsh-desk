@@ -1,4 +1,4 @@
-/* === Claude provider editor (cc-switch parity UI) ===
+/* === DSH provider editor (original Chara Desk routing UI) ===
    Everything inside .ccs-fullscreen-panel rides the --ccs-editor-* variable
    system defined in 160-theme-alignment.css (light/dark) and the Minato Aqua
    theme layer, so no per-theme colors belong here. */
@@ -254,6 +254,25 @@
   gap: 8px;
 }
 
+.dsh-probe-result {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dsh-probe-result svg { flex: 0 0 auto; }
+.dsh-probe-result strong { font-weight: 600; }
+.dsh-probe-result span { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsh-probe-result.info { color: oklch(58% 0.14 250); background: oklch(58% 0.14 250 / 0.08); }
+.dsh-probe-result.warning { color: oklch(62% 0.14 82); background: oklch(62% 0.14 82 / 0.09); }
+.dsh-probe-result.error { color: oklch(58% 0.17 28); background: oklch(58% 0.17 28 / 0.08); }
+
 /* Label + "manage & speed test" toggle on one line (cc-switch parity), so the
    candidate list stays tucked away instead of dumped inline. */
 .ccs-field-head {
@@ -381,6 +400,11 @@
   gap: 10px;
 }
 
+.ccs-model-mapping-head > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
 .ccs-model-mapping-actions {
   display: inline-flex;
   align-items: center;
@@ -418,6 +442,41 @@
   grid-template-columns: 104px 1fr minmax(0, 1fr) 96px;
   gap: 8px;
   align-items: center;
+}
+
+.dsh-model-table .ccs-model-row {
+  grid-template-columns: minmax(170px, 1.35fr) minmax(150px, 1fr) 96px 96px 32px;
+}
+
+.dsh-model-delete {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--ccs-editor-muted);
+  background: transparent;
+}
+
+.dsh-model-delete:hover {
+  color: oklch(58% 0.13 24);
+  border-color: var(--ccs-editor-line-strong);
+  background: var(--ccs-editor-hover);
+}
+
+.dsh-catalog-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  color: var(--ccs-editor-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dsh-catalog-preview span {
+  overflow-wrap: anywhere;
 }
 
 .ccs-model-row-head {
@@ -462,6 +521,7 @@
 
 @media (max-width: 760px) {
   .ccs-model-row { grid-template-columns: 1fr; }
+  .dsh-model-table .ccs-model-row { grid-template-columns: 1fr; }
   .ccs-model-row-head,
   .ccs-model-onem-empty { display: none; }
 }

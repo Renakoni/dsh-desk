@@ -40,6 +40,7 @@ const EXPECTED_CANONICAL_KEYS = [
   "theme",
   "uiStyle",
   "language",
+  "displayCurrency",
   "notificationRules",
   "customPlugins",
   "sound",

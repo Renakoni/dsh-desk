@@ -8,7 +8,7 @@
 @import './styles/70-settings-layout-refresh.css';
 @import './styles/80-settings-animations.css';
 @import './styles/90-routing.css';
-@import './styles/95-claude-provider-editor.css';
+@import './styles/95-dsh-provider-editor.css';
 @import './styles/100-token-sound-git.css';
 @import './styles/110-liquid-ui.css';
 @import './styles/120-dark-theme.css';
@@ -17,5 +17,4 @@
 @import './styles/150-settings-workbench.css';
 @import './styles/160-theme-alignment.css';
 @import './styles/170-minato-aqua-theme.css';
-@import './styles/180-dsh-providers.css';
 @import './styles/190-dsh-analytics.css';

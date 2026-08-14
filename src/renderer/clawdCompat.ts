@@ -96,6 +96,7 @@ type CompanionApi = {
   exportEventHistoryFile: () => Promise<void>;
   getDataDirectory: () => Promise<string>;
   openDataDirectory: () => Promise<{ ok: boolean; error?: string }>;
+  revealDshSession: (filePath: string) => Promise<boolean>;
   getMonitors: () => Promise<unknown[]>;
   getPlugins: () => Promise<unknown[]>;
   getClaudeResources: (force?: boolean) => Promise<ClaudeResourcesSnapshot>;
@@ -137,8 +138,11 @@ type CompanionApi = {
   listDshProviders: () => Promise<DshProviderListResult>;
   saveDshProvider: (provider: DshProviderSaveInput) => Promise<DshProviderMutationResult>;
   deleteDshProvider: (id: string) => Promise<DshProviderMutationResult>;
+  duplicateDshProvider: (id: string) => Promise<DshProviderMutationResult>;
+  reorderDshProviders: (ids: string[]) => Promise<DshProviderMutationResult>;
+  setDshProviderEnabled: (id: string, enabled: boolean) => Promise<DshProviderMutationResult>;
   switchDshProvider: (id: string, model?: string) => Promise<DshProviderSwitchResult>;
-  probeDshProvider: (payload: { id?: string; baseUrl?: string; protocol?: DshProviderProtocol | "deepseek-chat-completions"; apiKey?: string }) => Promise<DshProviderProbeResult>;
+  probeDshProvider: (payload: { id?: string; baseUrl?: string; protocol?: DshProviderProtocol | "deepseek-chat-completions"; apiKey?: string; mode?: "connectivity" | "models" }) => Promise<DshProviderProbeResult>;
   openClaudeProviderTerminal: (providerId: string, cwd: string) => Promise<{ ok: boolean; command: string; error?: string }>;
   pickTerminalDirectory: () => Promise<string | null>;
   onCcSwitchChanged: (callback: Listener<unknown>) => Unsubscribe;
@@ -222,6 +226,10 @@ const mockDshProviders: DshProvider[] = [{
     { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", contextWindow: 1_000_000 },
     { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", contextWindow: 1_000_000 }
   ],
+  modelsInherited: true,
+  catalogProvider: true,
+  enabled: true,
+  runtimeActive: true,
   credentialRef: "DEEPSEEK_API_KEY",
   hasCredential: false,
   isOfficial: true,
@@ -504,19 +512,27 @@ export function installClawdCompat() {
     installUpdate: async () => undefined,
     getUpdateStatus: async () => updateStatus(),
     getAppVersion: async () => "0.0.0-dev",
-    getTokenStats: async () => ({ sessions: [], daily: [], modelTotals: [], dailyTotals: [], projectTotals: [], recentRequests: [], totalTokens: 0, totalCostUsd: 0, totalSessions: 0, totalRequests: 0, cacheHitRatio: 0, pricing: { source: "embedded", sources: ["embedded"], updatedAt: 0, stale: true }, lastScannedAt: Date.now(), scanning: false }),
+    getTokenStats: async () => ({ sessions: [], daily: [], modelTotals: [], dailyTotals: [], projectTotals: [], recentRequests: [], totalTokens: 0, totalCostUsd: 0, totalSessions: 0, totalRequests: 0, cacheHitRatio: 0, pricing: { source: "embedded", sources: ["embedded"], updatedAt: 0, stale: true }, exchangeRates: { base: "USD", rates: { CNY: 7, USD: 1, EUR: 0.9 }, source: "embedded", updatedAt: 0, stale: true }, lastScannedAt: Date.now(), scanning: false }),
     getDshAnalytics: async () => ({
-      totals: { sessions: 7, turns: 9, steps: 42, toolCalls: 78, failedToolCalls: 2, llmMs: 409_422, toolMs: 665_000, ttftMs: 103_000, ttftSteps: 42, decodeMs: 306_422, decodeTokens: 42_117 },
+      totals: { events: 171, sessions: 7, turns: 9, steps: 42, toolCalls: 78, failedToolCalls: 2, permissionRequests: 3, permissionApproved: 2, permissionDenied: 1, llmMs: 409_422, toolMs: 665_000, ttftMs: 103_000, ttftSteps: 42, decodeMs: 306_422, decodeTokens: 42_117 },
       daily: Array.from({ length: 28 }, (_, index) => ({
         date: new Date(Date.now() - (27 - index) * 86_400_000).toISOString().slice(0, 10),
+        events: index % 5 === 0 ? 0 : 7 + (index % 11),
         sessions: index % 5 === 0 ? 0 : 1 + (index % 3),
         turns: index % 5 === 0 ? 0 : 1 + (index % 4),
         steps: index % 5 === 0 ? 0 : 3 + (index % 8),
         toolCalls: index % 5 === 0 ? 0 : 4 + (index % 13),
         failedToolCalls: index === 19 ? 1 : 0,
+        permissionRequests: index === 22 ? 3 : 0,
+        permissionApproved: index === 22 ? 2 : 0,
+        permissionDenied: index === 22 ? 1 : 0,
         totalTokens: index % 5 === 0 ? 0 : 12_000 + index * 1_700,
         llmMs: index % 5 === 0 ? 0 : 18_000 + index * 400,
-        toolMs: index % 5 === 0 ? 0 : 9_000 + index * 700
+        toolMs: index % 5 === 0 ? 0 : 9_000 + index * 700,
+        ttftMs: index % 5 === 0 ? 0 : 1_800 + index * 25,
+        ttftSteps: index % 5 === 0 ? 0 : 3 + (index % 8),
+        decodeMs: index % 5 === 0 ? 0 : 16_200 + index * 375,
+        decodeTokens: index % 5 === 0 ? 0 : 1_500 + index * 120
       })),
       tools: [
         { name: "pwsh", calls: 21, errors: 0, durationMs: 87_000 },
@@ -529,6 +545,10 @@ export function installClawdCompat() {
         { sessionId: "demo-1", title: "调用全部工具能力排查", filePath: "Development session", projectPath: "E:\\claude-plugins\\pet\\deepseek-harness", projectName: "deepseek-harness", provider: "deepseek-official", model: "deepseek-v4-flash", createdAt: Date.now() - 12_000_000, lastActivity: Date.now() - 90_000, durationMs: 11_999_150, turns: 1, steps: 16, toolCalls: 46, failedToolCalls: 2, llmMs: 228_611, toolMs: 646_116, ttftMs: 42_147, ttftSteps: 16, decodeMs: 186_464, decodeTokens: 24_725, inputTokens: 35_290, outputTokens: 24_725, cacheReadTokens: 540_032, cacheWriteTokens: 0, contextWindow: 1_000_000, pressureTokens: 48_067, projectedTokens: 48_515, systemTokens: 1_559, toolsTokens: 6_670, messageTokens: 36_874 },
         { sessionId: "demo-2", title: "Provider route smoke test", filePath: "Development session", projectPath: "E:\\claude-plugins\\pet\\deepseek-harness", projectName: "deepseek-harness", provider: "deepseek-official", model: "deepseek-v4-pro", createdAt: Date.now() - 3_600_000, lastActivity: Date.now() - 900_000, durationMs: 2_700_000, turns: 2, steps: 3, toolCalls: 4, failedToolCalls: 0, llmMs: 10_817, toolMs: 17, ttftMs: 7_632, ttftSteps: 3, decodeMs: 3_185, decodeTokens: 500, inputTokens: 1_200, outputTokens: 500, cacheReadTokens: 8_400, cacheWriteTokens: 0, contextWindow: 1_000_000, pressureTokens: 9_600, projectedTokens: 10_200, systemTokens: 1_500, toolsTokens: 6_600, messageTokens: 2_100 }
       ],
+      hourlyActivity: new Array(24).fill(0),
+      dailyHourlyActivity: {},
+      dailyToolUsage: {},
+      dailyTools: {},
       sessionRoot: "Development sessions",
       lastScannedAt: Date.now()
     }),
@@ -551,6 +571,7 @@ export function installClawdCompat() {
     exportEventHistoryFile: async () => undefined,
     getDataDirectory: async () => "Development data",
     openDataDirectory: async () => ({ ok: true }),
+    revealDshSession: async () => false,
     getMonitors: async () => [],
     getPlugins: async () => [],
     getClaudeResources: async () => ({ summary: { skills: 0, plugins: 0, mcp: 0 }, skills: [], plugins: [], mcp: [], scannedAt: Date.now(), paths: { claudeDir: "~/.claude", claudeJson: "~/.claude.json" } }),
@@ -701,20 +722,35 @@ export function installClawdCompat() {
     listDshProviders: async () => ({
       ok: true,
       providers: mockDshProviders,
+      catalogProviders: [],
+      runtimeAvailable: false,
       defaultProvider: mockDshProviders.find(provider => provider.isDefault)?.id ?? "deepseek-official",
       defaultModel: mockDshProviders.find(provider => provider.isDefault)?.defaultModel ?? "deepseek-v4-flash"
     }),
     saveDshProvider: async input => {
+      const id = input.id?.trim() || `route-${Date.now().toString(36)}`;
       const next: DshProvider = {
         ...input,
-        baseUrl: input.baseUrl,
-        credentialRef: input.id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${input.id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
+        id,
+        baseUrl: input.baseUrl ?? "",
+        models: input.models ?? [],
+        modelsInherited: input.inheritModels === true || input.models === undefined,
+        catalogProvider: input.catalogProvider === true,
+        enabled: input.enabled !== false,
+        runtimeActive: input.enabled !== false,
+        credentialRef: id === "deepseek-official" ? "DEEPSEEK_API_KEY" : `CHARA_DSH_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`,
+        ...(input.apiKey ? { apiKey: input.apiKey } : {}),
         hasCredential: !!input.apiKey,
-        isOfficial: input.id === "deepseek-official",
-        isDefault: mockDshProviders.some(provider => provider.id === input.id && provider.isDefault)
+        isOfficial: id === "deepseek-official",
+        isDefault: mockDshProviders.some(provider => provider.id === id && provider.isDefault)
       };
-      const index = mockDshProviders.findIndex(provider => provider.id === input.id);
-      if (index >= 0) mockDshProviders[index] = { ...mockDshProviders[index], ...next, hasCredential: next.hasCredential || mockDshProviders[index].hasCredential };
+      const index = mockDshProviders.findIndex(provider => provider.id === id);
+      if (index >= 0) mockDshProviders[index] = {
+        ...mockDshProviders[index],
+        ...next,
+        apiKey: next.apiKey || mockDshProviders[index].apiKey,
+        hasCredential: next.hasCredential || mockDshProviders[index].hasCredential
+      };
       else mockDshProviders.push(next);
       return { ok: true, provider: index >= 0 ? mockDshProviders[index] : next };
     },
@@ -724,9 +760,36 @@ export function installClawdCompat() {
       mockDshProviders.splice(index, 1);
       return { ok: true };
     },
-    switchDshProvider: async (id, model) => {
+    duplicateDshProvider: async id => {
+      const source = mockDshProviders.find(provider => provider.id === id);
+      if (!source || source.isOfficial) return { ok: false, error: "Provider cannot be copied" };
+      const copy = { ...structuredClone(source), id: `${id}-copy`, name: `${source.name} Copy`, isDefault: false };
+      mockDshProviders.push(copy);
+      return { ok: true, provider: copy };
+    },
+    reorderDshProviders: async ids => {
+      mockDshProviders.sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id));
+      return { ok: true };
+    },
+    setDshProviderEnabled: async (id, enabled) => {
       const provider = mockDshProviders.find(item => item.id === id);
       if (!provider) return { ok: false, error: "Provider not found" };
+      provider.enabled = enabled;
+      provider.runtimeActive = enabled;
+      if (!enabled && provider.isDefault) {
+        const fallback = mockDshProviders.find(item => item.id !== id && item.enabled);
+        provider.isDefault = false;
+        provider.defaultModel = undefined;
+        if (fallback) {
+          fallback.isDefault = true;
+          fallback.defaultModel = fallback.models[0]?.id;
+        }
+      }
+      return { ok: true, provider };
+    },
+    switchDshProvider: async (id, model) => {
+      const provider = mockDshProviders.find(item => item.id === id);
+      if (!provider || !provider.enabled) return { ok: false, error: "Provider not found or disabled" };
       const selectedModel = model || provider.models[0]?.id;
       mockDshProviders.forEach(item => { item.isDefault = item.id === id; item.defaultModel = item.id === id ? selectedModel : undefined; });
       return { ok: true, provider: id, model: selectedModel };

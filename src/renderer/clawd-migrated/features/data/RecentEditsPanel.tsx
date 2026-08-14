@@ -87,8 +87,8 @@ export function RecentEditsPanel({ hideSensitiveContent = false, onOpenSession }
                   <button
                     type="button"
                     className="recent-edit-jump"
-                    title={zh ? "查看所属会话" : "View session"}
-                    aria-label={zh ? "查看所属会话" : "View session"}
+                    title={zh ? "定位会话日志" : "Reveal session log"}
+                    aria-label={zh ? "定位会话日志" : "Reveal session log"}
                     onClick={() => onOpenSession(edit.sessionFilePath)}
                   >
                     <ArrowUpRight size={14} />

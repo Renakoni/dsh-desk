@@ -2,6 +2,7 @@
 import React from "react";
 import { Wrench, RefreshCw } from "lucide-react";
 import { useI18n } from "../../useI18n";
+import { DshRoutingPanel } from "../../components/dsh-routing/DshRoutingPanel";
 import { HooksManager, type HookStatus } from "../../components/hooks/HooksManager";
 import { hookOutcomeMessage, type HookOperationOutcome } from "../../components/hooks/hookOutcome";
 import { deriveConnectionState } from "./connectionState";
@@ -72,6 +73,7 @@ export function OverviewSection({
 
   return (
     <section className="overview-workbench">
+      <DshRoutingPanel />
       {connection.error ? <section className="connection-error"><Wrench size={18} />{hideSensitive ? redactSensitiveText(connection.error, locale) : connection.error}</section> : null}
 
       <section className="overview-connection">
@@ -109,8 +111,6 @@ export function OverviewSection({
           </div>
         ) : mode === "notConfigured" ? (
           <div className="connection-onboarding">
-            <h3>{t("main.connectTitle", "连接 DeepSeek Harness")}</h3>
-            <p>{t("connection.onboardingBody", "将 DSH Desk 插件安装到 DSH 的 Web 和 Headless profiles。")}</p>
             <HooksManager compact status={hookStatus} onOperationComplete={onOperationComplete} />
             {/* Discover an externally-installed config without leaving this view. */}
             {recheckButton}

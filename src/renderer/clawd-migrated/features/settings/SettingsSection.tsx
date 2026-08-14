@@ -1,13 +1,12 @@
 // @ts-nocheck
 import React from "react";
-import { Bell, Bot, Cable, Cpu, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
+import { Bell, Bot, Cable, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
 import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
 import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
 import { NotificationRulesPanel } from "../../components/NotificationRulesPanel";
-import { GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
+import { CurrencySegmented, GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
 import { ConnectionManagement } from "./ConnectionManagement";
-import { DshProvidersPanel } from "./DshProvidersPanel";
 import { PetThemeGrid } from "./PetThemeGrid";
 import { getPetTheme } from "../../utils/petThemes";
 
@@ -85,7 +84,6 @@ export function SettingsSection({
         <nav className="settings-subtabs">
           {[
             { id: "general", icon: <Gauge size={14} />, label: t("settings.subtabs.general", "通用") },
-            { id: "models", icon: <Cpu size={14} />, label: t("settings.subtabs.models", "模型") },
             { id: "pet", icon: <Bot size={14} />, label: t("settings.subtabs.pet", "桌宠") },
             { id: "notifications", icon: <Bell size={14} />, label: t("settings.subtabs.notifications", "通知") },
             { id: "about", icon: <Sparkles size={14} />, label: t("settings.subtabs.about", "关于") }
@@ -127,6 +125,7 @@ export function SettingsSection({
           </GroupCard>
 
           <GroupCard icon={<Shield size={18} />} title={t("sections.contentDisplay", "内容显示")}>
+            <CurrencySegmented value={settings.displayCurrency ?? "CNY"} onChange={displayCurrency => updateSettings({ displayCurrency })} />
             <Toggle label={t("appearance.hideSensitiveContent", "隐藏路径与内容")} checked={settings.hideSensitiveContent} onChange={hideSensitiveContent => updateSettings({ hideSensitiveContent })} />
             <p className="note">{t("appearance.hideSensitiveContentNote", "在界面和系统通知中隐藏文件路径与消息内容；仅改变屏幕上的显示，不会删除或加密任何本地数据。权限确认仍会显示决策所需的详情。")}</p>
           </GroupCard>
@@ -159,8 +158,6 @@ export function SettingsSection({
             />
           </GroupCard>
         </>}
-
-        {activeSettingsSubsection === "models" && <DshProvidersPanel />}
 
         {activeSettingsSubsection === "pet" && <>
           <GroupCard icon={<Bot size={18} />} title={t("sections.petDisplay", "桌宠显示")}>

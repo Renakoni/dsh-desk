@@ -1,13 +1,21 @@
 export type DshTrajectoryDay = {
   date: string;
+  events: number;
   sessions: number;
   turns: number;
   steps: number;
   toolCalls: number;
   failedToolCalls: number;
+  permissionRequests: number;
+  permissionApproved: number;
+  permissionDenied: number;
   totalTokens: number;
   llmMs: number;
   toolMs: number;
+  ttftMs: number;
+  ttftSteps: number;
+  decodeMs: number;
+  decodeTokens: number;
 };
 
 export type DshToolMetric = {
@@ -51,11 +59,15 @@ export type DshSessionMetric = {
 };
 
 export type DshAnalyticsTotals = {
+  events: number;
   sessions: number;
   turns: number;
   steps: number;
   toolCalls: number;
   failedToolCalls: number;
+  permissionRequests: number;
+  permissionApproved: number;
+  permissionDenied: number;
   llmMs: number;
   toolMs: number;
   ttftMs: number;
@@ -69,6 +81,10 @@ export type DshAnalyticsSnapshot = {
   daily: DshTrajectoryDay[];
   tools: DshToolMetric[];
   sessions: DshSessionMetric[];
+  hourlyActivity: number[];
+  dailyHourlyActivity: Record<string, number[]>;
+  dailyToolUsage: Record<string, Record<string, number>>;
+  dailyTools: Record<string, DshToolMetric[]>;
   sessionRoot: string;
   lastScannedAt: number;
 };
@@ -76,11 +92,15 @@ export type DshAnalyticsSnapshot = {
 export function emptyDshAnalyticsSnapshot(sessionRoot = "", scannedAt = Date.now()): DshAnalyticsSnapshot {
   return {
     totals: {
+      events: 0,
       sessions: 0,
       turns: 0,
       steps: 0,
       toolCalls: 0,
       failedToolCalls: 0,
+      permissionRequests: 0,
+      permissionApproved: 0,
+      permissionDenied: 0,
       llmMs: 0,
       toolMs: 0,
       ttftMs: 0,
@@ -91,6 +111,10 @@ export function emptyDshAnalyticsSnapshot(sessionRoot = "", scannedAt = Date.now
     daily: [],
     tools: [],
     sessions: [],
+    hourlyActivity: new Array(24).fill(0),
+    dailyHourlyActivity: {},
+    dailyToolUsage: {},
+    dailyTools: {},
     sessionRoot,
     lastScannedAt: scannedAt
   };

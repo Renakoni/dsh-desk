@@ -1,18 +1,16 @@
-// Ported from cc-switch v3.16.3 claudeProviderPresets.ts (MIT). Keep data-only.
-import type { ClaudeProviderConfig } from "../../../shared/events";
-
+// Ported from cc-switch v3.16.3 provider presets (MIT). Keep data-only.
 export interface ProviderTemplateValue {
   label: string;
   placeholder?: string;
   defaultValue?: string;
 }
 
-export interface ClaudeProviderPreset {
+export interface LegacyProviderPreset {
   name: string;
   websiteUrl: string;
   apiKeyUrl?: string;
-  settingsConfig: ClaudeProviderConfig["settingsConfig"];
-  category?: ClaudeProviderConfig["category"];
+  settingsConfig: { env?: Record<string, string>; [key: string]: unknown };
+  category?: string;
   isOfficial?: boolean;
   isPartner?: boolean;
   apiKeyField?: "ANTHROPIC_AUTH_TOKEN" | "ANTHROPIC_API_KEY";
@@ -24,18 +22,7 @@ export interface ClaudeProviderPreset {
   iconColor?: string;
 }
 
-export const claudeProviderPresets: ClaudeProviderPreset[] = [
-  {
-    name: "Claude Official",
-    websiteUrl: "https://www.anthropic.com/claude-code",
-    settingsConfig: {
-      env: {},
-    },
-    isOfficial: true,
-    category: "official",
-    icon: "anthropic",
-    iconColor: "#D4915D",
-  },
+export const legacyProviderPresets: LegacyProviderPreset[] = [
   {
     name: "胜算云",
     websiteUrl: "https://www.shengsuanyun.com/?from=CH_4HHXMRYF",
@@ -160,27 +147,6 @@ export const claudeProviderPresets: ClaudeProviderPreset[] = [
     category: "aggregator",
     isPartner: true,
     icon: "unity2",
-  },
-  {
-    name: "Gemini Native",
-    websiteUrl: "https://ai.google.dev/gemini-api",
-    apiKeyUrl: "https://aistudio.google.com/app/apikey",
-    apiKeyField: "ANTHROPIC_API_KEY",
-    settingsConfig: {
-      env: {
-        ANTHROPIC_BASE_URL: "https://generativelanguage.googleapis.com",
-        ANTHROPIC_API_KEY: "",
-        ANTHROPIC_MODEL: "gemini-3.5-flash",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: "gemini-3.5-flash",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "gemini-3.5-flash",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "gemini-3.5-flash",
-      },
-    },
-    category: "third_party",
-    apiFormat: "gemini_native",
-    endpointCandidates: ["https://generativelanguage.googleapis.com"],
-    icon: "gemini",
-    iconColor: "#4285F4",
   },
   {
     name: "DeepSeek",
@@ -1031,66 +997,5 @@ export const claudeProviderPresets: ClaudeProviderPreset[] = [
     category: "cn_official",
     icon: "xiaomimimo",
     iconColor: "#000000",
-  },
-  {
-    name: "AWS Bedrock (AKSK)",
-    websiteUrl: "https://aws.amazon.com/bedrock/",
-    settingsConfig: {
-      env: {
-        ANTHROPIC_BASE_URL: "https://bedrock-runtime.${AWS_REGION}.amazonaws.com",
-        AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}",
-        AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}",
-        AWS_REGION: "${AWS_REGION}",
-        ANTHROPIC_MODEL: "global.anthropic.claude-opus-4-8",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL:
-          "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "global.anthropic.claude-sonnet-4-6",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "global.anthropic.claude-opus-4-8",
-        CLAUDE_CODE_USE_BEDROCK: "1",
-      },
-    },
-    category: "cloud_provider",
-    templateValues: {
-      AWS_REGION: {
-        label: "AWS Region",
-        placeholder: "us-west-2",
-      },
-      AWS_ACCESS_KEY_ID: {
-        label: "Access Key ID",
-        placeholder: "AKIA...",
-      },
-      AWS_SECRET_ACCESS_KEY: {
-        label: "Secret Access Key",
-        placeholder: "your-secret-key",
-      },
-    },
-    icon: "aws",
-    iconColor: "#FF9900",
-  },
-  {
-    name: "AWS Bedrock (API Key)",
-    websiteUrl: "https://aws.amazon.com/bedrock/",
-    settingsConfig: {
-      apiKey: "",
-      env: {
-        ANTHROPIC_BASE_URL: "https://bedrock-runtime.${AWS_REGION}.amazonaws.com",
-        AWS_REGION: "${AWS_REGION}",
-        ANTHROPIC_MODEL: "global.anthropic.claude-opus-4-8",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL:
-          "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "global.anthropic.claude-sonnet-4-6",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "global.anthropic.claude-opus-4-8",
-        CLAUDE_CODE_USE_BEDROCK: "1",
-      },
-    },
-    category: "cloud_provider",
-    templateValues: {
-      AWS_REGION: {
-        label: "AWS Region",
-        placeholder: "us-west-2",
-      },
-    },
-    icon: "aws",
-    iconColor: "#FF9900",
   },
 ];

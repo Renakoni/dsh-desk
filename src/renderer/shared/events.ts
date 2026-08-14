@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import type { PetPackManifest } from "../../shared/petPack";
+import type { CurrencyRatesStatus, DisplayCurrency } from "../../shared/currency";
 
 export interface ClaudeSessionIndexItem {
   sessionId: string;
@@ -309,6 +310,7 @@ export interface CompanionSettings {
   theme: "light" | "dark" | "system";
   uiStyle: "classic" | "liquid";
   language: "auto" | "zh" | "en";
+  displayCurrency: DisplayCurrency;
   notificationRules: NotificationRule[];
   customPlugins: CustomPlugin[];
   sound: SoundSettings;
@@ -443,6 +445,7 @@ export interface TokenStats {
     updatedAt: number;
     stale: boolean;
   };
+  exchangeRates: CurrencyRatesStatus;
   lastScannedAt: number;
   scanning: boolean;
 }
@@ -634,6 +637,7 @@ export const defaultSettings: CompanionSettings = {
   theme: "system",
   uiStyle: "classic",
   language: "auto",
+  displayCurrency: "CNY",
   notificationRules: [
     { eventType: "done", enabled: true, playSound: true },
     { eventType: "error", enabled: true, playSound: true },
