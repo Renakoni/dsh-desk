@@ -31,7 +31,7 @@ import {
   X
 } from "lucide-react";
 import type { CompanionEvent, CompanionSettings, FeedbackMode, PetState, PermissionRequest, ToolName, UpdateStatus } from "../shared/events";
-import { defaultSettings, stateFromEvent, type EventHistoryEntry, type NotificationRule } from "../shared/events";
+import { defaultSettings, defaultStats, stateFromEvent, type EventHistoryEntry, type NotificationRule } from "../shared/events";
 import { redactDisplayEvent } from "../../shared/privacy";
 import "./styles.css";
 import { I18nProvider, useI18n, detectLocale } from "./useI18n";
@@ -733,7 +733,7 @@ function SettingsApp() {
   });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installing, setInstalling] = useState(false);
-  const [persistedStats, setPersistedStats] = useState<any>(null);
+  const [persistedStats, setPersistedStats] = useState<any>(defaultStats);
   const [onboardingDone, setOnboardingDone] = useState(() => {
     try { return localStorage.getItem("clawd-onboarding-done") === "1"; } catch { return true; }
   });
