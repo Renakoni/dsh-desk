@@ -1,11 +1,28 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listDshProviders, saveDshProvider } from "../src/main/dshProviderStore";
+import { resolveDshHome } from "../src/main/dshPaths";
 import { DshSessionScanner, isDshSessionLogPath } from "../src/main/dshSessionScanner";
 
 describe("DSH_HOME resolution", () => {
+  it("matches DSH normalization for blank, home-relative, and relative environment values", () => {
+    const previous = process.env.DSH_HOME;
+    try {
+      process.env.DSH_HOME = "   ";
+      expect(resolveDshHome()).toBe(resolve(homedir(), ".dsh"));
+      process.env.DSH_HOME = "~/custom-dsh";
+      expect(resolveDshHome()).toBe(resolve(homedir(), "custom-dsh"));
+      process.env.DSH_HOME = ".\\relative-dsh";
+      expect(resolveDshHome()).toBe(resolve(".\\relative-dsh"));
+      expect(resolveDshHome("~\\explicit-dsh")).toBe(resolve(homedir(), "explicit-dsh"));
+    } finally {
+      if (previous === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previous;
+    }
+  });
+
   it("uses one custom root for providers, analytics, and session reveal validation", async () => {
     const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-home-"));
     const previous = process.env.DSH_HOME;

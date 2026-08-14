@@ -4,6 +4,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OverviewSection } from "../src/renderer/clawd-migrated/features/overview/OverviewSection";
 import { SettingsSection } from "../src/renderer/clawd-migrated/features/settings/SettingsSection";
+import { ProviderEditPanel } from "../src/renderer/clawd-migrated/components/dsh-routing/ProviderEditPanel";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 import { defaultSettings } from "../src/renderer/shared/events";
 
@@ -122,6 +123,45 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByText("Upstream protocol")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
     expect((screen.getByRole("checkbox", { name: "Enable reasoning levels" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("preserves mixed model reasoning declarations on a no-op edit", () => {
+    const onSave = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <ProviderEditPanel
+          open
+          mode="edit"
+          provider={{
+            id: "mixed-gateway",
+            name: "Mixed Gateway",
+            baseUrl: "https://gateway.example/v1",
+            protocol: "openai-completions",
+            models: [
+              { id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } },
+              { id: "plain-model" }
+            ],
+            inheritModels: false,
+            catalogProvider: false,
+            enabled: true
+          }}
+          catalogProviders={[]}
+          onSave={onSave}
+          onClose={vi.fn()}
+          onProbe={vi.fn(async () => ({ ok: true }))}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledOnce();
+    const draft = onSave.mock.calls[0][0];
+    expect(draft.reasoningEnabled).toBeUndefined();
+    expect(draft.models).toEqual([
+      expect.objectContaining({ id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } }),
+      expect.not.objectContaining({ reasoningEfforts: expect.anything() })
+    ]);
   });
 
   it("reveals the stored key and classifies connection feedback", async () => {

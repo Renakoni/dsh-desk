@@ -170,6 +170,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     if (!provider.models?.some(model => model.reasoningEfforts !== undefined)) return undefined;
     return !provider.models.every(model => model.reasoningEfforts === false);
   });
+  const [reasoningTouched, setReasoningTouched] = useState(mode === "add");
   const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -192,6 +193,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
     setReasoningEnabled(true);
+    setReasoningTouched(true);
     setPreferredModel(preset.preferredModel ?? preset.models[0]?.id ?? "");
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
@@ -213,6 +215,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setModels([]);
     setCatalogModels([]);
     setReasoningEnabled(true);
+    setReasoningTouched(true);
     setPreferredModel("");
     setBaseUrl("");
     setProtocol("openai-completions");
@@ -263,11 +266,12 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     const managesReasoning = !official
       && !catalogProvider
       && (protocol === "openai-completions" || protocol === "openai-responses");
+    const applyReasoningChoice = mode === "add" || reasoningTouched;
     const normalizedModels = models.map(model => {
       const normalized = { ...model, id: model.id.trim() };
-      if (!managesReasoning) return normalized;
+      if (!managesReasoning || !applyReasoningChoice) return normalized;
       if (reasoningEnabled === false) return { ...normalized, reasoningEfforts: false as const };
-      return reasoningEnabled === true && normalized.reasoningEfforts === undefined
+      return reasoningEnabled === true && (normalized.reasoningEfforts === undefined || normalized.reasoningEfforts === false)
         ? { ...normalized, reasoningEfforts: { ...DEFAULT_DSH_REASONING_EFFORTS } }
         : normalized;
     }).filter(model => model.id);
@@ -283,7 +287,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       inheritModels,
       catalogProvider,
       enabled: provider.enabled !== false,
-      ...(managesReasoning && reasoningEnabled !== undefined ? { reasoningEnabled } : {}),
+      ...(managesReasoning && applyReasoningChoice && reasoningEnabled !== undefined ? { reasoningEnabled } : {}),
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
@@ -465,7 +469,14 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
 
                   {!official && !catalogProvider && !inheritModels && protocol !== "anthropic-messages" ? (
                     <label className="ccs-inline-check-row">
-                      <input type="checkbox" checked={reasoningEnabled === true} onChange={event => setReasoningEnabled(event.target.checked)} />
+                      <input
+                        type="checkbox"
+                        checked={reasoningEnabled === true}
+                        onChange={event => {
+                          setReasoningEnabled(event.target.checked);
+                          setReasoningTouched(true);
+                        }}
+                      />
                       <span>{t("dshProviders.reasoningEfforts", "启用思考强度")}</span>
                     </label>
                   ) : null}

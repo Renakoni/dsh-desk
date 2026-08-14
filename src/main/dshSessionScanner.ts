@@ -67,7 +67,7 @@ type ToolCall = {
   args: JsonObject | null;
 };
 
-type DayState = Omit<DshTrajectoryDay, "sessions" | "ttftMs" | "ttftSteps" | "decodeMs" | "decodeTokens"> & {
+type DayState = Omit<DshTrajectoryDay, "sessions"> & {
   sessionIds: Set<string>;
   hourlyActivity: number[];
   toolUsage: Record<string, number>;
@@ -124,6 +124,15 @@ function parseArguments(value: unknown): JsonObject | null {
   } catch {
     return null;
   }
+}
+
+function isDshTokenDelta(value: unknown): boolean {
+  const chunk = objectValue(value);
+  if (!chunk) return false;
+  const type = stringValue(chunk.type);
+  if (type === "text-delta" || type === "reasoning-delta") return stringValue(chunk.text) !== "";
+  if (type === "tool-call-delta") return stringValue(chunk.argumentsDelta) !== "" || typeof chunk.name === "string";
+  return false;
 }
 
 function lineCount(value: string): number {
@@ -183,6 +192,10 @@ function createDay(date: string): DayState {
     totalTokens: 0,
     llmMs: 0,
     toolMs: 0,
+    ttftMs: 0,
+    ttftSteps: 0,
+    decodeMs: 0,
+    decodeTokens: 0,
     hourlyActivity: new Array(24).fill(0),
     toolUsage: {},
     toolMetrics: {}
@@ -201,8 +214,13 @@ class SessionAccumulator {
   private steps = 0;
   private llmMs = 0;
   private toolMs = 0;
+  private ttftMs = 0;
+  private ttftSteps = 0;
+  private decodeMs = 0;
+  private decodeTokens = 0;
   private failedToolCalls = 0;
   private readonly stepStarts = new Map<string, number>();
+  private readonly firstTokenTimes = new Map<string, number>();
   private readonly calls = new Map<string, ToolCall>();
   private readonly requests: DshScannedTokenRequest[] = [];
   private readonly edits: ParsedEditRecord[] = [];
@@ -253,12 +271,24 @@ class SessionAccumulator {
       return;
     }
     if (type === "step/start") {
-      this.stepStarts.set(`${countValue(data.turn)}:${countValue(data.step)}`, time);
+      const stepKey = `${countValue(data.turn)}:${countValue(data.step)}`;
+      this.stepStarts.set(stepKey, time);
+      this.firstTokenTimes.delete(stepKey);
+      return;
+    }
+    if (type === "assistant/chunk") {
+      const stepKey = `${countValue(data.turn)}:${countValue(data.step)}`;
+      if (time > 0 && this.stepStarts.has(stepKey) && !this.firstTokenTimes.has(stepKey) && isDshTokenDelta(data.chunk)) {
+        this.firstTokenTimes.set(stepKey, time);
+      }
       return;
     }
     if (type === "step/end") {
       this.steps++;
       if (time > 0) this.day(time).steps++;
+      const stepKey = `${countValue(data.turn)}:${countValue(data.step)}`;
+      this.stepStarts.delete(stepKey);
+      this.firstTokenTimes.delete(stepKey);
       return;
     }
     if (type === "assistant/message") {
@@ -296,10 +326,10 @@ class SessionAccumulator {
       steps: this.steps,
       llmMs: this.llmMs,
       toolMs: this.toolMs,
-      ttftMs: 0,
-      ttftSteps: 0,
-      decodeMs: 0,
-      decodeTokens: 0
+      ttftMs: this.ttftMs,
+      ttftSteps: this.ttftSteps,
+      decodeMs: this.decodeMs,
+      decodeTokens: this.decodeTokens
     };
     const requestTokens = this.requests.reduce((totals, request) => ({
       inputTokens: totals.inputTokens + request.inputTokens,
@@ -345,6 +375,36 @@ class SessionAccumulator {
   }
 
   private consumeAssistant(row: JsonObject, data: JsonObject, time: number): void {
+    const stepKey = `${countValue(data.turn)}:${countValue(data.step)}`;
+    const startedAt = this.stepStarts.get(stepKey);
+    const firstTokenAt = this.firstTokenTimes.get(stepKey);
+    const durationMs = startedAt !== undefined && time >= startedAt ? time - startedAt : undefined;
+    if (durationMs !== undefined) this.llmMs += durationMs;
+    if (startedAt !== undefined && firstTokenAt !== undefined) {
+      const ttftMs = Math.max(0, firstTokenAt - startedAt);
+      this.ttftMs += ttftMs;
+      this.ttftSteps++;
+      if (time > 0) {
+        const day = this.day(time);
+        day.ttftMs += ttftMs;
+        day.ttftSteps++;
+      }
+      const usage = objectValue(data.usage);
+      const outputTokens = usage?.outputTokens;
+      if (typeof outputTokens === "number" && Number.isFinite(outputTokens) && outputTokens >= 0) {
+        const decodeMs = Math.max(0, time - firstTokenAt);
+        this.decodeMs += decodeMs;
+        this.decodeTokens += outputTokens;
+        if (time > 0) {
+          const day = this.day(time);
+          day.decodeMs += decodeMs;
+          day.decodeTokens += outputTokens;
+        }
+      }
+    }
+    this.stepStarts.delete(stepKey);
+    this.firstTokenTimes.delete(stepKey);
+
     const usage = objectValue(data.usage);
     if (!usage || !this.sessionId) return;
     const inputTokens = countValue(usage.inputTokens);
@@ -353,11 +413,6 @@ class SessionAccumulator {
     const cacheCreationTokens = countValue(usage.cacheWriteTokens);
     const totalTokens = inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens;
     if (totalTokens === 0) return;
-    const turn = countValue(data.turn);
-    const step = countValue(data.step);
-    const startedAt = this.stepStarts.get(`${turn}:${step}`);
-    const durationMs = startedAt !== undefined && time >= startedAt ? time - startedAt : undefined;
-    if (durationMs !== undefined) this.llmMs += durationMs;
     const request: DshScannedTokenRequest = {
       id: `${this.sessionId}:${countValue(row.seq)}`,
       sessionId: this.sessionId,
@@ -662,6 +717,10 @@ function mergeDay(target: Map<string, DayState>, incoming: DayState): void {
   current.totalTokens += incoming.totalTokens;
   current.llmMs += incoming.llmMs;
   current.toolMs += incoming.toolMs;
+  current.ttftMs += incoming.ttftMs;
+  current.ttftSteps += incoming.ttftSteps;
+  current.decodeMs += incoming.decodeMs;
+  current.decodeTokens += incoming.decodeTokens;
   incoming.hourlyActivity.forEach((count, hour) => { current.hourlyActivity[hour] += count; });
   for (const [tool, count] of Object.entries(incoming.toolUsage)) {
     current.toolUsage[tool] = (current.toolUsage[tool] ?? 0) + count;
@@ -685,28 +744,10 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
     for (const tool of scan.tools.values()) mergeTool(tools, tool);
   }
   const sessions = scans.map(scan => scan.session).sort((left, right) => right.lastActivity - left.lastActivity);
-  const sessionMetricsByDay = new Map<string, {
-    sessions: number;
-    ttftMs: number;
-    ttftSteps: number;
-    decodeMs: number;
-    decodeTokens: number;
-  }>();
+  const sessionsByDay = new Map<string, number>();
   for (const session of sessions) {
     const key = dateKey(session.lastActivity);
-    const metrics = sessionMetricsByDay.get(key) ?? {
-      sessions: 0,
-      ttftMs: 0,
-      ttftSteps: 0,
-      decodeMs: 0,
-      decodeTokens: 0
-    };
-    metrics.sessions++;
-    metrics.ttftMs += session.ttftMs;
-    metrics.ttftSteps += session.ttftSteps;
-    metrics.decodeMs += session.decodeMs;
-    metrics.decodeTokens += session.decodeTokens;
-    sessionMetricsByDay.set(key, metrics);
+    sessionsByDay.set(key, (sessionsByDay.get(key) ?? 0) + 1);
     if (!days.has(key)) days.set(key, createDay(key));
   }
   const daily = [...days.values()].sort((left, right) => left.date.localeCompare(right.date));
@@ -747,11 +788,10 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
       decodeTokens: 0
     }),
     daily: daily.map(day => {
-      const sessionMetrics = sessionMetricsByDay.get(day.date);
       return {
         date: day.date,
         events: day.events,
-        sessions: sessionMetrics?.sessions ?? 0,
+        sessions: sessionsByDay.get(day.date) ?? 0,
         turns: day.turns,
         steps: day.steps,
         toolCalls: day.toolCalls,
@@ -762,10 +802,10 @@ function analyticsFrom(scans: RawSessionScan[], sessionRoot: string, scannedAt: 
         totalTokens: day.totalTokens,
         llmMs: day.llmMs,
         toolMs: day.toolMs,
-        ttftMs: sessionMetrics?.ttftMs ?? 0,
-        ttftSteps: sessionMetrics?.ttftSteps ?? 0,
-        decodeMs: sessionMetrics?.decodeMs ?? 0,
-        decodeTokens: sessionMetrics?.decodeTokens ?? 0
+        ttftMs: day.ttftMs,
+        ttftSteps: day.ttftSteps,
+        decodeMs: day.decodeMs,
+        decodeTokens: day.decodeTokens
       };
     }),
     tools: [...tools.values()].sort((left, right) => right.calls - left.calls || right.durationMs - left.durationMs || left.name.localeCompare(right.name)),
