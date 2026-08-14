@@ -19,6 +19,15 @@ describe("scanCache serialize/parse (durable per-file scan cache)", () => {
     expect(out.get("/b.jsonl")).toEqual(entry(333, 44, { sessionId: "s", messageCount: 3 }));
   });
 
+  it("round-trips optional content fingerprints", () => {
+    const fingerprint = "a".repeat(64);
+    const text = serializeScanCache(V, [["/a.jsonl", { ...entry(1, 2, { x: 1 }), fingerprint }]]);
+    expect(parseScanCache(text, V).get("/a.jsonl")).toEqual({
+      ...entry(1, 2, { x: 1 }),
+      fingerprint
+    });
+  });
+
   it("writes a version header line so a schema bump can invalidate the whole cache", () => {
     const text = serializeScanCache(V, [["/a.jsonl", entry(1, 2, { x: 1 })]]);
     expect(text.split("\n")[0]).toBe(JSON.stringify({ v: V }));
@@ -27,6 +36,12 @@ describe("scanCache serialize/parse (durable per-file scan cache)", () => {
   it("returns an EMPTY map on a version mismatch — forces a full rescan, never serves stale data", () => {
     const text = serializeScanCache(V, [["/a.jsonl", entry(1, 2, { x: 1 })]]);
     expect(parseScanCache(text, V + 1).size).toBe(0);
+  });
+
+  it("supports string versions for derivation-specific cache invalidation", () => {
+    const text = serializeScanCache("2:timezone:zone-a", [["/a.jsonl", entry(1, 2, { x: 1 })]]);
+    expect(parseScanCache(text, "2:timezone:zone-a").size).toBe(1);
+    expect(parseScanCache(text, "2:timezone:zone-b").size).toBe(0);
   });
 
   it("returns empty when the header line is corrupt (whole sidecar is untrusted)", () => {

@@ -160,7 +160,7 @@ describe("DSH native session scanning", () => {
     const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-persisted-projection-"));
     const storageDir = join(dshHome, "storages");
     mkdirSync(storageDir, { recursive: true });
-    const sessionPath = writeSimpleSession(dshHome, "session-one", "Raw title");
+    writeSimpleSession(dshHome, "session-one", "Raw title");
     const cachePath = join(dshHome, "scan-cache.ndjson");
     const projectionPath = join(storageDir, "session_projcache.json");
     const initialProjection = projectionCache();
@@ -168,10 +168,8 @@ describe("DSH native session scanning", () => {
     writeFileSync(projectionPath, JSON.stringify(initialProjection));
 
     expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath).scan())).toEqual(["Projected one"]);
-    const metadata = statSync(sessionPath);
-    writeFileSync(sessionPath, "x".repeat(metadata.size));
-    utimesSync(sessionPath, metadata.atime, metadata.mtime);
-    expect(statSync(sessionPath).mtimeMs).toBe(metadata.mtimeMs);
+    const persistedEntry = JSON.parse(readFileSync(cachePath, "utf8").trimEnd().split("\n")[1]) as { h?: string };
+    expect(persistedEntry.h).toMatch(/^[a-f0-9]{64}$/);
     const updatedProjection = projectionCache();
     updatedProjection.tables.sessions["session-one"].rows.title.val = "Projected two";
     writeFileSync(projectionPath, JSON.stringify(updatedProjection));
@@ -186,8 +184,8 @@ describe("DSH native session scanning", () => {
     await new DshSessionScanner(dshHome, cachePath).scan();
     replaceWithoutChangingFileKey(sessionPath, "Original", "Changed!");
     const lines = readFileSync(cachePath, "utf8").trimEnd().split("\n");
-    const header = JSON.parse(lines[0]) as { v: number };
-    lines[0] = JSON.stringify({ v: header.v + 1 });
+    const header = JSON.parse(lines[0]) as { v: string };
+    lines[0] = JSON.stringify({ v: `${header.v}:changed` });
     writeFileSync(cachePath, `${lines.join("\n")}\n`);
 
     expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath).scan())).toEqual(["Changed!"]);
@@ -212,7 +210,7 @@ describe("DSH native session scanning", () => {
     });
     writeFileSync(cachePath, `${lines.join("\n")}\n`);
 
-    expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath).scan())).toEqual(["Changed! A", "Original B"]);
+    expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath).scan())).toEqual(["Changed! A", "Changed! B"]);
   });
 
   it("reparses modified files, removes deleted entries, and preserves unchanged entries", async () => {
@@ -229,7 +227,7 @@ describe("DSH native session scanning", () => {
     rmSync(deletedPath);
 
     const result = await new DshSessionScanner(dshHome, cachePath).scan();
-    expect(sessionTitles(result)).toEqual(["Changed! A", "Original B"]);
+    expect(sessionTitles(result)).toEqual(["Changed! A", "Changed! B"]);
     expect(result.analytics.totals.sessions).toBe(2);
     const persistedPaths = readFileSync(cachePath, "utf8").trimEnd().split("\n").slice(1)
       .map(line => (JSON.parse(line) as { p: string }).p);
@@ -237,7 +235,7 @@ describe("DSH native session scanning", () => {
     expect(persistedPaths).not.toContain(deletedPath);
   });
 
-  it("force scanning bypasses both memory and persistent raw scan reuse", async () => {
+  it("detects same-key replacements before memory cache reuse and still supports force scanning", async () => {
     const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-cache-force-"));
     const sessionPath = writeSimpleSession(dshHome, "session-one", "Original");
     const cachePath = join(dshHome, "scan-cache.ndjson");
@@ -245,8 +243,22 @@ describe("DSH native session scanning", () => {
     await scanner.scan();
     replaceWithoutChangingFileKey(sessionPath, "Original", "Changed!");
 
-    expect(sessionTitles(await scanner.scan())).toEqual(["Original"]);
+    expect(sessionTitles(await scanner.scan())).toEqual(["Changed!"]);
     expect(sessionTitles(await scanner.scan(true))).toEqual(["Changed!"]);
+  });
+
+  it("invalidates persisted local-time buckets when the timezone changes", async () => {
+    const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-cache-timezone-"));
+    writeSimpleSession(dshHome, "session-one", "Real title");
+    const cachePath = join(dshHome, "scan-cache.ndjson");
+    await new DshSessionScanner(dshHome, cachePath, "zone-a").scan();
+    const lines = readFileSync(cachePath, "utf8").trimEnd().split("\n");
+    const entry = JSON.parse(lines[1]) as { d: { session: { title: string } } };
+    entry.d.session.title = "Cached title";
+    lines[1] = JSON.stringify(entry);
+    writeFileSync(cachePath, `${lines.join("\n")}\n`);
+
+    expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath, "zone-b").scan())).toEqual(["Real title"]);
   });
 
   it("matches a clean full scan after restoring many persisted entries", async () => {
