@@ -2,11 +2,11 @@
 //
 // The token/session scanners already reuse a file's parsed result in memory when its
 // (mtimeMs, size) are unchanged; that cache is lost on quit, so a cold start re-streams every
-// ~/.claude/projects/**/*.jsonl from scratch. Persisting the cache trades a few MB of disk for a
-// near-instant cold start: only files that actually changed get re-parsed.
+// local session log from scratch. Persisting the cache trades a few MB of disk for a near-instant
+// cold start: only files that actually changed get re-parsed.
 //
-// Correctness rests ENTIRELY on the (mtimeMs, size) key. Claude Code's session logs are
-// append-only, so any change flips the size and/or mtime and forces a re-parse — a persisted
+// Correctness rests ENTIRELY on the (mtimeMs, size) key. Supported session logs are append-only,
+// so any change flips the size and/or mtime and forces a re-parse — a persisted
 // entry is only ever reused for a byte-identical file. A version mismatch (scan logic/payload
 // shape changed), a corrupt line, or any read error makes the loader ignore the sidecar and the
 // scan runs in full — i.e. it degrades to today's behavior, never to wrong numbers.
