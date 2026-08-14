@@ -57,7 +57,7 @@ function modelsForPreset(preset: LegacyProviderPreset): DshProviderModel[] {
 }
 
 export function dshProviderPresets(catalog: DshCatalogProvider[]): DshProviderPreset[] {
-  return legacyProviderPresets.flatMap((preset, index) => {
+  return legacyProviderPresets.flatMap<DshProviderPreset>((preset, index) => {
     if (preset.name === "DeepSeek") return [];
     const protocol = protocolForPreset(preset);
     if (!protocol) return [];
