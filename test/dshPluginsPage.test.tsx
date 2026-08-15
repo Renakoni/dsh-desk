@@ -202,4 +202,20 @@ describe("DSH resource schemes page", () => {
     fireEvent.click(stars);
     expect(screen.getAllByRole("article")[0].textContent).toContain("Zulu Plugin");
   });
+
+  it("shows repository errors instead of presenting a failed Skill market as empty", async () => {
+    const mockApi = api();
+    mockApi.getDshSkillMarketplace = vi.fn(async () => ({
+      repos: [{ owner: "owner", name: "demo", branch: "main", enabled: true }],
+      skills: [],
+      scannedAt: 1,
+      errors: ["owner/demo: The request timed out."]
+    })) as unknown as typeof mockApi.getDshSkillMarketplace;
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skill 市场" }));
+    expect(await screen.findByText(/此市场暂时无法加载/)).not.toBeNull();
+    expect(screen.queryByText("没有匹配项")).toBeNull();
+  });
 });

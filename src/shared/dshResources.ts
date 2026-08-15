@@ -4,6 +4,7 @@ export type DshResourceItem = {
   id: string;
   kind: DshResourceKind;
   name: string;
+  packageName?: string;
   description?: string;
   detail?: string;
   enabled: boolean;

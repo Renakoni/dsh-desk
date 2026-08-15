@@ -39,6 +39,7 @@ export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | n
       id: `plugin:${entry.entryId}`,
       kind: "plugin" as const,
       name: entry.moduleName,
+      packageName: entry.moduleName,
       detail: entry.entryId,
       description: entry.fiberPhase === null ? "DSH Loader" : `DSH Loader - ${entry.fiberPhase}`,
       enabled: entry.enabled,

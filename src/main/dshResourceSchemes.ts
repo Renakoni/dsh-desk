@@ -108,6 +108,22 @@ function arraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function migrateRuntimePluginIds(ids: string[], inventory: DshResourceInventory): string[] {
+  const runtimeIdsByPackage = new Map<string, string[]>();
+  for (const resource of inventory.plugins) {
+    if (!resource.manageable && !resource.required) continue;
+    if (!resource.id.startsWith("plugin:") || resource.id.startsWith("plugin:package:")) continue;
+    const packageName = resource.packageName ?? resource.name;
+    const entries = runtimeIdsByPackage.get(packageName) ?? [];
+    entries.push(resource.id);
+    runtimeIdsByPackage.set(packageName, entries);
+  }
+  return [...new Set(ids.flatMap(id => {
+    if (!id.startsWith("plugin:package:")) return [id];
+    return runtimeIdsByPackage.get(id.slice("plugin:package:".length)) ?? [id];
+  }))];
+}
+
 function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory): DshResourceDrift {
   const schemeId = store.appliedSchemeId;
   const scheme = store.schemes.find(item => item.id === schemeId);
@@ -156,22 +172,21 @@ export class DshResourceSchemeManager {
     if (!all) return store;
     const skills = inventory.skills.map(item => item.id);
     const plugins = inventory.plugins.map(item => item.id);
-    const defaultScheme = store.schemes.find(scheme => scheme.id === DEFAULT_DSH_SCHEME_ID);
-    const migrateDefaultPlugins = inventory.runtimeConnected
-      && Boolean(defaultScheme)
-      && defaultScheme!.plugins.every(id => id.startsWith("plugin:package:"));
-    if (arraysEqual(all.skills, skills) && arraysEqual(all.plugins, plugins) && !migrateDefaultPlugins) return store;
+    const migrateRuntimePlugins = inventory.runtimeConnected;
     const timestamp = this.now();
     const next = {
       ...store,
       schemes: store.schemes.map(scheme => {
-        if (scheme.id === ALL_DSH_SCHEME_ID) return { ...scheme, skills, plugins, updatedAt: timestamp };
-        if (scheme.id === DEFAULT_DSH_SCHEME_ID && migrateDefaultPlugins) {
-          return { ...scheme, plugins: inventory.plugins.filter(item => item.enabled).map(item => item.id), updatedAt: timestamp };
+        const nextPlugins = migrateRuntimePlugins ? migrateRuntimePluginIds(scheme.plugins, inventory) : scheme.plugins;
+        if (scheme.id === ALL_DSH_SCHEME_ID) {
+          if (arraysEqual(scheme.skills, skills) && arraysEqual(scheme.plugins, plugins)) return scheme;
+          return { ...scheme, skills, plugins, updatedAt: timestamp };
         }
-        return scheme;
+        if (arraysEqual(scheme.plugins, nextPlugins)) return scheme;
+        return { ...scheme, plugins: nextPlugins, updatedAt: timestamp };
       })
     };
+    if (next.schemes.every((scheme, index) => scheme === store.schemes[index])) return store;
     saveStore(this.options.storePath, next);
     return next;
   }
@@ -281,7 +296,6 @@ export class DshResourceSchemeManager {
       if (resource.kind === "skill") {
         const enabled = new Set(snapshot.inventory.skills.filter(item => item.enabled).map(item => item.id));
         if (input.enabled) enabled.add(resource.id); else enabled.delete(resource.id);
-        applyDshSkillSelection(enabled, this.options.dshHome);
         this.options.setDesiredSkills(skillStates(snapshot.inventory.skills, enabled));
       } else {
         this.options.setDesiredPlugins(Object.fromEntries(snapshot.inventory.plugins

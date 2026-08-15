@@ -25,8 +25,8 @@ describe("DSH resource schemes", () => {
       dshHome: join(root, "dsh"),
       inventory: () => ({
         skills: [],
-        plugins: live
-          ? [{ id: "plugin:runtime-entry", kind: "plugin", name: "runtime", enabled: true, manageable: true }]
+      plugins: live
+          ? [{ id: "plugin:runtime-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true }]
           : [{ id: "plugin:package:demo", kind: "plugin", name: "demo", enabled: true, manageable: false }],
         scannedAt: 1,
         runtimeConnected: live
@@ -49,8 +49,9 @@ describe("DSH resource schemes", () => {
     writeSkill(dshHome, "second-skill");
     const desired: Array<Record<string, boolean>> = [];
     const desiredSkills: Array<Record<string, boolean>> = [];
+    let desiredSkillStates: Record<string, boolean> = {};
     const inventory = (): DshResourceInventory => ({
-      skills: scanDshSkills(dshHome, agentsHome).skills.map(skill => ({ id: skill.id, kind: "skill", name: skill.name, enabled: skill.enabled && skill.active, manageable: skill.manageable })),
+      skills: scanDshSkills(dshHome, agentsHome).skills.map(skill => ({ id: skill.id, kind: "skill", name: skill.name, enabled: Object.prototype.hasOwnProperty.call(desiredSkillStates, skill.name) ? desiredSkillStates[skill.name] : skill.enabled && skill.active, manageable: skill.manageable })),
       plugins: [
         { id: "plugin:core", kind: "plugin", name: "core", enabled: true, manageable: false, required: true },
         { id: "plugin:third", kind: "plugin", name: "third", enabled: true, manageable: true }
@@ -62,7 +63,7 @@ describe("DSH resource schemes", () => {
       storePath: join(root, "schemes.json"),
       dshHome,
       inventory,
-      setDesiredSkills: states => desiredSkills.push(states),
+      setDesiredSkills: states => { desiredSkills.push(states); desiredSkillStates = { ...states }; },
       setDesiredPlugins: states => desired.push(states),
       now: () => 10
     });
@@ -80,10 +81,64 @@ describe("DSH resource schemes", () => {
     expect(manager.setResourceState({ schemeId, resourceId: "skill:user-dsh:first-skill", enabled: false }).ok).toBe(true);
     expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.skills).toEqual(memberSkills);
     expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:user-dsh:first-skill")?.enabled).toBe(false);
+    expect(existsSync(join(dshHome, "skills", "first-skill", "SKILL.md"))).toBe(true);
+
+    desiredSkillStates = {};
+    const restarted = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      dshHome,
+      inventory,
+      setDesiredSkills: states => { desiredSkills.push(states); desiredSkillStates = { ...states }; },
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+    expect(restarted.snapshot().schemes.find(scheme => scheme.id === schemeId)?.skills).toEqual(memberSkills);
+    expect(restarted.snapshot().inventory.skills.find(skill => skill.id === "skill:user-dsh:first-skill")?.enabled).toBe(true);
+    expect(existsSync(join(dshHome, "skills", "first-skill", "SKILL.md"))).toBe(true);
 
     expect(manager.apply(schemeId).ok).toBe(true);
     expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:user-dsh:first-skill")?.enabled).toBe(true);
     expect(manager.setResourceState({ schemeId, resourceId: "plugin:core", enabled: false }).ok).toBe(false);
+  });
+
+  it("migrates package placeholders in every custom scheme without rebuilding selections", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-custom-runtime-"));
+    roots.push(root);
+    let live = false;
+    const inventory = () => ({
+      skills: [],
+      plugins: live
+        ? [
+          { id: "plugin:runtime-a", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: true, manageable: true },
+          { id: "plugin:runtime-b", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: true, manageable: true },
+          { id: "plugin:runtime-other", kind: "plugin" as const, name: "other", packageName: "other", enabled: true, manageable: true }
+        ]
+        : [
+          { id: "plugin:package:demo", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: true, manageable: false },
+          { id: "plugin:package:other", kind: "plugin" as const, name: "other", packageName: "other", enabled: true, manageable: false }
+        ],
+      scannedAt: 1,
+      runtimeConnected: live
+    });
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      dshHome: join(root, "dsh"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+    const created = manager.save({ name: "Focused", skills: [], plugins: ["plugin:package:demo"] });
+    expect(created.ok).toBe(true);
+    const schemeId = created.ok ? created.schemeId : "";
+    live = true;
+
+    const snapshot = manager.snapshot();
+    expect(snapshot.schemes.find(scheme => scheme.id === schemeId)?.plugins).toEqual(["plugin:runtime-a", "plugin:runtime-b"]);
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:runtime-a", "plugin:runtime-b", "plugin:runtime-other"]);
+    expect(manager.apply(schemeId).ok).toBe(true);
+    expect(desired.at(-1)).toEqual({ "runtime-a": true, "runtime-b": true, "runtime-other": false });
   });
 
   it("keeps a missing resource record when an existing scheme is saved", () => {

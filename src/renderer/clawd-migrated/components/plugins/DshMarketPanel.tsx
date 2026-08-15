@@ -30,17 +30,32 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
   const [skills, setSkills] = useState<DshSkillMarketplaceSnapshot | null>(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<Record<MarketTab, boolean>>({ plugins: false, skills: false });
   const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<Record<MarketTab, string>>({ plugins: "", skills: "" });
   const [repoManager, setRepoManager] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [repoBranch, setRepoBranch] = useState("");
   const [sort, setSort] = useState<MarketSort>({ key: "name", direction: "asc" });
 
+  const error = errors[tab];
+  const isLoading = loading[tab];
+
+  function setMarketError(market: MarketTab, message: string) {
+    setErrors(current => ({ ...current, [market]: message }));
+  }
+
+  function setSnapshotErrors(market: MarketTab, messages: string[], empty: boolean) {
+    if (messages.length === 0) { setMarketError(market, ""); return; }
+    const prefix = empty
+      ? t("dshResources.marketLoadFailed", locale === "zh" ? "此市场暂时无法加载。" : "This market could not be loaded.")
+      : t("dshResources.marketPartialFailure", locale === "zh" ? "部分来源加载失败：" : "Some sources could not be loaded:");
+    setMarketError(market, `${prefix} ${messages.join("; ")}`);
+  }
+
   async function loadPlugins(force = false) {
-    setLoading(true);
-    setError("");
+    setLoading(current => ({ ...current, plugins: true }));
+    setMarketError("plugins", "");
     try {
       const [catalog, inventory] = await Promise.all([
         window.companion.getDshPluginMarketplace(force),
@@ -48,17 +63,22 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
       ]);
       setPlugins(catalog);
       setInstalled(inventory);
+      setSnapshotErrors("plugins", catalog.error ? [catalog.error] : [], catalog.plugins.length === 0);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally { setLoading(false); }
+      setMarketError("plugins", reason instanceof Error ? reason.message : String(reason));
+    } finally { setLoading(current => ({ ...current, plugins: false })); }
   }
 
-  async function loadSkills() {
-    setLoading(true);
-    setError("");
-    try { setSkills(await window.companion.getDshSkillMarketplace()); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setLoading(false); }
+  async function loadSkills(force = false) {
+    setLoading(current => ({ ...current, skills: true }));
+    setMarketError("skills", "");
+    try {
+      const snapshot = await window.companion.getDshSkillMarketplace(force);
+      setSkills(snapshot);
+      setSnapshotErrors("skills", snapshot.errors, snapshot.skills.length === 0);
+    } catch (reason) {
+      setMarketError("skills", reason instanceof Error ? reason.message : String(reason));
+    } finally { setLoading(current => ({ ...current, skills: false })); }
   }
 
   useEffect(() => { void loadPlugins(); }, []);
@@ -87,7 +107,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
       profiles: installed.profiles.filter(profile => profile.exists && !profile.readError).map(profile => profile.name)
     });
     setBusy("");
-    if (!result.ok) { setError(result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
+    if (!result.ok) { setMarketError("plugins", result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
     setInstalled(result.snapshot);
     onChanged();
   }
@@ -98,7 +118,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     setBusy(skill.key);
     const result = await window.companion.installDshSkill(skill);
     setBusy("");
-    if (!result.ok) { setError(result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
+    if (!result.ok) { setMarketError("skills", result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
     setSkills(current => current ? { ...current, skills: current.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) } : current);
     onChanged();
   }
@@ -106,12 +126,13 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
   async function addRepo() {
     const value = repoUrl.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "");
     const [owner, name, ...rest] = value.split("/");
-    if (!owner || !name || rest.length > 0) { setError(t("dshResources.invalidRepository", "Enter a GitHub repository in owner/repository format.")); return; }
+    if (!owner || !name || rest.length > 0) { setMarketError("skills", t("dshResources.invalidRepository", "Enter a GitHub repository in owner/repository format.")); return; }
     setBusy("repo:add");
     const result = await window.companion.addDshSkillRepo({ owner, name, branch: repoBranch.trim() || "main", enabled: true });
     setBusy("");
-    if (!result.ok || !result.snapshot) { setError(result.error ?? t("dshResources.repositoryAddFailed", "Couldn't add the repository.")); return; }
+    if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryAddFailed", "Couldn't add the repository.")); return; }
     setSkills(result.snapshot);
+    setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
     setRepoUrl("");
     setRepoBranch("");
   }
@@ -120,8 +141,9 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     setBusy(`repo:${owner}/${name}`);
     const result = await window.companion.removeDshSkillRepo(owner, name);
     setBusy("");
-    if (!result.ok || !result.snapshot) { setError(result.error ?? t("dshResources.repositoryRemoveFailed", "Couldn't remove the repository.")); return; }
+    if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryRemoveFailed", "Couldn't remove the repository.")); return; }
     setSkills(result.snapshot);
+    setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
   }
 
   return (
@@ -145,7 +167,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
       {error ? <section className="connection-error">{error}</section> : null}
       <section className="claude-resource-list-toolbar">
         <div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(tab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", tab === "plugins" ? "Search plugins" : "Search skills")} /></div>
-        <button type="button" className="claude-resource-search-refresh" onClick={() => void (tab === "plugins" ? loadPlugins(true) : loadSkills())} disabled={loading || busy !== ""} aria-label={t("dshResources.refresh", "Refresh")}><RefreshCw size={17} className={loading ? "spinning" : undefined} /></button>
+        <button type="button" className="claude-resource-search-refresh" onClick={() => void (tab === "plugins" ? loadPlugins(true) : loadSkills(true))} disabled={isLoading || busy !== ""} aria-label={t("dshResources.refresh", "Refresh")}><RefreshCw size={17} className={isLoading ? "spinning" : undefined} /></button>
       </section>
 
       <section className="dsh-market-list">
@@ -154,13 +176,13 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
           <button type="button" onClick={() => changeSort("stars")} aria-label={t("dshResources.sortByStars", "Sort by Stars")}><Star size={12} /><span>{t("dshResources.starsHeader", "Stars")}</span>{sort.key === "stars" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
           <span>{t("dshResources.action", "Action")}</span>
         </header>
-        {loading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{t("dshResources.loading", "Loading...")}</div> : null}
+        {isLoading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{t("dshResources.loading", "Loading...")}</div> : null}
         {tab === "plugins" ? pluginRows.map((plugin, index) => {
           const isInstalled = installedPackages.has(plugin.packageName);
           const description = locale === "zh" ? plugin.description.zh : plugin.description.en;
           return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={t("dshResources.openRepository", "Open repository")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{t(isInstalled ? "dshResources.installed" : "dshResources.install", isInstalled ? "Installed" : "Install")}</button></div></article>;
         }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={t("dshResources.openSkillDocument", "Open Skill document")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{t(skill.installed ? "dshResources.installed" : "dshResources.install", skill.installed ? "Installed" : "Install")}</button></div></article>)}
-        {!loading && (tab === "plugins" ? pluginRows.length === 0 : skillRows.length === 0) ? <div className="claude-resource-empty">{t("dshResources.noMatches", "No matches")}</div> : null}
+        {!isLoading && !error && (tab === "plugins" ? Boolean(plugins) && pluginRows.length === 0 : Boolean(skills) && skillRows.length === 0) ? <div className="claude-resource-empty">{t("dshResources.noMatches", "No matches")}</div> : null}
       </section>
     </div>
   );

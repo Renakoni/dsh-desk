@@ -3668,6 +3668,7 @@ function dshResourceInventory(): DshResourceInventory {
       id: `plugin:package:${plugin.packageName}`,
       kind: "plugin" as const,
       name: plugin.name,
+      packageName: plugin.packageName,
       ...(plugin.description ? { description: plugin.description } : {}),
       detail: plugin.packageName,
       enabled: plugin.states.some(state => state.enabled),
@@ -3704,7 +3705,8 @@ function dshResourceSchemeManager() {
 function dshSkillMarketplace() {
   dshSkillMarketplaceInstance ??= new DshSkillMarketplace({
     dshHome: resolveDshHome(),
-    storePath: dshSkillRepositoriesPath()
+    storePath: dshSkillRepositoriesPath(),
+    cachePath: join(app.getPath("userData"), "dsh-skill-marketplace-cache.json")
   });
   return dshSkillMarketplaceInstance;
 }
@@ -4165,7 +4167,7 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-resource-scheme-delete", (_, schemeId: unknown) => dshResourceSchemeManager().delete(typeof schemeId === "string" ? schemeId : ""));
   ipcMain.handle("companion:dsh-resource-scheme-apply", (_, schemeId: unknown) => dshResourceSchemeManager().apply(typeof schemeId === "string" ? schemeId : ""));
   ipcMain.handle("companion:dsh-resource-state", (_, input: DshResourceStateInput) => dshResourceSchemeManager().setResourceState(input));
-  ipcMain.handle("companion:dsh-skill-marketplace", () => dshSkillMarketplace().snapshot());
+  ipcMain.handle("companion:dsh-skill-marketplace", (_, force?: boolean) => dshSkillMarketplace().snapshot(Boolean(force)));
   ipcMain.handle("companion:dsh-skill-repo-add", (_, repo: DshSkillRepo) => dshSkillMarketplace().addRepo(repo));
   ipcMain.handle("companion:dsh-skill-repo-remove", (_, owner: unknown, name: unknown) => dshSkillMarketplace().removeRepo(String(owner ?? ""), String(name ?? "")));
   ipcMain.handle("companion:dsh-skill-install", (_, skill: DshMarketplaceSkill) => dshSkillMarketplace().install(skill));

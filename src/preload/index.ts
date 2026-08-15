@@ -144,7 +144,7 @@ contextBridge.exposeInMainWorld("companion", {
   applyDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-apply", schemeId),
   setDshResourceState: (input: DshResourceStateInput) => ipcRenderer.invoke("companion:dsh-resource-state", input),
   onDshResourcesUpdated: (callback: () => void) => onChannel("companion:dsh-resources-updated", callback),
-  getDshSkillMarketplace: () => ipcRenderer.invoke("companion:dsh-skill-marketplace"),
+  getDshSkillMarketplace: (force?: boolean) => ipcRenderer.invoke("companion:dsh-skill-marketplace", force),
   addDshSkillRepo: (repo: DshSkillRepo) => ipcRenderer.invoke("companion:dsh-skill-repo-add", repo),
   removeDshSkillRepo: (owner: string, name: string) => ipcRenderer.invoke("companion:dsh-skill-repo-remove", owner, name),
   installDshSkill: (skill: DshMarketplaceSkill) => ipcRenderer.invoke("companion:dsh-skill-install", skill),
