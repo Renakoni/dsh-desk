@@ -2015,13 +2015,17 @@ function dshUsageLogPath() {
   return join(app.getPath("userData"), "dsh-usage.ndjson");
 }
 
+function dshSessionScanCachePath() {
+  return join(app.getPath("userData"), "dsh-session-scan-cache.ndjson");
+}
+
 function getDshUsageStore() {
   dshUsageStore ??= new DshUsageStore(dshUsageLogPath());
   return dshUsageStore;
 }
 
 function getDshSessionScanner() {
-  dshSessionScanner ??= new DshSessionScanner(resolveDshHome());
+  dshSessionScanner ??= new DshSessionScanner(resolveDshHome(), dshSessionScanCachePath());
   return dshSessionScanner;
 }
 
