@@ -6,13 +6,15 @@ import en from "./locales/en.json";
 const locales = { zh, en } as const;
 type LocaleKey = keyof typeof locales;
 type Messages = typeof zh;
+export type I18nValues = Record<string, string | number>;
+export type I18nTranslate = (path: string, fallback?: string, values?: I18nValues) => string;
 
 const I18nContext = createContext<{
-  t: (path: string, fallback?: string) => string;
+  t: I18nTranslate;
   locale: LocaleKey;
   setLocale: (locale: LocaleKey) => void;
 }>({
-  t: (p: string, f?: string) => f ?? p,
+  t: (p: string, f?: string, values?: I18nValues) => formatI18n(f ?? p, values),
   locale: "zh",
   setLocale: () => {}
 });
@@ -27,6 +29,12 @@ function deepGet(obj: any, path: string): string | undefined {
   return typeof cur === "string" ? cur : undefined;
 }
 
+export function formatI18n(template: string, values?: I18nValues): string {
+  if (!values) return template;
+  return template.replace(/\{([A-Za-z0-9_]+)\}/g, (placeholder, key: string) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : placeholder);
+}
+
 export function I18nProvider({ children, initialLocale = "zh" }: { children: React.ReactNode; initialLocale?: LocaleKey }) {
   const [locale, setLocaleState] = useState<LocaleKey>(initialLocale);
 
@@ -34,10 +42,10 @@ export function I18nProvider({ children, initialLocale = "zh" }: { children: Rea
     setLocaleState(initialLocale);
   }, [initialLocale]);
 
-  const t = useCallback((path: string, fallback?: string) => {
+  const t = useCallback((path: string, fallback?: string, values?: I18nValues) => {
     const msgs = locales[locale];
     const val = deepGet(msgs, path);
-    return val ?? fallback ?? path;
+    return formatI18n(val ?? fallback ?? path, values);
   }, [locale]);
 
   const setLocale = useCallback((l: LocaleKey) => {

@@ -66,9 +66,9 @@ function api(resourceSnapshot = snapshot) {
   };
 }
 
-function renderPage(mockApi = api()) {
+function renderPage(mockApi = api(), initialLocale: "zh" | "en" = "zh") {
   Object.assign(window, { companion: mockApi });
-  render(<I18nProvider initialLocale="zh"><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
+  render(<I18nProvider initialLocale={initialLocale}><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
   return mockApi;
 }
 
@@ -79,8 +79,8 @@ afterEach(() => {
 
 describe("DSH resource schemes page", () => {
   it("omits descriptions and identifiers that repeat the resource name", () => {
-    expect(dshResourcePresentation({ id: "plugin:demo", kind: "plugin", name: "demo", description: "demo", detail: "demo", enabled: true, manageable: true }, false, true)).toEqual({});
-    expect(dshResourcePresentation({ id: "plugin:desk", kind: "plugin", name: "dsh-desk-plugin", description: "DSH Desk bridge", detail: "dsh-desk-plugin", enabled: true, manageable: false }, false, true)).toEqual({ description: "DSH Desk bridge" });
+    expect(dshResourcePresentation({ id: "plugin:demo", kind: "plugin", name: "demo", description: "demo", detail: "demo", enabled: true, manageable: true }, false, "Details hidden")).toEqual({});
+    expect(dshResourcePresentation({ id: "plugin:desk", kind: "plugin", name: "dsh-desk-plugin", description: "DSH Desk bridge", detail: "dsh-desk-plugin", enabled: true, manageable: false }, false, "Details hidden")).toEqual({ description: "DSH Desk bridge" });
   });
 
   it("keeps the original scheme layout and exposes the full runtime inventory", async () => {
@@ -92,7 +92,7 @@ describe("DSH resource schemes page", () => {
     expect(screen.queryByText("来源")).toBeNull();
     expect(screen.queryByText("DSH 运行时")).toBeNull();
 
-    fireEvent.change(screen.getByPlaceholderText("搜索 Plugins"), { target: { value: "plugin-159" } });
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
     expect(await screen.findByText("@deepseek-ai/plugin-159")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Skills/ }));
     expect(await screen.findByText("review")).not.toBeNull();
@@ -154,13 +154,13 @@ describe("DSH resource schemes page", () => {
     };
     const mockApi = renderPage(api(missingSnapshot));
     await screen.findByText("@deepseek-ai/plugin-0");
-    fireEvent.change(screen.getByPlaceholderText("搜索 Plugins"), { target: { value: "dsh-chara-desk" } });
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "dsh-chara-desk" } });
     expect(await screen.findByText("package:dsh-chara-desk")).not.toBeNull();
     expect(screen.getByText("缺失")).not.toBeNull();
     expect(screen.queryByText("已禁用")).toBeNull();
 
     fireEvent.click(screen.getByTitle("编辑"));
-    fireEvent.change(screen.getByPlaceholderText("搜索 Plugins"), { target: { value: "dsh-chara-desk" } });
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "dsh-chara-desk" } });
     fireEvent.click(await screen.findByRole("button", { name: /package:dsh-chara-desk/ }));
     const dialog = screen.getByRole("alertdialog", { name: "删除缺失记录？" });
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
@@ -180,6 +180,15 @@ describe("DSH resource schemes page", () => {
     renderPage(api(disconnected));
     expect(await screen.findByText("@deepseek-ai/plugin-0")).not.toBeNull();
     expect(screen.queryByText(/完整插件列表暂不可用/)).toBeNull();
+  });
+
+  it("renders natural English resource copy from the locale catalog", async () => {
+    renderPage(api(), "en");
+    expect(await screen.findByText("Default")).not.toBeNull();
+    expect(screen.getByPlaceholderText("Search plugins")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Marketplace" }));
+    expect(await screen.findByRole("button", { name: "Plugin marketplace" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Sort by Stars" })).not.toBeNull();
   });
 
   it("sorts market rows by repository Stars in both directions", async () => {
