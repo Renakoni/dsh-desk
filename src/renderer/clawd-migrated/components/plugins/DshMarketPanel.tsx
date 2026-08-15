@@ -48,8 +48,8 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
   function setSnapshotErrors(market: MarketTab, messages: string[], empty: boolean) {
     if (messages.length === 0) { setMarketError(market, ""); return; }
     const prefix = empty
-      ? t("dshResources.marketLoadFailed", locale === "zh" ? "此市场暂时无法加载。" : "This market could not be loaded.")
-      : t("dshResources.marketPartialFailure", locale === "zh" ? "部分来源加载失败：" : "Some sources could not be loaded:");
+      ? t("dshResources.marketLoadFailed", "The marketplace is currently unavailable.")
+      : t("dshResources.marketPartialFailure", "Some sources could not be loaded:");
     setMarketError(market, `${prefix} ${messages.join("; ")}`);
   }
 

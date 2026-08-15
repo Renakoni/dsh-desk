@@ -215,7 +215,7 @@ describe("DSH resource schemes page", () => {
     await screen.findByText("@deepseek-ai/plugin-0");
     fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
     fireEvent.click(screen.getByRole("button", { name: "Skill 市场" }));
-    expect(await screen.findByText(/此市场暂时无法加载/)).not.toBeNull();
+    expect(await screen.findByText(/市场内容暂时无法加载/)).not.toBeNull();
     expect(screen.queryByText("没有匹配项")).toBeNull();
   });
 });
