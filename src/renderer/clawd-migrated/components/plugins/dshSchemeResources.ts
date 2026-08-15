@@ -6,7 +6,7 @@ export function unavailableDshResources(
   resourceIds: string[],
   availableResources: DshResourceItem[],
   tab: DshResourceTab,
-  zh: boolean
+  missingDescription: string
 ): DshResourceItem[] {
   const availableIds = new Set(availableResources.map(resource => resource.id));
   return resourceIds
@@ -15,15 +15,15 @@ export function unavailableDshResources(
       id: resourceId,
       kind: tab === "skills" ? "skill" : "plugin",
       name: resourceId.replace(/^[^:]+:/, ""),
-      description: zh ? "当前环境中已不存在" : "No longer available in the current environment",
+      description: missingDescription,
       enabled: false,
       manageable: false,
       missing: true
     }));
 }
 
-export function dshResourcePresentation(resource: DshResourceItem, hideSensitiveContent: boolean, zh: boolean) {
-  if (hideSensitiveContent) return { description: zh ? "资源详情已隐藏" : "Resource details hidden" };
+export function dshResourcePresentation(resource: DshResourceItem, hideSensitiveContent: boolean, hiddenDescription: string) {
+  if (hideSensitiveContent) return { description: hiddenDescription };
   const name = resource.name.trim().toLocaleLowerCase();
   const description = resource.description?.trim();
   const visibleDescription = description && description.toLocaleLowerCase() !== name ? description : undefined;

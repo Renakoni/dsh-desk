@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Code2, ExternalLink, Package, Plus, RefreshCw, Search, Settings2, Star, Trash2 } from "lucide-react";
 import type { DshMarketplaceSnapshot, DshPluginSnapshot, DshSkillMarketplaceSnapshot } from "../../../../shared/dshPlugins";
+import { useI18n } from "../../useI18n";
 
 type MarketTab = "plugins" | "skills";
 type MarketSortKey = "name" | "stars";
@@ -21,7 +22,8 @@ function sortRows<T extends { name: string; stars: number | null }>(rows: T[], s
   });
 }
 
-export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack: () => void; onChanged: () => void }) {
+export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onChanged: () => void }) {
+  const { locale, t } = useI18n();
   const [tab, setTab] = useState<MarketTab>("plugins");
   const [plugins, setPlugins] = useState<DshMarketplaceSnapshot | null>(null);
   const [installed, setInstalled] = useState<DshPluginSnapshot | null>(null);
@@ -85,7 +87,7 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
       profiles: installed.profiles.filter(profile => profile.exists && !profile.readError).map(profile => profile.name)
     });
     setBusy("");
-    if (!result.ok) { setError(result.error ?? (zh ? "安装失败" : "Installation failed")); return; }
+    if (!result.ok) { setError(result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
     setInstalled(result.snapshot);
     onChanged();
   }
@@ -96,7 +98,7 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
     setBusy(skill.key);
     const result = await window.companion.installDshSkill(skill);
     setBusy("");
-    if (!result.ok) { setError(result.error ?? (zh ? "安装失败" : "Installation failed")); return; }
+    if (!result.ok) { setError(result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
     setSkills(current => current ? { ...current, skills: current.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) } : current);
     onChanged();
   }
@@ -104,11 +106,11 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
   async function addRepo() {
     const value = repoUrl.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "");
     const [owner, name, ...rest] = value.split("/");
-    if (!owner || !name || rest.length > 0) { setError(zh ? "请输入有效的 GitHub 仓库" : "Enter a valid GitHub repository"); return; }
+    if (!owner || !name || rest.length > 0) { setError(t("dshResources.invalidRepository", "Enter a GitHub repository in owner/repository format.")); return; }
     setBusy("repo:add");
     const result = await window.companion.addDshSkillRepo({ owner, name, branch: repoBranch.trim() || "main", enabled: true });
     setBusy("");
-    if (!result.ok || !result.snapshot) { setError(result.error ?? (zh ? "添加失败" : "Could not add repository")); return; }
+    if (!result.ok || !result.snapshot) { setError(result.error ?? t("dshResources.repositoryAddFailed", "Couldn't add the repository.")); return; }
     setSkills(result.snapshot);
     setRepoUrl("");
     setRepoBranch("");
@@ -118,47 +120,47 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
     setBusy(`repo:${owner}/${name}`);
     const result = await window.companion.removeDshSkillRepo(owner, name);
     setBusy("");
-    if (!result.ok || !result.snapshot) { setError(result.error ?? (zh ? "删除失败" : "Could not remove repository")); return; }
+    if (!result.ok || !result.snapshot) { setError(result.error ?? t("dshResources.repositoryRemoveFailed", "Couldn't remove the repository.")); return; }
     setSkills(result.snapshot);
   }
 
   return (
     <div className="dsh-market-panel">
       <header className="dsh-market-header">
-        <button type="button" className="claude-profile-icon-button" onClick={onBack} aria-label={zh ? "返回" : "Back"}><ArrowLeft size={17} /></button>
+        <button type="button" className="claude-profile-icon-button" onClick={onBack} aria-label={t("common.back", "Back")}><ArrowLeft size={17} /></button>
         <nav className="dsh-market-tabs">
-          <button type="button" className={tab === "plugins" ? "active" : ""} onClick={() => setTab("plugins")}><Package size={15} />{zh ? "插件市场" : "Plugin market"}</button>
-          <button type="button" className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Code2 size={15} />{zh ? "Skill 市场" : "Skill market"}</button>
+          <button type="button" className={tab === "plugins" ? "active" : ""} onClick={() => setTab("plugins")}><Package size={15} />{t("dshResources.pluginMarketplace", "Plugin marketplace")}</button>
+          <button type="button" className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Code2 size={15} />{t("dshResources.skillMarketplace", "Skill marketplace")}</button>
         </nav>
-        {tab === "skills" ? <button type="button" className={`claude-profile-icon-button ${repoManager ? "active" : ""}`} onClick={() => setRepoManager(value => !value)} title={zh ? "仓库" : "Repositories"}><Settings2 size={16} /></button> : <span />}
+        {tab === "skills" ? <button type="button" className={`claude-profile-icon-button ${repoManager ? "active" : ""}`} onClick={() => setRepoManager(value => !value)} title={t("dshResources.repositories", "Skill repositories")}><Settings2 size={16} /></button> : <span />}
       </header>
 
       {repoManager && tab === "skills" ? (
         <section className="dsh-repo-manager">
-          <div className="dsh-repo-add"><input value={repoUrl} onChange={event => setRepoUrl(event.target.value)} placeholder="owner/repository" /><input value={repoBranch} onChange={event => setRepoBranch(event.target.value)} placeholder={zh ? "分支（默认 main）" : "Branch (main)"} /><button type="button" className="claude-profile-icon-button" onClick={() => void addRepo()} disabled={busy !== ""}><Plus size={16} /></button></div>
-          <div className="dsh-repo-list">{(skills?.repos ?? []).map(repo => <span key={`${repo.owner}/${repo.name}`}><b>{repo.owner}/{repo.name}</b><small>{repo.branch}</small><button type="button" onClick={() => void removeRepo(repo.owner, repo.name)} disabled={busy !== ""} aria-label={zh ? `删除 ${repo.owner}/${repo.name}` : `Remove ${repo.owner}/${repo.name}`}><Trash2 size={13} /></button></span>)}</div>
+          <div className="dsh-repo-add"><input value={repoUrl} onChange={event => setRepoUrl(event.target.value)} placeholder="owner/repository" /><input value={repoBranch} onChange={event => setRepoBranch(event.target.value)} placeholder={t("dshResources.branchPlaceholder", "Branch (default: main)")} /><button type="button" className="claude-profile-icon-button" onClick={() => void addRepo()} disabled={busy !== ""} aria-label={t("dshResources.addRepository", "Add repository")}><Plus size={16} /></button></div>
+          <div className="dsh-repo-list">{(skills?.repos ?? []).map(repo => <span key={`${repo.owner}/${repo.name}`}><b>{repo.owner}/{repo.name}</b><small>{repo.branch}</small><button type="button" onClick={() => void removeRepo(repo.owner, repo.name)} disabled={busy !== ""} aria-label={t("dshResources.removeRepository", "Remove {repository}", { repository: `${repo.owner}/${repo.name}` })}><Trash2 size={13} /></button></span>)}</div>
         </section>
       ) : null}
 
       {error ? <section className="connection-error">{error}</section> : null}
       <section className="claude-resource-list-toolbar">
-        <div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={tab === "plugins" ? (zh ? "搜索插件" : "Search plugins") : (zh ? "搜索 Skills" : "Search Skills")} /></div>
-        <button type="button" className="claude-resource-search-refresh" onClick={() => void (tab === "plugins" ? loadPlugins(true) : loadSkills())} disabled={loading || busy !== ""} aria-label={zh ? "刷新" : "Refresh"}><RefreshCw size={17} className={loading ? "spinning" : undefined} /></button>
+        <div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(tab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", tab === "plugins" ? "Search plugins" : "Search skills")} /></div>
+        <button type="button" className="claude-resource-search-refresh" onClick={() => void (tab === "plugins" ? loadPlugins(true) : loadSkills())} disabled={loading || busy !== ""} aria-label={t("dshResources.refresh", "Refresh")}><RefreshCw size={17} className={loading ? "spinning" : undefined} /></button>
       </section>
 
       <section className="dsh-market-list">
         <header className="dsh-market-list-head">
-          <button type="button" onClick={() => changeSort("name")} aria-label={zh ? "按名称排序" : "Sort by name"}><span>{zh ? "名称" : "Name"}</span>{sort.key === "name" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
-          <button type="button" onClick={() => changeSort("stars")} aria-label={zh ? "按 Stars 排序" : "Sort by Stars"}><Star size={12} /><span>Stars</span>{sort.key === "stars" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
-          <span>{zh ? "操作" : "Action"}</span>
+          <button type="button" onClick={() => changeSort("name")} aria-label={t("dshResources.sortByName", "Sort by name")}><span>{t("dshResources.nameHeader", "Name")}</span>{sort.key === "name" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
+          <button type="button" onClick={() => changeSort("stars")} aria-label={t("dshResources.sortByStars", "Sort by Stars")}><Star size={12} /><span>{t("dshResources.starsHeader", "Stars")}</span>{sort.key === "stars" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
+          <span>{t("dshResources.action", "Action")}</span>
         </header>
-        {loading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{zh ? "正在加载..." : "Loading..."}</div> : null}
+        {loading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{t("dshResources.loading", "Loading...")}</div> : null}
         {tab === "plugins" ? pluginRows.map((plugin, index) => {
           const isInstalled = installedPackages.has(plugin.packageName);
-          const description = zh ? plugin.description.zh : plugin.description.en;
-          return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={zh ? "打开仓库" : "Open repository"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{isInstalled ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>;
-        }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={zh ? "打开 Skill 文档" : "Open Skill document"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{skill.installed ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>)}
-        {!loading && (tab === "plugins" ? pluginRows.length === 0 : skillRows.length === 0) ? <div className="claude-resource-empty">{zh ? "没有匹配项" : "No matches"}</div> : null}
+          const description = locale === "zh" ? plugin.description.zh : plugin.description.en;
+          return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={t("dshResources.openRepository", "Open repository")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{t(isInstalled ? "dshResources.installed" : "dshResources.install", isInstalled ? "Installed" : "Install")}</button></div></article>;
+        }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={t("dshResources.openSkillDocument", "Open Skill document")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{t(skill.installed ? "dshResources.installed" : "dshResources.install", skill.installed ? "Installed" : "Install")}</button></div></article>)}
+        {!loading && (tab === "plugins" ? pluginRows.length === 0 : skillRows.length === 0) ? <div className="claude-resource-empty">{t("dshResources.noMatches", "No matches")}</div> : null}
       </section>
     </div>
   );
