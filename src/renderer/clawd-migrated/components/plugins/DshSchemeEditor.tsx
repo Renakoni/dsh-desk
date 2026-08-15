@@ -35,12 +35,12 @@ export function DshSchemeEditor({
     skills: [...new Set([...inventory.skills.filter(item => !item.manageable && item.enabled).map(item => item.id), ...initial.skills])],
     plugins: [...new Set([...inventory.plugins.filter(item => !item.manageable && item.enabled).map(item => item.id), ...initial.plugins])]
   }));
-  const [activeTab, setActiveTab] = useState<DshResourceTab>("skills");
+  const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const tabs = [
-    { id: "skills" as const, label: "Skills", icon: Code2 },
-    { id: "plugins" as const, label: "Plugins", icon: Package }
+    { id: "plugins" as const, label: "Plugins", icon: Package },
+    { id: "skills" as const, label: "Skills", icon: Code2 }
   ];
   const availableResources = inventory[activeTab];
   const availableIds = useMemo(() => new Set(availableResources.map(resource => resource.id)), [availableResources]);
