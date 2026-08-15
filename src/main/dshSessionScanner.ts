@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
@@ -11,6 +12,7 @@ import {
   type DshTrajectoryDay
 } from "../shared/dshAnalytics";
 import { resolveDshHome } from "./dshPaths";
+import { loadScanCache, saveScanCache, type CachedScan } from "./scanCachePersistence";
 
 type JsonObject = Record<string, unknown>;
 
@@ -83,11 +85,36 @@ type RawSessionScan = {
   tools: Map<string, DshToolMetric>;
 };
 
-type SessionFile = { filePath: string; mtimeMs: number; size: number };
+type PersistedDayState = Omit<DayState, "sessionIds"> & { sessionIds: string[] };
+
+type PersistedRawSessionScan = Omit<RawSessionScan, "days" | "tools"> & {
+  days: PersistedDayState[];
+  tools: DshToolMetric[];
+};
+
+type SessionFileMetadata = { filePath: string; mtimeMs: number; ctimeMs: number; size: number };
+type CachedRawSessionScan = {
+  mtimeMs: number;
+  size: number;
+  fingerprint: string;
+  verifiedInProcessCtimeMs?: number;
+  scan: RawSessionScan | null;
+};
 
 type ByteRange = { start: number; end: number };
 
 const ZSTD_MAGIC = 0xFD2FB528;
+// Bump whenever RawSessionScan parsing or the persisted DTO shape changes.
+const DSH_SESSION_SCAN_CACHE_VERSION = 2;
+
+export function dshSessionScanTimeZoneKey(): string {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
+  return `${timeZone}:${new Date().getTimezoneOffset()}`;
+}
+
+function dshSessionScanCacheVersion(timeZoneKey: string): string {
+  return `${DSH_SESSION_SCAN_CACHE_VERSION}:timezone:${timeZoneKey}`;
+}
 
 function objectValue(value: unknown): JsonObject | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null;
@@ -103,6 +130,193 @@ function countValue(value: unknown): number {
 
 function finiteValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function hasStringFields(value: JsonObject, fields: readonly string[]): boolean {
+  return fields.every(field => typeof value[field] === "string");
+}
+
+function hasNumberFields(value: JsonObject, fields: readonly string[]): boolean {
+  return fields.every(field => isNonNegativeNumber(value[field]));
+}
+
+function hasCountFields(value: JsonObject, fields: readonly string[]): boolean {
+  return fields.every(field => isNonNegativeInteger(value[field]));
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || isNonNegativeNumber(value);
+}
+
+function isOptionalCount(value: unknown): boolean {
+  return value === undefined || isNonNegativeInteger(value);
+}
+
+function isCountRecord(value: unknown): value is Record<string, number> {
+  const record = objectValue(value);
+  return record !== null && Object.values(record).every(isNonNegativeInteger);
+}
+
+function isPersistedToolMetric(value: unknown): value is DshToolMetric {
+  const metric = objectValue(value);
+  return metric !== null
+    && typeof metric.name === "string"
+    && hasCountFields(metric, ["calls", "errors"])
+    && hasNumberFields(metric, ["durationMs"]);
+}
+
+function isPersistedSession(value: unknown, filePath: string): value is DshSessionMetric {
+  const session = objectValue(value);
+  return session !== null
+    && hasStringFields(session, ["sessionId", "title", "filePath", "projectName", "provider", "model"])
+    && session.filePath === filePath
+    && isOptionalString(session.projectPath)
+    && hasNumberFields(session, ["createdAt", "lastActivity", "durationMs", "llmMs", "toolMs", "ttftMs", "decodeMs"])
+    && hasCountFields(session, [
+      "turns", "steps", "toolCalls", "failedToolCalls", "ttftSteps", "decodeTokens",
+      "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"
+    ])
+    && ["contextWindow", "pressureTokens", "projectedTokens", "systemTokens", "toolsTokens", "messageTokens"]
+      .every(field => isOptionalCount(session[field]));
+}
+
+function isPersistedRequest(value: unknown, sessionId: string, filePath: string): value is DshScannedTokenRequest {
+  const request = objectValue(value);
+  return request !== null
+    && hasStringFields(request, ["id", "sessionId", "filePath", "projectName", "model"])
+    && request.sessionId === sessionId
+    && request.filePath === filePath
+    && request.entrypoint === "dsh"
+    && isOptionalString(request.projectPath)
+    && isOptionalString(request.provider)
+    && isOptionalNumber(request.durationMs)
+    && hasNumberFields(request, ["timestamp"])
+    && hasCountFields(request, [
+      "inputTokens", "outputTokens", "cacheReadTokens", "cacheCreationTokens", "totalTokens"
+    ]);
+}
+
+function isPersistedEdit(value: unknown, sessionId: string, filePath: string): value is ParsedEditRecord {
+  const edit = objectValue(value);
+  return edit !== null
+    && hasStringFields(edit, ["id", "filePath", "sessionId", "sessionFilePath", "projectName"])
+    && edit.sessionId === sessionId
+    && edit.sessionFilePath === filePath
+    && (edit.op === "edit" || edit.op === "create")
+    && isOptionalString(edit.projectPath)
+    && hasCountFields(edit, ["addedLines", "removedLines"])
+    && hasNumberFields(edit, ["timestamp"]);
+}
+
+function isPersistedUsage(value: unknown): value is UsageCounts {
+  const usage = objectValue(value);
+  return usage !== null
+    && isCountRecord(usage.tools)
+    && isCountRecord(usage.skills)
+    && isCountRecord(usage.agents);
+}
+
+function decodePersistedDay(value: unknown): DayState | undefined {
+  const day = objectValue(value);
+  if (day === null
+    || typeof day.date !== "string"
+    || !/^\d{4}-\d{2}-\d{2}$/.test(day.date)
+    || !Array.isArray(day.sessionIds)
+    || !day.sessionIds.every(sessionId => typeof sessionId === "string")
+    || !hasCountFields(day, [
+      "events", "turns", "steps", "toolCalls", "failedToolCalls", "permissionRequests",
+      "permissionApproved", "permissionDenied", "totalTokens", "ttftSteps", "decodeTokens"
+    ])
+    || !hasNumberFields(day, ["llmMs", "toolMs", "ttftMs", "decodeMs"])
+    || !Array.isArray(day.hourlyActivity)
+    || day.hourlyActivity.length !== 24
+    || !day.hourlyActivity.every(isNonNegativeInteger)
+    || !isCountRecord(day.toolUsage)) return undefined;
+  const rawMetrics = objectValue(day.toolMetrics);
+  if (rawMetrics === null) return undefined;
+  const toolMetrics: Record<string, DshToolMetric> = {};
+  for (const [name, metric] of Object.entries(rawMetrics)) {
+    if (!isPersistedToolMetric(metric) || metric.name !== name) return undefined;
+    toolMetrics[name] = metric;
+  }
+  return {
+    date: day.date,
+    events: day.events as number,
+    sessionIds: new Set(day.sessionIds as string[]),
+    turns: day.turns as number,
+    steps: day.steps as number,
+    toolCalls: day.toolCalls as number,
+    failedToolCalls: day.failedToolCalls as number,
+    permissionRequests: day.permissionRequests as number,
+    permissionApproved: day.permissionApproved as number,
+    permissionDenied: day.permissionDenied as number,
+    totalTokens: day.totalTokens as number,
+    llmMs: day.llmMs as number,
+    toolMs: day.toolMs as number,
+    ttftMs: day.ttftMs as number,
+    ttftSteps: day.ttftSteps as number,
+    decodeMs: day.decodeMs as number,
+    decodeTokens: day.decodeTokens as number,
+    hourlyActivity: day.hourlyActivity as number[],
+    toolUsage: day.toolUsage as Record<string, number>,
+    toolMetrics
+  };
+}
+
+function encodeRawSessionScan(scan: RawSessionScan): PersistedRawSessionScan {
+  return {
+    session: scan.session,
+    requests: scan.requests,
+    edits: scan.edits,
+    usage: scan.usage,
+    days: [...scan.days.values()].map(day => ({ ...day, sessionIds: [...day.sessionIds] })),
+    tools: [...scan.tools.values()]
+  };
+}
+
+function decodeRawSessionScan(value: unknown, filePath: string): RawSessionScan | undefined {
+  const payload = objectValue(value);
+  if (payload === null || !isPersistedSession(payload.session, filePath)) return undefined;
+  const session = payload.session;
+  if (!Array.isArray(payload.requests)
+    || !payload.requests.every(request => isPersistedRequest(request, session.sessionId, filePath))
+    || !Array.isArray(payload.edits)
+    || !payload.edits.every(edit => isPersistedEdit(edit, session.sessionId, filePath))
+    || !isPersistedUsage(payload.usage)
+    || !Array.isArray(payload.days)
+    || !Array.isArray(payload.tools)
+    || !payload.tools.every(isPersistedToolMetric)) return undefined;
+  const days = new Map<string, DayState>();
+  for (const value of payload.days) {
+    const day = decodePersistedDay(value);
+    if (!day || days.has(day.date)) return undefined;
+    days.set(day.date, day);
+  }
+  const tools = new Map<string, DshToolMetric>();
+  for (const tool of payload.tools) {
+    if (tools.has(tool.name)) return undefined;
+    tools.set(tool.name, tool);
+  }
+  return {
+    session,
+    requests: payload.requests,
+    edits: payload.edits,
+    usage: payload.usage,
+    days,
+    tools
+  };
 }
 
 function dateKey(timestamp: number): string {
@@ -583,8 +797,8 @@ export function parseDshSessionRows(rows: readonly unknown[], filePath: string, 
   return scan ? applyProjection(scan, projection) : null;
 }
 
-async function collectSessionFiles(root: string): Promise<SessionFile[]> {
-  const files: SessionFile[] = [];
+async function collectSessionFiles(root: string): Promise<SessionFileMetadata[]> {
+  const files: SessionFileMetadata[] = [];
   const visit = async (directory: string, depth: number): Promise<void> => {
     if (depth > 4) return;
     let entries;
@@ -600,7 +814,7 @@ async function collectSessionFiles(root: string): Promise<SessionFile[]> {
       } else if (entry.isFile() && (entry.name === "session.jsonl" || entry.name === "session.jsonl.zstd")) {
         try {
           const metadata = await stat(fullPath);
-          files.push({ filePath: fullPath, mtimeMs: metadata.mtimeMs, size: metadata.size });
+          files.push({ filePath: fullPath, mtimeMs: metadata.mtimeMs, ctimeMs: metadata.ctimeMs, size: metadata.size });
         } catch {
           // A session can disappear between directory enumeration and stat.
         }
@@ -609,6 +823,11 @@ async function collectSessionFiles(root: string): Promise<SessionFile[]> {
   };
   await visit(root, 0);
   return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
+}
+
+async function readSessionFile(filePath: string): Promise<{ buffer: Buffer; fingerprint: string }> {
+  const buffer = await readFile(filePath);
+  return { buffer, fingerprint: createHash("sha256").update(buffer).digest("hex") };
 }
 
 // DSH appends independently compressed Zstandard frames. Node's streaming
@@ -660,9 +879,8 @@ function completeZstdFrames(buffer: Buffer): ByteRange[] {
   return frames;
 }
 
-async function scanFile(filePath: string): Promise<RawSessionScan | null> {
+function scanSessionBuffer(filePath: string, buffer: Buffer): RawSessionScan | null {
   const accumulator = new SessionAccumulator(filePath);
-  const buffer = await readFile(filePath);
   const plaintext = filePath.endsWith(".zstd")
     ? completeZstdFrames(buffer).map(frame => zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString("utf8"))
     : [buffer.toString("utf8")];
@@ -679,6 +897,11 @@ async function scanFile(filePath: string): Promise<RawSessionScan | null> {
     }
   }
   return accumulator.finish();
+}
+
+async function scanFile(filePath: string): Promise<{ scan: RawSessionScan | null; fingerprint: string }> {
+  const { buffer, fingerprint } = await readSessionFile(filePath);
+  return { scan: scanSessionBuffer(filePath, buffer), fingerprint };
 }
 
 function applyProjection(scan: RawSessionScan, projection: ProjectionRecord | undefined): RawSessionScan {
@@ -833,13 +1056,67 @@ async function mapWithConcurrency<T, R>(items: readonly T[], concurrency: number
 }
 
 export class DshSessionScanner {
-  private readonly fileCache = new Map<string, { mtimeMs: number; size: number; scan: RawSessionScan | null }>();
+  private readonly fileCache = new Map<string, CachedRawSessionScan>();
+  private persistentCacheLoaded = false;
+  private persistentCacheDirty = false;
+  private persistentCacheVersion: string;
+  private readonly timeZoneKey: () => string;
   private lastSignature = "";
   private lastResult: DshSessionScanResult | null = null;
 
-  constructor(private readonly dshHome = resolveDshHome()) {}
+  constructor(
+    private readonly dshHome = resolveDshHome(),
+    private readonly persistentCachePath?: string,
+    timeZoneKey: string | (() => string) = dshSessionScanTimeZoneKey
+  ) {
+    this.timeZoneKey = typeof timeZoneKey === "function" ? timeZoneKey : () => timeZoneKey;
+    this.persistentCacheVersion = dshSessionScanCacheVersion(this.timeZoneKey());
+  }
+
+  private refreshTimeZone(): void {
+    const version = dshSessionScanCacheVersion(this.timeZoneKey());
+    if (version === this.persistentCacheVersion) return;
+    this.persistentCacheVersion = version;
+    this.fileCache.clear();
+    this.persistentCacheLoaded = false;
+    this.persistentCacheDirty = true;
+    this.lastSignature = "";
+    this.lastResult = null;
+  }
+
+  private loadPersistentCache(): void {
+    if (this.persistentCacheLoaded) return;
+    this.persistentCacheLoaded = true;
+    if (!this.persistentCachePath) return;
+    for (const [filePath, entry] of loadScanCache<unknown>(this.persistentCachePath, this.persistentCacheVersion)) {
+      const scan = decodeRawSessionScan(entry.payload, filePath);
+      if (!scan || typeof entry.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(entry.fingerprint)) {
+        this.persistentCacheDirty = true;
+        continue;
+      }
+      this.fileCache.set(filePath, { mtimeMs: entry.mtimeMs, size: entry.size, fingerprint: entry.fingerprint, scan });
+    }
+  }
+
+  private savePersistentCache(): void {
+    if (!this.persistentCachePath || !this.persistentCacheDirty) return;
+    const entries: Array<[string, CachedScan<PersistedRawSessionScan>]> = [];
+    for (const [filePath, entry] of this.fileCache) {
+      if (!entry.scan) continue;
+      entries.push([filePath, {
+        mtimeMs: entry.mtimeMs,
+        size: entry.size,
+        fingerprint: entry.fingerprint,
+        payload: encodeRawSessionScan(entry.scan)
+      }]);
+    }
+    saveScanCache(this.persistentCachePath, this.persistentCacheVersion, entries);
+    this.persistentCacheDirty = false;
+  }
 
   async scan(force = false): Promise<DshSessionScanResult> {
+    this.refreshTimeZone();
+    this.loadPersistentCache();
     const sessionRoot = join(this.dshHome, "sessions");
     const projectionPath = join(this.dshHome, "storages", "session_projcache.json");
     const files = await collectSessionFiles(sessionRoot);
@@ -852,7 +1129,7 @@ export class DshSessionScanner {
     } catch {
       // Projection cache is optional; raw logs remain authoritative.
     }
-    const signature = `${projectionSignature}|${files.map(file => `${file.filePath}:${file.mtimeMs}:${file.size}`).join("|")}`;
+    const signature = `${projectionSignature}|${files.map(file => `${file.filePath}:${file.mtimeMs}:${file.ctimeMs}:${file.size}`).join("|")}`;
     if (!force && signature === this.lastSignature && this.lastResult) {
       return { ...this.lastResult, analytics: { ...this.lastResult.analytics, lastScannedAt: Date.now() } };
     }
@@ -866,21 +1143,50 @@ export class DshSessionScanner {
     }
     const livePaths = new Set(files.map(file => file.filePath));
     for (const path of this.fileCache.keys()) {
-      if (!livePaths.has(path)) this.fileCache.delete(path);
+      if (!livePaths.has(path)) {
+        this.fileCache.delete(path);
+        this.persistentCacheDirty = true;
+      }
     }
+    let sessionReadFailed = false;
     const scans = await mapWithConcurrency(files, 4, async file => {
       const cached = this.fileCache.get(file.filePath);
-      let rawScan: RawSessionScan | null;
-      if (!force && cached && cached.mtimeMs === file.mtimeMs && cached.size === file.size) {
+      const metadataMatches = cached?.mtimeMs === file.mtimeMs && cached.size === file.size;
+      let rawScan: RawSessionScan | null = null;
+      let fingerprint = cached?.fingerprint ?? "";
+      let cacheChanged = false;
+      // Persisted entries omit the verified ctime and must prove their fingerprint once per process.
+      if (!force && cached && metadataMatches && cached.verifiedInProcessCtimeMs === file.ctimeMs) {
         rawScan = cached.scan;
       } else {
-        rawScan = null;
         try {
-          rawScan = await scanFile(file.filePath);
+          if (!force && cached && metadataMatches) {
+            const contents = await readSessionFile(file.filePath);
+            fingerprint = contents.fingerprint;
+            rawScan = fingerprint === cached.fingerprint && cached.scan
+              ? cached.scan
+              : scanSessionBuffer(file.filePath, contents.buffer);
+            cacheChanged = fingerprint !== cached.fingerprint || rawScan !== cached.scan;
+          } else {
+            const scanned = await scanFile(file.filePath);
+            rawScan = scanned.scan;
+            fingerprint = scanned.fingerprint;
+            cacheChanged = true;
+          }
+          this.fileCache.set(file.filePath, {
+            mtimeMs: file.mtimeMs,
+            size: file.size,
+            fingerprint,
+            verifiedInProcessCtimeMs: file.ctimeMs,
+            scan: rawScan
+          });
         } catch {
+          sessionReadFailed = true;
           // One unreadable session must not hide the rest of the local history.
         }
-        this.fileCache.set(file.filePath, { mtimeMs: file.mtimeMs, size: file.size, scan: rawScan });
+      }
+      if (cacheChanged) {
+        this.persistentCacheDirty = true;
       }
       if (!rawScan) return null;
       const sessionId = rawScan.session.sessionId || file.filePath.split(/[\\/]/).at(-2) || "";
@@ -897,8 +1203,14 @@ export class DshSessionScanner {
       requestIds: new Set(requests.map(request => request.id)),
       signature
     };
-    this.lastSignature = signature;
-    this.lastResult = result;
+    if (sessionReadFailed) {
+      this.lastSignature = "";
+      this.lastResult = null;
+    } else {
+      this.lastSignature = signature;
+      this.lastResult = result;
+    }
+    this.savePersistentCache();
     return result;
   }
 }
