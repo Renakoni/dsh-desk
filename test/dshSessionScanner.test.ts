@@ -235,15 +235,15 @@ describe("DSH native session scanning", () => {
     expect(persistedPaths).not.toContain(deletedPath);
   });
 
-  it("detects same-key replacements before memory cache reuse and still supports force scanning", async () => {
+  it("keeps the metadata fast path for unchanged files while force scanning bypasses raw scan reuse", async () => {
     const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-cache-force-"));
     const sessionPath = writeSimpleSession(dshHome, "session-one", "Original");
     const cachePath = join(dshHome, "scan-cache.ndjson");
     const scanner = new DshSessionScanner(dshHome, cachePath);
     await scanner.scan();
-    replaceWithoutChangingFileKey(sessionPath, "Original", "Changed!");
+    expect(sessionTitles(await scanner.scan())).toEqual(["Original"]);
 
-    expect(sessionTitles(await scanner.scan())).toEqual(["Changed!"]);
+    replaceWithoutChangingFileKey(sessionPath, "Original", "Changed!");
     expect(sessionTitles(await scanner.scan(true))).toEqual(["Changed!"]);
   });
 
@@ -259,6 +259,31 @@ describe("DSH native session scanning", () => {
     writeFileSync(cachePath, `${lines.join("\n")}\n`);
 
     expect(sessionTitles(await new DshSessionScanner(dshHome, cachePath, "zone-b").scan())).toEqual(["Real title"]);
+  });
+
+  it("rebuilds local-time buckets when the timezone changes in a running scanner", async () => {
+    const originalTimeZone = process.env.TZ;
+    const dshHome = mkdtempSync(join(tmpdir(), "dsh-desk-cache-live-timezone-"));
+    const sessionDir = join(dshHome, "sessions", "--demo--", "session-one");
+    mkdirSync(sessionDir, { recursive: true });
+    const timestamp = Date.UTC(2026, 0, 1, 1);
+    writeFileSync(join(sessionDir, "session.jsonl"), [
+      JSON.stringify({ type: "session", id: "session-one", createdAt: timestamp, cwd: "C:\\work\\demo" }),
+      JSON.stringify({ type: "session/title", seq: 0, time: timestamp, data: { title: "Timezone session" } }),
+      ""
+    ].join("\n"));
+
+    try {
+      process.env.TZ = "UTC";
+      const scanner = new DshSessionScanner(dshHome, join(dshHome, "scan-cache.ndjson"));
+      expect((await scanner.scan()).analytics.daily.map(day => day.date)).toEqual(["2026-01-01"]);
+
+      process.env.TZ = "America/Los_Angeles";
+      expect((await scanner.scan()).analytics.daily.map(day => day.date)).toEqual(["2025-12-31"]);
+    } finally {
+      if (originalTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimeZone;
+    }
   });
 
   it("matches a clean full scan after restoring many persisted entries", async () => {

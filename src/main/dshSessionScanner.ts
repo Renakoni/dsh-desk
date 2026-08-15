@@ -92,8 +92,14 @@ type PersistedRawSessionScan = Omit<RawSessionScan, "days" | "tools"> & {
   tools: DshToolMetric[];
 };
 
-type SessionFile = { filePath: string; mtimeMs: number; size: number; fingerprint: string };
-type SessionFileMetadata = Omit<SessionFile, "fingerprint">;
+type SessionFileMetadata = { filePath: string; mtimeMs: number; ctimeMs: number; size: number };
+type CachedRawSessionScan = {
+  mtimeMs: number;
+  size: number;
+  fingerprint: string;
+  verifiedInProcessCtimeMs?: number;
+  scan: RawSessionScan | null;
+};
 
 type ByteRange = { start: number; end: number };
 
@@ -808,7 +814,7 @@ async function collectSessionFiles(root: string): Promise<SessionFileMetadata[]>
       } else if (entry.isFile() && (entry.name === "session.jsonl" || entry.name === "session.jsonl.zstd")) {
         try {
           const metadata = await stat(fullPath);
-          files.push({ filePath: fullPath, mtimeMs: metadata.mtimeMs, size: metadata.size });
+          files.push({ filePath: fullPath, mtimeMs: metadata.mtimeMs, ctimeMs: metadata.ctimeMs, size: metadata.size });
         } catch {
           // A session can disappear between directory enumeration and stat.
         }
@@ -819,8 +825,9 @@ async function collectSessionFiles(root: string): Promise<SessionFileMetadata[]>
   return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
 }
 
-async function sessionFileFingerprint(filePath: string): Promise<string> {
-  return createHash("sha256").update(await readFile(filePath)).digest("hex");
+async function readSessionFile(filePath: string): Promise<{ buffer: Buffer; fingerprint: string }> {
+  const buffer = await readFile(filePath);
+  return { buffer, fingerprint: createHash("sha256").update(buffer).digest("hex") };
 }
 
 // DSH appends independently compressed Zstandard frames. Node's streaming
@@ -872,9 +879,8 @@ function completeZstdFrames(buffer: Buffer): ByteRange[] {
   return frames;
 }
 
-async function scanFile(filePath: string): Promise<{ scan: RawSessionScan | null; fingerprint: string }> {
+function scanSessionBuffer(filePath: string, buffer: Buffer): RawSessionScan | null {
   const accumulator = new SessionAccumulator(filePath);
-  const buffer = await readFile(filePath);
   const plaintext = filePath.endsWith(".zstd")
     ? completeZstdFrames(buffer).map(frame => zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString("utf8"))
     : [buffer.toString("utf8")];
@@ -890,7 +896,12 @@ async function scanFile(filePath: string): Promise<{ scan: RawSessionScan | null
       }
     }
   }
-  return { scan: accumulator.finish(), fingerprint: createHash("sha256").update(buffer).digest("hex") };
+  return accumulator.finish();
+}
+
+async function scanFile(filePath: string): Promise<{ scan: RawSessionScan | null; fingerprint: string }> {
+  const { buffer, fingerprint } = await readSessionFile(filePath);
+  return { scan: scanSessionBuffer(filePath, buffer), fingerprint };
 }
 
 function applyProjection(scan: RawSessionScan, projection: ProjectionRecord | undefined): RawSessionScan {
@@ -1045,19 +1056,32 @@ async function mapWithConcurrency<T, R>(items: readonly T[], concurrency: number
 }
 
 export class DshSessionScanner {
-  private readonly fileCache = new Map<string, { mtimeMs: number; size: number; fingerprint: string; scan: RawSessionScan | null }>();
+  private readonly fileCache = new Map<string, CachedRawSessionScan>();
   private persistentCacheLoaded = false;
   private persistentCacheDirty = false;
-  private readonly persistentCacheVersion: string;
+  private persistentCacheVersion: string;
+  private readonly timeZoneKey: () => string;
   private lastSignature = "";
   private lastResult: DshSessionScanResult | null = null;
 
   constructor(
     private readonly dshHome = resolveDshHome(),
     private readonly persistentCachePath?: string,
-    timeZoneKey = dshSessionScanTimeZoneKey()
+    timeZoneKey: string | (() => string) = dshSessionScanTimeZoneKey
   ) {
-    this.persistentCacheVersion = dshSessionScanCacheVersion(timeZoneKey);
+    this.timeZoneKey = typeof timeZoneKey === "function" ? timeZoneKey : () => timeZoneKey;
+    this.persistentCacheVersion = dshSessionScanCacheVersion(this.timeZoneKey());
+  }
+
+  private refreshTimeZone(): void {
+    const version = dshSessionScanCacheVersion(this.timeZoneKey());
+    if (version === this.persistentCacheVersion) return;
+    this.persistentCacheVersion = version;
+    this.fileCache.clear();
+    this.persistentCacheLoaded = false;
+    this.persistentCacheDirty = true;
+    this.lastSignature = "";
+    this.lastResult = null;
   }
 
   private loadPersistentCache(): void {
@@ -1091,17 +1115,11 @@ export class DshSessionScanner {
   }
 
   async scan(force = false): Promise<DshSessionScanResult> {
+    this.refreshTimeZone();
     this.loadPersistentCache();
     const sessionRoot = join(this.dshHome, "sessions");
     const projectionPath = join(this.dshHome, "storages", "session_projcache.json");
-    const metadata = await collectSessionFiles(sessionRoot);
-    const files = (await mapWithConcurrency(metadata, 4, async file => {
-      try {
-        return { ...file, fingerprint: await sessionFileFingerprint(file.filePath) };
-      } catch {
-        return null;
-      }
-    })).filter((file): file is SessionFile => file !== null);
+    const files = await collectSessionFiles(sessionRoot);
     let projectionText = "";
     let projectionSignature = "missing";
     try {
@@ -1111,7 +1129,7 @@ export class DshSessionScanner {
     } catch {
       // Projection cache is optional; raw logs remain authoritative.
     }
-    const signature = `${projectionSignature}|${files.map(file => `${file.filePath}:${file.mtimeMs}:${file.size}:${file.fingerprint}`).join("|")}`;
+    const signature = `${projectionSignature}|${files.map(file => `${file.filePath}:${file.mtimeMs}:${file.ctimeMs}:${file.size}`).join("|")}`;
     if (!force && signature === this.lastSignature && this.lastResult) {
       return { ...this.lastResult, analytics: { ...this.lastResult.analytics, lastScannedAt: Date.now() } };
     }
@@ -1130,22 +1148,44 @@ export class DshSessionScanner {
         this.persistentCacheDirty = true;
       }
     }
+    let sessionReadFailed = false;
     const scans = await mapWithConcurrency(files, 4, async file => {
       const cached = this.fileCache.get(file.filePath);
-      let rawScan: RawSessionScan | null;
-      let fingerprint = file.fingerprint;
-      if (!force && cached && cached.mtimeMs === file.mtimeMs && cached.size === file.size && cached.fingerprint === file.fingerprint) {
+      const metadataMatches = cached?.mtimeMs === file.mtimeMs && cached.size === file.size;
+      let rawScan: RawSessionScan | null = null;
+      let fingerprint = cached?.fingerprint ?? "";
+      let cacheChanged = false;
+      // Persisted entries omit the verified ctime and must prove their fingerprint once per process.
+      if (!force && cached && metadataMatches && cached.verifiedInProcessCtimeMs === file.ctimeMs) {
         rawScan = cached.scan;
       } else {
-        rawScan = null;
         try {
-          const scanned = await scanFile(file.filePath);
-          rawScan = scanned.scan;
-          fingerprint = scanned.fingerprint;
+          if (!force && cached && metadataMatches) {
+            const contents = await readSessionFile(file.filePath);
+            fingerprint = contents.fingerprint;
+            rawScan = fingerprint === cached.fingerprint && cached.scan
+              ? cached.scan
+              : scanSessionBuffer(file.filePath, contents.buffer);
+            cacheChanged = fingerprint !== cached.fingerprint || rawScan !== cached.scan;
+          } else {
+            const scanned = await scanFile(file.filePath);
+            rawScan = scanned.scan;
+            fingerprint = scanned.fingerprint;
+            cacheChanged = true;
+          }
+          this.fileCache.set(file.filePath, {
+            mtimeMs: file.mtimeMs,
+            size: file.size,
+            fingerprint,
+            verifiedInProcessCtimeMs: file.ctimeMs,
+            scan: rawScan
+          });
         } catch {
+          sessionReadFailed = true;
           // One unreadable session must not hide the rest of the local history.
         }
-        this.fileCache.set(file.filePath, { mtimeMs: file.mtimeMs, size: file.size, fingerprint, scan: rawScan });
+      }
+      if (cacheChanged) {
         this.persistentCacheDirty = true;
       }
       if (!rawScan) return null;
@@ -1163,8 +1203,13 @@ export class DshSessionScanner {
       requestIds: new Set(requests.map(request => request.id)),
       signature
     };
-    this.lastSignature = signature;
-    this.lastResult = result;
+    if (sessionReadFailed) {
+      this.lastSignature = "";
+      this.lastResult = null;
+    } else {
+      this.lastSignature = signature;
+      this.lastResult = result;
+    }
     this.savePersistentCache();
     return result;
   }
