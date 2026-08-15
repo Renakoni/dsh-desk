@@ -24,6 +24,7 @@ export type DshResourceSchemeManagerOptions = {
   storePath: string;
   dshHome: string;
   inventory: () => DshResourceInventory;
+  setDesiredSkills: (states: Record<string, boolean>) => void;
   setDesiredPlugins: (states: Record<string, boolean>) => void;
   now?: () => number;
 };
@@ -188,7 +189,7 @@ export class DshResourceSchemeManager {
     const requestedPlugins = stringArray(input.plugins);
     if (!name || requestedSkills === null || requestedPlugins === null) return { ok: false, issues: [issue("invalid-scheme-input", "Scheme content is invalid.")] };
     const withRequired = (requested: string[], kind: "skills" | "plugins") => [...new Set([
-      ...snapshot.inventory[kind].filter(item => !item.manageable && item.enabled).map(item => item.id),
+      ...snapshot.inventory[kind].filter(item => item.required).map(item => item.id),
       ...requested
     ])];
     const skills = withRequired(requestedSkills, "skills");
@@ -199,8 +200,8 @@ export class DshResourceSchemeManager {
     if (snapshot.schemes.some(scheme => scheme.id !== input.id && scheme.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
       return { ok: false, issues: [issue("duplicate-scheme-name", "A scheme with this name already exists.")] };
     }
-    const unknown = [...skills, ...plugins].find(id => ![...snapshot.inventory.skills, ...snapshot.inventory.plugins].some(item => item.id === id));
-    if (unknown) return { ok: false, issues: [issue("missing-resource", "Scheme references a resource that no longer exists.", unknown)] };
+    const invalid = skills.find(id => !id.startsWith("skill:")) ?? plugins.find(id => !id.startsWith("plugin:"));
+    if (invalid) return { ok: false, issues: [issue("invalid-scheme-input", "Scheme contains an invalid resource ID.", invalid)] };
     const timestamp = this.now();
     const scheme: DshResourceScheme = existing ? {
       ...existing,
@@ -244,6 +245,7 @@ export class DshResourceSchemeManager {
   private applyRuntime(scheme: DshResourceScheme, inventory: DshResourceInventory): void {
     const selectedSkills = new Set(scheme.skills);
     applyDshSkillSelection(selectedSkills, this.options.dshHome);
+    this.options.setDesiredSkills(skillStates(inventory.skills, selectedSkills));
     const selectedPlugins = new Set(scheme.plugins);
     this.options.setDesiredPlugins(Object.fromEntries(
       inventory.plugins.filter(item => item.manageable).map(item => [item.id.replace(/^plugin:/, ""), selectedPlugins.has(item.id)])
@@ -271,30 +273,32 @@ export class DshResourceSchemeManager {
     const snapshot = this.snapshot();
     const scheme = snapshot.schemes.find(item => item.id === input.schemeId);
     if (!scheme || scheme.id === ALL_DSH_SCHEME_ID) return { ok: false, issues: [issue("protected-scheme", "This scheme cannot be changed.")] };
+    if (snapshot.appliedSchemeId !== scheme.id) return { ok: false, issues: [issue("inactive-scheme", "Apply this scheme before changing a live resource.")] };
     const resource = [...snapshot.inventory.skills, ...snapshot.inventory.plugins].find(item => item.id === input.resourceId);
     if (!resource) return { ok: false, issues: [issue("missing-resource", "Resource no longer exists.", input.resourceId)] };
-    if (!resource.manageable) return { ok: false, issues: [issue("protected-resource", "This DSH resource is read-only.", input.resourceId)] };
-    const field = resource.kind === "skill" ? "skills" : "plugins";
-    const values = new Set(scheme[field]);
-    if (input.enabled) values.add(resource.id);
-    else values.delete(resource.id);
-    const updated = { ...scheme, [field]: [...values], updatedAt: this.now() };
-    const store: DshResourceSchemeStore = {
-      schemaVersion: DSH_RESOURCE_SCHEME_VERSION,
-      schemes: snapshot.schemes.map(item => item.id === scheme.id ? updated : item),
-      appliedSchemeId: snapshot.appliedSchemeId
-    };
-    saveStore(this.options.storePath, store);
-    if (store.appliedSchemeId === scheme.id) {
-      try { this.applyRuntime(updated, snapshot.inventory); } catch (error) {
-        saveStore(this.options.storePath, {
-          schemaVersion: DSH_RESOURCE_SCHEME_VERSION,
-          schemes: snapshot.schemes,
-          appliedSchemeId: snapshot.appliedSchemeId
-        });
-        return { ok: false, issues: [issue("resource-state-failed", error instanceof Error ? error.message : String(error), resource.id)] };
+    if (!resource.manageable || resource.required) return { ok: false, issues: [issue("protected-resource", "This DSH resource is required.", input.resourceId)] };
+    try {
+      if (resource.kind === "skill") {
+        const enabled = new Set(snapshot.inventory.skills.filter(item => item.enabled).map(item => item.id));
+        if (input.enabled) enabled.add(resource.id); else enabled.delete(resource.id);
+        applyDshSkillSelection(enabled, this.options.dshHome);
+        this.options.setDesiredSkills(skillStates(snapshot.inventory.skills, enabled));
+      } else {
+        this.options.setDesiredPlugins(Object.fromEntries(snapshot.inventory.plugins
+          .filter(item => item.manageable)
+          .map(item => [item.id.replace(/^plugin:/, ""), item.id === resource.id ? input.enabled : item.enabled])));
       }
+    } catch (error) {
+      return { ok: false, issues: [issue("resource-state-failed", error instanceof Error ? error.message : String(error), resource.id)] };
     }
     return { ok: true, schemeId: scheme.id, snapshot: this.snapshot() };
   }
+}
+
+function skillStates(resources: DshResourceInventory["skills"], selected: ReadonlySet<string>): Record<string, boolean> {
+  const states: Record<string, boolean> = {};
+  for (const resource of resources.filter(item => item.manageable)) {
+    states[resource.name] = Boolean(states[resource.name]) || selected.has(resource.id);
+  }
+  return states;
 }

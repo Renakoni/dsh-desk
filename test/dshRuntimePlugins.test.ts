@@ -15,7 +15,7 @@ describe("DSH runtime plugin inventory", () => {
     expect(snapshot?.entries).toHaveLength(160);
     expect(snapshot?.entries[159].entryId).toBe("root:entry-159");
     const resources = dshRuntimePluginResources(snapshot);
-    expect(resources[0].manageable).toBe(false);
+    expect(resources[0]).toMatchObject({ manageable: false, required: true });
     expect(resources[159]).toMatchObject({ id: "plugin:root:entry-159", manageable: true });
   });
 

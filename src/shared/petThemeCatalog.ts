@@ -69,12 +69,9 @@ export const MINATO_AQUA_CATALOG: PetThemeCatalog = {
     "running",
     "waiting_permission",
     "done",
-    "extra_action_5",
     "extra_action_7",
     "extra_action_8",
-    "extra_action_9",
-    "extra_action_aqua_bocchi",
-    "extra_action_aqua_pixel"
+    "extra_action_aqua_bocchi"
   ],
   roleDefaults: {
     idle: "idle",

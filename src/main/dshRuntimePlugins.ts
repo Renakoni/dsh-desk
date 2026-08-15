@@ -42,7 +42,8 @@ export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | n
       detail: entry.entryId,
       description: entry.fiberPhase === null ? "DSH Loader" : `DSH Loader - ${entry.fiberPhase}`,
       enabled: entry.enabled,
-      manageable: !protectedEntry
+      manageable: !protectedEntry,
+      required: protectedEntry
     };
   });
 }

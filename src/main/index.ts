@@ -154,7 +154,9 @@ let trayMenuWindow: BrowserWindow | null = null;
 let petExpanded = false;
 let eventServer: ReturnType<typeof createServer> | null = null;
 let dshRuntimePluginSnapshot: DshRuntimePluginSnapshot | null = null;
+let desiredDshSkillStates: Record<string, boolean> = {};
 let desiredDshPluginStates: Record<string, boolean> = {};
+let desiredDshResourcesRestored = false;
 let dshSkillMarketplaceInstance: DshSkillMarketplace | null = null;
 let tray: Tray | null = null;
 let startupWarmupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3646,10 +3648,17 @@ function dshResourceInventory(): DshResourceInventory {
     name: skill.name,
     description: skill.description,
     detail: skill.source === "user-dsh" ? "~/.dsh/skills" : "~/.agents/skills",
-    enabled: skill.enabled && skill.active,
-    manageable: skill.manageable
+    enabled: Object.prototype.hasOwnProperty.call(desiredDshSkillStates, skill.name)
+      ? desiredDshSkillStates[skill.name]
+      : skill.enabled && skill.active,
+    manageable: true
   }));
-  let plugins = dshRuntimePluginResources(dshRuntimePluginSnapshot);
+  let plugins = dshRuntimePluginResources(dshRuntimePluginSnapshot).map(plugin => {
+    const entryId = plugin.id.replace(/^plugin:/, "");
+    return Object.prototype.hasOwnProperty.call(desiredDshPluginStates, entryId)
+      ? { ...plugin, enabled: desiredDshPluginStates[entryId] }
+      : plugin;
+  });
   if (plugins.length === 0) {
     plugins = dshPluginCatalog().snapshot().plugins.map(plugin => ({
       id: `plugin:package:${plugin.packageName}`,
@@ -3658,7 +3667,8 @@ function dshResourceInventory(): DshResourceInventory {
       ...(plugin.description ? { description: plugin.description } : {}),
       detail: plugin.packageName,
       enabled: plugin.states.some(state => state.enabled),
-      manageable: false
+      manageable: false,
+      required: plugin.protected
     }));
   }
   return {
@@ -3667,6 +3677,10 @@ function dshResourceInventory(): DshResourceInventory {
     scannedAt: Date.now(),
     runtimeConnected: dshRuntimePluginSnapshot !== null
   };
+}
+
+function setDesiredDshSkills(states: Record<string, boolean>) {
+  desiredDshSkillStates = { ...states };
 }
 
 function setDesiredDshPlugins(states: Record<string, boolean>) {
@@ -3678,6 +3692,7 @@ function dshResourceSchemeManager() {
     storePath: dshResourceSchemesPath(),
     dshHome: resolveDshHome(),
     inventory: dshResourceInventory,
+    setDesiredSkills: setDesiredDshSkills,
     setDesiredPlugins: setDesiredDshPlugins
   });
 }
@@ -3690,18 +3705,25 @@ function dshSkillMarketplace() {
   return dshSkillMarketplaceInstance;
 }
 
-function restoreDesiredDshPlugins() {
-  if (Object.keys(desiredDshPluginStates).length > 0) return;
+function restoreDesiredDshResources() {
+  if (desiredDshResourcesRestored) return;
   try {
     const snapshot = dshResourceSchemeManager().snapshot();
     const scheme = snapshot.schemes.find(item => item.id === snapshot.appliedSchemeId);
     if (!scheme) return;
     const selected = new Set(scheme.plugins);
+    const selectedSkills = new Set(scheme.skills);
+    const skillStates: Record<string, boolean> = {};
+    for (const item of snapshot.inventory.skills.filter(item => item.manageable)) {
+      skillStates[item.name] = Boolean(skillStates[item.name]) || selectedSkills.has(item.id);
+    }
+    setDesiredDshSkills(skillStates);
     setDesiredDshPlugins(Object.fromEntries(
       snapshot.inventory.plugins
         .filter(item => item.manageable)
         .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
     ));
+    desiredDshResourcesRestored = true;
   } catch {
     // A malformed scheme file is reported by the resource page; never block the event bridge.
   }
@@ -3822,11 +3844,11 @@ function startEventServer() {
           return;
         }
         dshRuntimePluginSnapshot = snapshot;
-        restoreDesiredDshPlugins();
+        restoreDesiredDshResources();
         if (panelWindow && !panelWindow.isDestroyed()) {
           panelWindow.webContents.send("companion:dsh-resources-updated");
         }
-        sendJson(res, 200, { ok: true, desiredPlugins: desiredDshPluginStates });
+        sendJson(res, 200, { ok: true, desiredSkills: desiredDshSkillStates, desiredPlugins: desiredDshPluginStates });
       } catch {
         sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
       }

@@ -8,7 +8,7 @@ import {
   sessionStartEvent,
   usageRecordForSessionEvent,
 } from '../src/bridge.js'
-import { applyDesiredPluginStates, loaderInventory } from '../src/index.js'
+import { applyDesiredPluginStates, applyDesiredSkillStates, loaderInventory } from '../src/index.js'
 
 const servers = new Set()
 
@@ -243,5 +243,27 @@ describe('DSH Loader inventory bridge', () => {
     }]
     await applyDesiredPluginStates({ entries: () => entries }, { core: false, third: false })
     assert.deepEqual(updates, [['third-config', { disabled: true }]])
+  })
+
+  it('shadows disabled user skills without moving their shared files', () => {
+    const registrations = []
+    const disposed = []
+    const blockers = new Map()
+    const skills = { register: skill => {
+      registrations.push(skill)
+      return () => { disposed.push(skill.name) }
+    } }
+
+    applyDesiredSkillStates(skills, { review: false, deploy: true }, blockers)
+    assert.deepEqual(registrations, [{
+      name: 'review',
+      description: 'Disabled in the active DSH Desk scheme.',
+      invocation: { modelInvocable: false, userInvocable: false },
+      source: 'runtime',
+      content: '',
+    }])
+    applyDesiredSkillStates(skills, { review: true }, blockers)
+    assert.deepEqual(disposed, ['review'])
+    assert.equal(blockers.size, 0)
   })
 })

@@ -1,8 +1,25 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Code2, ExternalLink, Package, Plus, RefreshCw, Search, Settings2, Star, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Code2, ExternalLink, Package, Plus, RefreshCw, Search, Settings2, Star, Trash2 } from "lucide-react";
 import type { DshMarketplaceSnapshot, DshPluginSnapshot, DshSkillMarketplaceSnapshot } from "../../../../shared/dshPlugins";
 
 type MarketTab = "plugins" | "skills";
+type MarketSortKey = "name" | "stars";
+type MarketSort = { key: MarketSortKey; direction: "asc" | "desc" };
+
+function compareNullableStars(left: number | null, right: number | null, direction: MarketSort["direction"]): number {
+  if (left === null) return right === null ? 0 : 1;
+  if (right === null) return -1;
+  return direction === "asc" ? left - right : right - left;
+}
+
+function sortRows<T extends { name: string; stars: number | null }>(rows: T[], sort: MarketSort): T[] {
+  return [...rows].sort((left, right) => {
+    const primary = sort.key === "stars"
+      ? compareNullableStars(left.stars, right.stars, sort.direction)
+      : (sort.direction === "asc" ? 1 : -1) * left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+    return primary || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  });
+}
 
 export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack: () => void; onChanged: () => void }) {
   const [tab, setTab] = useState<MarketTab>("plugins");
@@ -17,6 +34,7 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
   const [repoManager, setRepoManager] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [repoBranch, setRepoBranch] = useState("");
+  const [sort, setSort] = useState<MarketSort>({ key: "name", direction: "asc" });
 
   async function loadPlugins(force = false) {
     setLoading(true);
@@ -44,12 +62,19 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
   useEffect(() => { void loadPlugins(); }, []);
   useEffect(() => {
     setQuery("");
+    setSort({ key: "name", direction: "asc" });
     if (tab === "skills" && !skills) void loadSkills();
   }, [tab, skills]);
 
-  const pluginRows = useMemo(() => (plugins?.plugins ?? []).filter(plugin => !deferredQuery || [plugin.name, plugin.owner, plugin.description.zh, plugin.description.en].join(" ").toLocaleLowerCase().includes(deferredQuery)), [deferredQuery, plugins]);
-  const skillRows = useMemo(() => (skills?.skills ?? []).filter(skill => !deferredQuery || [skill.name, skill.description, skill.repoOwner, skill.repoName].join(" ").toLocaleLowerCase().includes(deferredQuery)), [deferredQuery, skills]);
+  const pluginRows = useMemo(() => sortRows((plugins?.plugins ?? []).filter(plugin => !deferredQuery || [plugin.name, plugin.owner, plugin.description.zh, plugin.description.en].join(" ").toLocaleLowerCase().includes(deferredQuery)), sort), [deferredQuery, plugins, sort]);
+  const skillRows = useMemo(() => sortRows((skills?.skills ?? []).filter(skill => !deferredQuery || [skill.name, skill.description, skill.repoOwner, skill.repoName].join(" ").toLocaleLowerCase().includes(deferredQuery)), sort), [deferredQuery, skills, sort]);
   const installedPackages = new Set((installed?.plugins ?? []).map(plugin => plugin.packageName));
+
+  function changeSort(key: MarketSortKey) {
+    setSort(current => current.key === key
+      ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      : { key, direction: key === "stars" ? "desc" : "asc" });
+  }
 
   async function installPlugin(index: number) {
     const plugin = pluginRows[index];
@@ -122,11 +147,17 @@ export function DshMarketPanel({ zh, onBack, onChanged }: { zh: boolean; onBack:
       </section>
 
       <section className="dsh-market-list">
+        <header className="dsh-market-list-head">
+          <button type="button" onClick={() => changeSort("name")} aria-label={zh ? "按名称排序" : "Sort by name"}><span>{zh ? "名称" : "Name"}</span>{sort.key === "name" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
+          <button type="button" onClick={() => changeSort("stars")} aria-label={zh ? "按 Stars 排序" : "Sort by Stars"}><Star size={12} /><span>Stars</span>{sort.key === "stars" ? (sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}</button>
+          <span>{zh ? "操作" : "Action"}</span>
+        </header>
         {loading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{zh ? "正在加载..." : "Loading..."}</div> : null}
         {tab === "plugins" ? pluginRows.map((plugin, index) => {
           const isInstalled = installedPackages.has(plugin.packageName);
-          return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p>{zh ? plugin.description.zh : plugin.description.en}</p>{plugin.stars !== null ? <small className="dsh-market-row-meta"><Star size={11} fill="currentColor" />{plugin.stars.toLocaleString()}</small> : null}</div><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={zh ? "打开仓库" : "Open repository"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{isInstalled ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>;
-        }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p>{skill.description}</p></div><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(`https://github.com/${skill.repoOwner}/${skill.repoName}`)} aria-label={zh ? "打开仓库" : "Open repository"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{skill.installed ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>)}
+          const description = zh ? plugin.description.zh : plugin.description.en;
+          return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={zh ? "打开仓库" : "Open repository"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{isInstalled ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>;
+        }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={zh ? "打开 Skill 文档" : "Open Skill document"}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{skill.installed ? (zh ? "已安装" : "Installed") : (zh ? "安装" : "Install")}</button></div></article>)}
         {!loading && (tab === "plugins" ? pluginRows.length === 0 : skillRows.length === 0) ? <div className="claude-resource-empty">{zh ? "没有匹配项" : "No matches"}</div> : null}
       </section>
     </div>

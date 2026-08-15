@@ -1,5 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, Code2, Copy, Package, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Store } from "lucide-react";
+import { Check, ChevronDown, Code2, Copy, Package, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 import {
   ALL_DSH_SCHEME_ID,
@@ -15,7 +15,7 @@ import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { RoutingToaster } from "../dsh-routing/RoutingToaster";
 import { DshMarketPanel } from "./DshMarketPanel";
 import { DshSchemeEditor } from "./DshSchemeEditor";
-import { filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 type BusyAction = "refresh" | "save" | "delete" | "apply" | "resource" | null;
@@ -65,9 +65,9 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
   }, [active, refresh]);
   useEffect(() => {
     const applied = snapshot.appliedSchemeId;
-    setSelectedSchemeId(current => snapshot.schemes.some(scheme => scheme.id === current)
-      ? current
-      : applied && snapshot.schemes.some(scheme => scheme.id === applied) ? applied : snapshot.schemes[0]?.id ?? "");
+    setSelectedSchemeId(applied && snapshot.schemes.some(scheme => scheme.id === applied)
+      ? applied
+      : snapshot.schemes[0]?.id ?? "");
   }, [snapshot.appliedSchemeId, snapshot.schemes]);
   useEffect(() => setQuery(""), [activeTab]);
 
@@ -188,29 +188,29 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
         </nav>
       </div>
 
-      {!snapshot.inventory.runtimeConnected && activeTab === "plugins" ? <section className="claude-profile-unavailable"><AlertTriangle size={16} />{zh ? "完整插件列表暂不可用，当前仅显示已安装插件。" : "The complete plugin list is unavailable; only installed plugins are shown."}</section> : null}
       {loadError || actionError ? <section className="connection-error">{loadError ?? actionError}</section> : null}
       <section className="claude-resource-list-toolbar"><div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={zh ? `搜索 ${activeLabel}` : `Search ${activeLabel}`} /></div><button type="button" className="claude-resource-search-refresh" onClick={() => void refresh()} disabled={busyAction !== null} aria-label={zh ? "刷新" : "Refresh"}><RefreshCw size={17} className={busyAction === "refresh" ? "spinning" : undefined} /></button></section>
-      <ResourceTable items={filteredItems} loading={loading} selected={new Set(selectedScheme?.[activeTab] ?? [])} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} zh={zh} onState={changeResourceState} />
+      <ResourceTable items={filteredItems} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} zh={zh} onState={changeResourceState} />
     </div>
   );
 }
 
-function ResourceTable({ items, loading, selected, busyResourceId, hideSensitiveContent, zh, onState }: { items: DshResourceItem[]; loading: boolean; selected: Set<string>; busyResourceId: string | null; hideSensitiveContent: boolean; zh: boolean; onState: (resource: DshResourceItem, enabled: boolean) => void }) {
+function ResourceTable({ items, loading, busyResourceId, hideSensitiveContent, zh, onState }: { items: DshResourceItem[]; loading: boolean; busyResourceId: string | null; hideSensitiveContent: boolean; zh: boolean; onState: (resource: DshResourceItem, enabled: boolean) => void }) {
   const virtual = useVirtualRows(items, ROW_HEIGHT, `${items.map(item => item.id).join("|")}:${loading}`, 5);
   return (
     <section ref={virtual.viewportRef} className="claude-resource-table" onScroll={event => virtual.onScroll(event.currentTarget.scrollTop)}>
-      <header className="claude-resource-table-head"><span>{zh ? "资源" : "Resource"}</span><span>{zh ? "状态" : "Status"}</span></header>
+      <header className="claude-resource-table-head"><span>{zh ? "资源" : "Resource"}</span><span>{zh ? "状态" : "Status"}</span><span>{zh ? "操作" : "Action"}</span></header>
       {loading && items.length === 0 ? <div className="claude-resource-empty">{zh ? "正在扫描..." : "Scanning..."}</div> : items.length === 0 ? <div className="claude-resource-empty">{zh ? "当前方案没有此类资源" : "No resources in this scheme"}</div> : (
         <div className="claude-profile-readonly-space" style={{ height: virtual.totalHeight }}>
           {virtual.visible.map((resource, offset) => {
             const index = virtual.start + offset;
-            const member = selected.has(resource.id);
-            const description = hideSensitiveContent ? (zh ? "资源详情已隐藏" : "Resource details hidden") : resource.description ?? resource.detail ?? (zh ? "DSH 资源" : "DSH resource");
+            const presentation = dshResourcePresentation(resource, hideSensitiveContent, zh);
+            const busy = busyResourceId === resource.id;
             return (
               <article key={resource.id} className="claude-resource-row claude-profile-readonly-row" style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }}>
-                <div className="claude-resource-row-main"><div className="claude-resource-name-line"><strong>{resource.name}</strong></div><p title={description}>{description}</p>{resource.detail && !hideSensitiveContent ? <code>{resource.detail}</code> : null}</div>
-                {resource.manageable ? <button type="button" className="claude-profile-resource-action" onClick={() => onState(resource, !member)} disabled={busyResourceId !== null}>{member ? <PowerOff size={13} /> : <Power size={13} />}{member ? (zh ? "停用" : "Disable") : (zh ? "启用" : "Enable")}</button> : <span className={`claude-resource-status ${resource.enabled ? "active" : ""}`}>{resource.enabled ? (zh ? "已启用" : "Enabled") : (zh ? "未启用" : "Disabled")}</span>}
+                <div className="claude-resource-row-main"><div className="claude-resource-name-line"><strong>{resource.name}</strong></div>{presentation.description ? <p title={presentation.description}>{presentation.description}</p> : null}{presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}</div>
+                <span className={`claude-resource-status ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{resource.missing ? (zh ? "缺失" : "Missing") : resource.enabled ? (zh ? "已启用" : "Enabled") : (zh ? "已禁用" : "Disabled")}</span>
+                {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : resource.enabled ? (zh ? "禁用" : "Disable") : (zh ? "启用" : "Enable")}</button> : <span className="claude-profile-resource-unavailable">{resource.missing ? (zh ? "待处理" : "Needs attention") : resource.required ? (zh ? "必装" : "Required") : (zh ? "不可操作" : "Unavailable")}</span>}
               </article>
             );
           })}

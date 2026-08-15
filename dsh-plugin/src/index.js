@@ -2,7 +2,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { agentErrorEvent, createBridge, sessionStartEvent } from './bridge.js'
 
 export const name = 'dsh-desk'
-export const inject = ['agents', 'sessions', 'approval', 'loader']
+export const inject = ['agents', 'sessions', 'approval', 'loader', 'skills']
 
 export const Config = Schema.object({
   port: Schema.number().default(17321),
@@ -29,10 +29,10 @@ export function loaderInventory(loader) {
   return { entries }
 }
 
-function desiredPluginStates(value) {
+function desiredStates(value, key) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  if (!value.desiredPlugins || typeof value.desiredPlugins !== 'object' || Array.isArray(value.desiredPlugins)) return null
-  return value.desiredPlugins
+  if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) return null
+  return value[key]
 }
 
 export async function applyDesiredPluginStates(loader, desired) {
@@ -42,6 +42,25 @@ export async function applyDesiredPluginStates(loader, desired) {
     const enabled = desired[entry.id]
     if (typeof enabled !== 'boolean' || enabled === !entry.disabled) continue
     await entry.parent.tree.update(entry.options.id, { disabled: !enabled })
+  }
+}
+
+export function applyDesiredSkillStates(skills, desired, blockers) {
+  for (const [skillName, dispose] of blockers) {
+    if (desired[skillName] === false) continue
+    dispose()
+    blockers.delete(skillName)
+  }
+  for (const [skillName, enabled] of Object.entries(desired)) {
+    if (enabled !== false || blockers.has(skillName)) continue
+    const dispose = skills.register({
+      name: skillName,
+      description: 'Disabled in the active DSH Desk scheme.',
+      invocation: { modelInvocable: false, userInvocable: false },
+      source: 'runtime',
+      content: '',
+    })
+    blockers.set(skillName, dispose)
   }
 }
 
@@ -60,6 +79,7 @@ export function apply(ctx, config) {
 
   const lifetime = new AbortController()
   const bridge = createBridge(config, lifetime.signal)
+  const skillBlockers = new Map()
   let inventoryTimer
   let publishingInventory = false
   let republishInventory = false
@@ -71,8 +91,10 @@ export function apply(ctx, config) {
     publishingInventory = true
     try {
       const response = await bridge.publishPluginInventory(loaderInventory(ctx.loader))
-      const desired = desiredPluginStates(response)
-      if (desired) await applyDesiredPluginStates(ctx.loader, desired)
+      const desiredSkills = desiredStates(response, 'desiredSkills')
+      const desiredPlugins = desiredStates(response, 'desiredPlugins')
+      if (desiredSkills) applyDesiredSkillStates(ctx.skills, desiredSkills, skillBlockers)
+      if (desiredPlugins) await applyDesiredPluginStates(ctx.loader, desiredPlugins)
     } catch (error) {
       console.warn('dsh-desk: failed to apply desktop plugin state', error)
     } finally {
@@ -94,6 +116,8 @@ export function apply(ctx, config) {
   ctx.effect(() => async () => {
     if (inventoryTimer !== undefined) clearTimeout(inventoryTimer)
     clearInterval(inventoryInterval)
+    for (const dispose of skillBlockers.values()) dispose()
+    skillBlockers.clear()
     lifetime.abort()
     await bridge.close()
   }, 'dsh-desk: abort loopback requests')

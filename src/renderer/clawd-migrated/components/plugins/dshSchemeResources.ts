@@ -17,8 +17,26 @@ export function unavailableDshResources(
       name: resourceId.replace(/^[^:]+:/, ""),
       description: zh ? "当前环境中已不存在" : "No longer available in the current environment",
       enabled: false,
-      manageable: false
+      manageable: false,
+      missing: true
     }));
+}
+
+export function dshResourcePresentation(resource: DshResourceItem, hideSensitiveContent: boolean, zh: boolean) {
+  if (hideSensitiveContent) return { description: zh ? "资源详情已隐藏" : "Resource details hidden" };
+  const name = resource.name.trim().toLocaleLowerCase();
+  const description = resource.description?.trim();
+  const visibleDescription = description && description.toLocaleLowerCase() !== name ? description : undefined;
+  const detail = resource.detail?.trim();
+  const visibleDetail = detail
+    && detail.toLocaleLowerCase() !== name
+    && detail.toLocaleLowerCase() !== visibleDescription?.toLocaleLowerCase()
+    ? detail
+    : undefined;
+  return {
+    ...(visibleDescription ? { description: visibleDescription } : {}),
+    ...(visibleDetail ? { detail: visibleDetail } : {})
+  };
 }
 
 export function filterDshResources(resources: DshResourceItem[], query: string, hideSensitiveContent: boolean) {

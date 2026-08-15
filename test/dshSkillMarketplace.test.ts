@@ -28,14 +28,21 @@ describe("DSH Skill repository marketplace", () => {
     const calls: string[] = [];
     const fetcher = vi.fn(async (url: string | URL | Request) => {
       calls.push(String(url));
+      if (String(url).startsWith("https://api.github.com/")) {
+        return Response.json({ stargazers_count: 4321 });
+      }
       return String(url).endsWith("/develop")
         ? new Response("missing", { status: 404 })
         : new Response(archive(), { status: 200, headers: { "content-type": "application/zip" } });
     });
     const market = new DshSkillMarketplace({ dshHome, storePath, fetcher: fetcher as typeof fetch, now: () => 20 });
     const snapshot = await market.snapshot();
-    expect(calls.map(url => url.split("/").at(-1))).toEqual(["develop", "main"]);
+    expect(calls.filter(url => url.startsWith("https://codeload.github.com/")).map(url => url.split("/").at(-1))).toEqual(["develop", "main"]);
     expect(snapshot.skills.map(skill => skill.name)).toEqual(["other-tool", "root-tool"]);
+    expect(snapshot.skills.find(skill => skill.name === "other-tool")).toMatchObject({
+      readmeUrl: "https://github.com/owner/demo/blob/main/other/SKILL.md",
+      stars: 4321
+    });
     const installed = await market.install(snapshot.skills.find(skill => skill.name === "other-tool")!);
     expect(installed.ok).toBe(true);
     expect(installed.snapshot.skills.find(skill => skill.name === "other-tool")).toMatchObject({ enabled: true, manageable: true });

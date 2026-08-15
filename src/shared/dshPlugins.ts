@@ -150,9 +150,11 @@ export type DshMarketplaceSkill = {
   name: string;
   description: string;
   directory: string;
+  readmeUrl: string;
   repoOwner: string;
   repoName: string;
   repoBranch: string;
+  stars: number | null;
   installed: boolean;
 };
 

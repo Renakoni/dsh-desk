@@ -420,9 +420,11 @@ let mockDshSkillMarketplace: DshSkillMarketplaceSnapshot = {
     name: "frontend-design",
     description: "Build polished frontend interfaces.",
     directory: "skills/frontend-design",
+    readmeUrl: "https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md",
     repoOwner: "anthropics",
     repoName: "skills",
     repoBranch: "main",
+    stars: 0,
     installed: false
   }],
   scannedAt: Date.now(),
@@ -808,12 +810,10 @@ export function installClawdCompat() {
       const field = resource?.kind === "plugin" ? "plugins" : "skills";
       mockDshResourceSchemes = {
         ...mockDshResourceSchemes,
-        schemes: mockDshResourceSchemes.schemes.map(scheme => {
-          if (scheme.id !== input.schemeId) return scheme;
-          const ids = new Set(scheme[field]);
-          if (input.enabled) ids.add(input.resourceId); else ids.delete(input.resourceId);
-          return { ...scheme, [field]: [...ids] };
-        })
+        inventory: {
+          ...mockDshResourceSchemes.inventory,
+          [field]: mockDshResourceSchemes.inventory[field].map(item => item.id === input.resourceId ? { ...item, enabled: input.enabled } : item)
+        }
       };
       return { ok: true, schemeId: input.schemeId, snapshot: mockDshResourceSchemes };
     },

@@ -15,16 +15,16 @@ describe("resolvePetAnimation: action mapping reaches the real pet", () => {
   it("applies the user's mapping for the running state", () => {
     // The regression this file exists for: a mapping saved in the panel must
     // change what the desktop pet shows, not just the panel's preview.
-    const resolved = resolvePetAnimation("running", { running: "extra_action_5" }, null);
-    expect(resolved.animationKey).toBe("extra_action_5");
-    expect(resolved.imageKey).toBe("extra_action_5");
+    const resolved = resolvePetAnimation("running", { running: "extra_action_7" }, null);
+    expect(resolved.animationKey).toBe("extra_action_7");
+    expect(resolved.imageKey).toBe("extra_action_7");
   });
 
   it("maps pet states onto the picker's vocabulary (completed→done, permission-prompt→waiting_permission)", () => {
     expect(resolvePetAnimation("completed", { done: "extra_action_aqua_bocchi" }, null).animationKey)
       .toBe("extra_action_aqua_bocchi");
-    expect(resolvePetAnimation("permission-prompt", { waiting_permission: "extra_action_9" }, null).animationKey)
-      .toBe("extra_action_9");
+    expect(resolvePetAnimation("permission-prompt", { waiting_permission: "extra_action_8" }, null).animationKey)
+      .toBe("extra_action_8");
   });
 
   it("routes the error state through the running mapping, like the panel preview does", () => {
@@ -32,8 +32,8 @@ describe("resolvePetAnimation: action mapping reaches the real pet", () => {
   });
 
   it("leaves unmapped states on their defaults", () => {
-    expect(resolvePetAnimation("idle", { running: "extra_action_5" }, null).animationKey).toBe("idle");
-    expect(resolvePetAnimation("completed", { running: "extra_action_5" }, null).animationKey).toBe("done");
+    expect(resolvePetAnimation("idle", { running: "extra_action_7" }, null).animationKey).toBe("idle");
+    expect(resolvePetAnimation("completed", { running: "extra_action_7" }, null).animationKey).toBe("done");
   });
 
   it("accepts every animation the active theme provides in a mapping slot", () => {
@@ -51,7 +51,7 @@ describe("resolvePetAnimation: action mapping reaches the real pet", () => {
   it("rejects legacy alias names instead of translating them", () => {
     // Each case picks a state whose default differs from what alias
     // translation would have produced, so a translation bug cannot pass.
-    expect(resolvePetAnimation("running", { running: "extra-action-5" }, null).animationKey).toBe("running");
+    expect(resolvePetAnimation("running", { running: "retired-action" }, null).animationKey).toBe("running");
     expect(resolvePetAnimation("completed", { done: "thinking" }, null).animationKey).toBe("done");
     expect(resolvePetAnimation("running", { running: "permission" }, null).animationKey).toBe("running");
     expect(resolvePetAnimation("permission-prompt", { waiting_permission: "aqua-pixel" }, null).animationKey)
@@ -69,18 +69,18 @@ describe("resolvePetAnimation: action mapping reaches the real pet", () => {
   });
 
   it("shows the idle-rotation sprite while idling", () => {
-    expect(resolvePetAnimation("idle", {}, null, "extra_action_5").animationKey).toBe("extra_action_5");
+    expect(resolvePetAnimation("idle", {}, null, "extra_action_7").animationKey).toBe("extra_action_7");
   });
 
   it("ignores mappings stored under the idle slot", () => {
     // idle is the universal fallback slot; there is no mapping row for it,
     // so a persisted entry must not restyle the idle pet.
-    expect(resolvePetAnimation("idle", { idle: "extra_action_5" }, null).animationKey).toBe("idle");
+    expect(resolvePetAnimation("idle", { idle: "extra_action_7" }, null).animationKey).toBe("idle");
   });
 
   it("ignores an idle-rotation sprite outside the idle state", () => {
-    expect(resolvePetAnimation("running", {}, null, "extra_action_5").animationKey).toBe("running");
-    expect(resolvePetAnimation("permission-prompt", {}, null, "extra_action_5").animationKey).toBe("waiting_permission");
+    expect(resolvePetAnimation("running", {}, null, "extra_action_7").animationKey).toBe("running");
+    expect(resolvePetAnimation("permission-prompt", {}, null, "extra_action_7").animationKey).toBe("waiting_permission");
   });
 
   it("applies the user's mapping on top of the rotation base key, like the panel preview", () => {
@@ -89,21 +89,21 @@ describe("resolvePetAnimation: action mapping reaches the real pet", () => {
   });
 
   it("lets a preview beat the idle rotation", () => {
-    const resolved = resolvePetAnimation("idle", {}, { key: "extra_action_9", nonce: 3 }, "extra_action_5");
-    expect(resolved.animationKey).toBe("extra_action_9");
-    expect(resolved.imageKey).toBe("extra_action_9:3");
+    const resolved = resolvePetAnimation("idle", {}, { key: "extra_action_8", nonce: 3 }, "extra_action_7");
+    expect(resolved.animationKey).toBe("extra_action_8");
+    expect(resolved.imageKey).toBe("extra_action_8:3");
   });
 
   it("lets a preview override the mapping and stamps the nonce for restarts", () => {
-    const resolved = resolvePetAnimation("running", { running: "extra_action_5" }, { key: "extra_action_9", nonce: 42 });
-    expect(resolved.animationKey).toBe("extra_action_9");
-    expect(resolved.imageKey).toBe("extra_action_9:42");
+    const resolved = resolvePetAnimation("running", { running: "extra_action_7" }, { key: "extra_action_8", nonce: 42 });
+    expect(resolved.animationKey).toBe("extra_action_8");
+    expect(resolved.imageKey).toBe("extra_action_8:42");
   });
 
   it("keeps the mapped animation when a preview key is invalid", () => {
-    const resolved = resolvePetAnimation("running", { running: "extra_action_5" }, { key: "bogus", nonce: 7 });
-    expect(resolved.animationKey).toBe("extra_action_5");
-    expect(resolved.imageKey).toBe("extra_action_5:7");
+    const resolved = resolvePetAnimation("running", { running: "extra_action_7" }, { key: "bogus", nonce: 7 });
+    expect(resolved.animationKey).toBe("extra_action_7");
+    expect(resolved.imageKey).toBe("extra_action_7:7");
   });
 });
 
@@ -128,7 +128,7 @@ describe("resolvePetAnimation with an imported pack catalog", () => {
   it("validates mappings against the pack's keys, not the global superset", () => {
     expect(resolvePetAnimation("running", { running: "waving" }, null, null, packCatalog).animationKey).toBe("waving");
     // Canonical but built-in-only: rejected under the pack catalog.
-    expect(resolvePetAnimation("running", { running: "extra_action_5" }, null, null, packCatalog).animationKey).toBe("running");
+    expect(resolvePetAnimation("running", { running: "extra_action_7" }, null, null, packCatalog).animationKey).toBe("running");
   });
 
   it("applies mappings on top of the pack's role defaults", () => {
@@ -139,8 +139,8 @@ describe("resolvePetAnimation with an imported pack catalog", () => {
 
   it("validates idle-rotation sprites and previews against the pack catalog", () => {
     expect(resolvePetAnimation("idle", {}, null, "review", packCatalog).animationKey).toBe("review");
-    expect(resolvePetAnimation("idle", {}, null, "extra_action_9", packCatalog).animationKey).toBe("idle");
-    const preview = resolvePetAnimation("idle", {}, { key: "extra_action_9", nonce: 5 }, null, packCatalog);
+    expect(resolvePetAnimation("idle", {}, null, "extra_action_8", packCatalog).animationKey).toBe("idle");
+    const preview = resolvePetAnimation("idle", {}, { key: "extra_action_8", nonce: 5 }, null, packCatalog);
     expect(preview.animationKey).toBe("idle");
     expect(preview.imageKey).toBe("idle:5");
   });

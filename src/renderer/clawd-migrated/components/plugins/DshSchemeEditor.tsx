@@ -1,7 +1,8 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
 import type { DshResourceInventory, DshResourceItem, DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
-import { filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
+import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
+import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 const ROW_HEIGHT = 64;
@@ -32,11 +33,12 @@ export function DshSchemeEditor({
 }) {
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
-    skills: [...new Set([...inventory.skills.filter(item => !item.manageable && item.enabled).map(item => item.id), ...initial.skills])],
-    plugins: [...new Set([...inventory.plugins.filter(item => !item.manageable && item.enabled).map(item => item.id), ...initial.plugins])]
+    skills: [...new Set([...inventory.skills.filter(item => item.required).map(item => item.id), ...initial.skills])],
+    plugins: [...new Set([...inventory.plugins.filter(item => item.required).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
+  const [missingRemoval, setMissingRemoval] = useState<DshResourceItem | null>(null);
   const deferredQuery = useDeferredValue(query);
   const tabs = [
     { id: "plugins" as const, label: "Plugins", icon: Package },
@@ -55,11 +57,19 @@ export function DshSchemeEditor({
 
   useEffect(() => setQuery(""), [activeTab]);
 
-  function toggleResource(resource: DshResourceItem) {
-    if (!resource.manageable) return;
+  function moveResource(resource: DshResourceItem) {
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => ({ ...current, [activeTab]: resources.filter(item => next.has(item.id)).map(item => item.id) }));
+  }
+
+  function toggleResource(resource: DshResourceItem) {
+    if (resource.required) return;
+    if (selected.has(resource.id) && resource.missing) {
+      setMissingRemoval(resource);
+      return;
+    }
+    moveResource(resource);
   }
 
   const title = initial.id ? (zh ? "编辑配置方案" : "Edit scheme") : (zh ? "新建配置方案" : "New scheme");
@@ -89,18 +99,30 @@ export function DshSchemeEditor({
 
       <section className="claude-profile-editor-toolbar"><div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={zh ? `搜索 ${activeLabel}` : `Search ${activeLabel}`} /></div></section>
       <section className="claude-profile-transfer" aria-busy={busy}>
-        <TransferColumn title={zh ? "未选择" : "Unselected"} side="unselected" items={unselected} selected={selected} hideSensitiveContent={hideSensitiveContent} zh={zh} busy={busy} resetKey={`${activeTab}:${deferredQuery}:unselected`} onMove={toggleResource} />
-        <TransferColumn title={zh ? "已选择" : "Selected"} side="selected" items={selectedItems} selected={selected} hideSensitiveContent={hideSensitiveContent} zh={zh} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />
+        <TransferColumn title={zh ? "未选择" : "Unselected"} side="unselected" items={unselected} availableIds={availableIds} hideSensitiveContent={hideSensitiveContent} zh={zh} busy={busy} resetKey={`${activeTab}:${deferredQuery}:unselected`} onMove={toggleResource} />
+        <TransferColumn title={zh ? "已选择" : "Selected"} side="selected" items={selectedItems} availableIds={availableIds} hideSensitiveContent={hideSensitiveContent} zh={zh} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />
       </section>
+      {missingRemoval ? (
+        <ConfirmDialog
+          title={zh ? "删除缺失记录？" : "Remove missing record?"}
+          cancelLabel={zh ? "取消" : "Cancel"}
+          confirmLabel={zh ? "删除记录" : "Remove record"}
+          danger
+          onCancel={() => setMissingRemoval(null)}
+          onConfirm={() => { const resource = missingRemoval; setMissingRemoval(null); moveResource(resource); }}
+        >
+          <p>{zh ? `“${missingRemoval.name}”已不在当前环境中。是否从此方案移除该记录？` : `“${missingRemoval.name}” is no longer available. Remove its record from this scheme?`}</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
-function TransferColumn({ title, side, items, selected, hideSensitiveContent, zh, busy, resetKey, onMove }: {
+function TransferColumn({ title, side, items, availableIds, hideSensitiveContent, zh, busy, resetKey, onMove }: {
   title: string;
   side: "unselected" | "selected";
   items: DshResourceItem[];
-  selected: Set<string>;
+  availableIds: Set<string>;
   hideSensitiveContent: boolean;
   zh: boolean;
   busy: boolean;
@@ -116,11 +138,13 @@ function TransferColumn({ title, side, items, selected, hideSensitiveContent, zh
           <div className="claude-profile-virtual-space" style={{ height: virtual.totalHeight }}>
             {virtual.visible.map((resource, offset) => {
               const index = virtual.start + offset;
-              const description = hideSensitiveContent ? (zh ? "资源详情已隐藏" : "Resource details hidden") : resource.description ?? resource.detail ?? (zh ? "DSH 资源" : "DSH resource");
+              const available = availableIds.has(resource.id);
+              const presentation = dshResourcePresentation(resource, hideSensitiveContent, zh);
+              const description = presentation.description ?? presentation.detail;
               return (
-                <button type="button" key={resource.id} className="claude-profile-transfer-option" style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || !resource.manageable} onClick={() => onMove(resource)}>
-                  <span className="claude-profile-resource-copy"><strong>{resource.name}</strong><small title={description}>{description}</small></span>
-                  <span className={`claude-profile-live-state ${resource.enabled ? "active" : "idle"}`}>{!resource.manageable ? (zh ? "只读" : "Read-only") : selected.has(resource.id) ? (zh ? "已选择" : "Selected") : (zh ? "未选择" : "Unselected")}</span>
+                <button type="button" key={resource.id} className={`claude-profile-transfer-option ${resource.required ? "required" : ""}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || resource.required} onClick={() => onMove(resource)}>
+                  <span className="claude-profile-resource-copy"><strong>{resource.name}</strong>{description ? <small title={description}>{description}</small> : null}</span>
+                  <span className={`claude-profile-live-state ${!available ? "missing" : resource.enabled ? "active" : "idle"}`}>{!available ? (zh ? "缺失" : "Missing") : resource.required ? (zh ? "必装" : "Required") : resource.enabled ? (zh ? "已启用" : "Enabled") : (zh ? "已禁用" : "Disabled")}</span>
                 </button>
               );
             })}

@@ -8,6 +8,8 @@ export type DshResourceItem = {
   detail?: string;
   enabled: boolean;
   manageable: boolean;
+  required?: boolean;
+  missing?: boolean;
 };
 
 export type DshResourceInventory = {

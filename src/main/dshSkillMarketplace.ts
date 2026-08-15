@@ -82,7 +82,12 @@ function frontmatter(raw: string): Record<string, unknown> | null {
   return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
 }
 
-export function discoverSkillsInArchive(repo: DshSkillRepo, archive: Archive, installedNames: ReadonlySet<string>): DshMarketplaceSkill[] {
+export function discoverSkillsInArchive(
+  repo: DshSkillRepo,
+  archive: Archive,
+  installedNames: ReadonlySet<string>,
+  stars: number | null = null
+): DshMarketplaceSkill[] {
   const skillFiles = Object.keys(archive.files)
     .filter(path => posix.basename(path).toLocaleLowerCase() === "skill.md")
     .sort((left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right));
@@ -102,9 +107,11 @@ export function discoverSkillsInArchive(repo: DshSkillRepo, archive: Archive, in
       name,
       description,
       directory,
+      readmeUrl: `https://github.com/${repo.owner}/${repo.name}/blob/${archive.branch}/${directory ? `${directory}/` : ""}SKILL.md`,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoBranch: archive.branch,
+      stars,
       installed: installedNames.has(name.toLocaleLowerCase())
     });
   }
@@ -147,13 +154,28 @@ export class DshSkillMarketplace {
     throw new Error(lastError);
   }
 
+  private async repositoryStars(repo: DshSkillRepo): Promise<number | null> {
+    try {
+      const response = await this.fetcher(`https://api.github.com/repos/${repo.owner}/${repo.name}`, {
+        headers: { accept: "application/vnd.github+json" }
+      });
+      if (!response.ok) return null;
+      const data = await response.json() as { stargazers_count?: unknown };
+      return typeof data.stargazers_count === "number" && Number.isFinite(data.stargazers_count) && data.stargazers_count >= 0
+        ? data.stargazers_count
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   async snapshot(): Promise<DshSkillMarketplaceSnapshot> {
     const repos = loadRepos(this.options.storePath);
     const installedNames = new Set(scanDshSkills(this.options.dshHome).skills.map(skill => skill.name.toLocaleLowerCase()));
     const results = await Promise.all(repos.filter(repo => repo.enabled).map(async repo => {
       try {
-        const archive = await this.download(repo);
-        return { skills: discoverSkillsInArchive(repo, archive, installedNames), error: null };
+        const [archive, stars] = await Promise.all([this.download(repo), this.repositoryStars(repo)]);
+        return { skills: discoverSkillsInArchive(repo, archive, installedNames, stars), error: null };
       } catch (error) {
         return { skills: [], error: `${repo.owner}/${repo.name}: ${error instanceof Error ? error.message : String(error)}` };
       }
