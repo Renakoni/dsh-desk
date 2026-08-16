@@ -90,7 +90,17 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
 
   const pluginRows = useMemo(() => sortRows((plugins?.plugins ?? []).filter(plugin => !deferredQuery || [plugin.name, plugin.owner, plugin.description.zh, plugin.description.en].join(" ").toLocaleLowerCase().includes(deferredQuery)), sort), [deferredQuery, plugins, sort]);
   const skillRows = useMemo(() => sortRows((skills?.skills ?? []).filter(skill => !deferredQuery || [skill.name, skill.description, skill.repoOwner, skill.repoName].join(" ").toLocaleLowerCase().includes(deferredQuery)), sort), [deferredQuery, skills, sort]);
-  const installedPackages = new Set((installed?.plugins ?? []).map(plugin => plugin.packageName));
+  const targetProfiles = (installed?.profiles ?? [])
+    .filter(profile => profile.exists && !profile.readError)
+    .map(profile => profile.name);
+  const installedByPackage = new Map((installed?.plugins ?? []).map(plugin => [plugin.packageName, plugin]));
+
+  function isPluginInstalled(packageName: string): boolean {
+    if (targetProfiles.length === 0) return false;
+    const plugin = installedByPackage.get(packageName);
+    if (!plugin) return false;
+    return targetProfiles.every(profile => plugin.states.some(state => state.profile === profile && state.materialized));
+  }
 
   function changeSort(key: MarketSortKey) {
     setSort(current => current.key === key
@@ -107,8 +117,18 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
       profiles: installed.profiles.filter(profile => profile.exists && !profile.readError).map(profile => profile.name)
     });
     setBusy("");
-    if (!result.ok) { setMarketError("plugins", result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
     setInstalled(result.snapshot);
+    if (!result.ok) {
+      if (result.changedProfiles.length > 0) {
+        onChanged();
+        const partial = t("dshResources.partialInstallationFailed", "Installed in {profiles}, but installation failed for the remaining profiles.", { profiles: result.changedProfiles.join(", ") });
+        const restart = result.restartRequired ? ` ${t("dshResources.restartCompletedProfiles", "Restart DSH to use the completed changes.")}` : "";
+        setMarketError("plugins", `${partial}${restart}${result.error ? ` ${result.error}` : ""}`);
+      } else {
+        setMarketError("plugins", result.error ?? t("dshResources.installationFailed", "Installation failed."));
+      }
+      return;
+    }
     onChanged();
   }
 
@@ -178,7 +198,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
         </header>
         {isLoading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{t("dshResources.loading", "Loading...")}</div> : null}
         {tab === "plugins" ? pluginRows.map((plugin, index) => {
-          const isInstalled = installedPackages.has(plugin.packageName);
+          const isInstalled = isPluginInstalled(plugin.packageName);
           const description = locale === "zh" ? plugin.description.zh : plugin.description.en;
           return <article key={plugin.id} className="dsh-market-row"><div><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={t("dshResources.openRepository", "Open repository")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{t(isInstalled ? "dshResources.installed" : "dshResources.install", isInstalled ? "Installed" : "Install")}</button></div></article>;
         }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={t("dshResources.openSkillDocument", "Open Skill document")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{t(skill.installed ? "dshResources.installed" : "dshResources.install", skill.installed ? "Installed" : "Install")}</button></div></article>)}

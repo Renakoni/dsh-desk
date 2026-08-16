@@ -20,7 +20,7 @@ const MAX_UNPACKED_BYTES = 100 * 1024 * 1024;
 const ARCHIVE_TIMEOUT_MS = 10_000;
 const STARS_TIMEOUT_MS = 5_000;
 const CACHE_REFRESH_MS = 12 * 60 * 60 * 1000;
-const MARKETPLACE_CACHE_VERSION = 1;
+const MARKETPLACE_CACHE_VERSION = 2;
 const DEFAULT_REPOS: DshSkillRepo[] = [
   { owner: "anthropics", name: "skills", branch: "main", enabled: true },
   { owner: "ComposioHQ", name: "awesome-claude-skills", branch: "master", enabled: true },
@@ -182,8 +182,8 @@ export function discoverSkillsInArchive(
   const acceptedDirectories: string[] = [];
   const skills: DshMarketplaceSkill[] = [];
   for (const filePath of skillFiles) {
-    const directory = posix.dirname(filePath) === "." ? "" : posix.dirname(filePath);
-    if (acceptedDirectories.some(parent => directory === parent || directory.startsWith(`${parent}/`))) continue;
+    const directory = posix.dirname(filePath);
+    if (acceptedDirectories.some(parent => parent === "." || directory === parent || directory.startsWith(`${parent}/`))) continue;
     let data: Record<string, unknown> | null;
     try { data = frontmatter(strFromU8(archive.files[filePath])); } catch { data = null; }
     const name = typeof data?.name === "string" ? data.name : "";
@@ -191,11 +191,11 @@ export function discoverSkillsInArchive(
     if (!SKILL_NAME.test(name) || !description) continue;
     acceptedDirectories.push(directory);
     skills.push({
-      key: `${repo.owner}/${repo.name}:${directory || "."}`,
+      key: `${repo.owner}/${repo.name}:${directory}`,
       name,
       description,
       directory,
-      readmeUrl: `https://github.com/${repo.owner}/${repo.name}/blob/${archive.branch}/${directory ? `${directory}/` : ""}SKILL.md`,
+      readmeUrl: `https://github.com/${repo.owner}/${repo.name}/blob/${archive.branch}/${directory === "." ? "" : `${directory}/`}SKILL.md`,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoBranch: archive.branch,
@@ -349,7 +349,7 @@ export class DshSkillMarketplace {
   async install(skill: DshMarketplaceSkill): Promise<DshSkillInstallResult> {
     try {
       const repo: DshSkillRepo = { owner: skill.repoOwner, name: skill.repoName, branch: skill.repoBranch, enabled: true };
-      if (!validRepo(repo) || !SKILL_NAME.test(skill.name) || skill.key !== `${repo.owner}/${repo.name}:${skill.directory || "."}`) {
+      if (!validRepo(repo) || !SKILL_NAME.test(skill.name) || skill.key !== `${repo.owner}/${repo.name}:${skill.directory}`) {
         throw new Error("Skill installation request is invalid.");
       }
       const archive = await this.download(repo);
@@ -358,8 +358,10 @@ export class DshSkillMarketplace {
       const destination = resolve(this.options.dshHome, "skills", discovered.name);
       const skillsRoot = resolve(this.options.dshHome, "skills");
       if (dirname(destination) !== skillsRoot || existsSync(destination)) throw new Error("A Skill with this name is already installed.");
-      const prefix = discovered.directory ? `${discovered.directory}/` : "";
-      const entries = Object.entries(archive.files).filter(([path]) => path === `${discovered.directory}/SKILL.md` || path.startsWith(prefix));
+      const prefix = discovered.directory === "." ? "" : `${discovered.directory}/`;
+      const entries = discovered.directory === "."
+        ? Object.entries(archive.files)
+        : Object.entries(archive.files).filter(([path]) => path.startsWith(prefix));
       mkdirSync(skillsRoot, { recursive: true });
       mkdirSync(destination, { recursive: false });
       try {

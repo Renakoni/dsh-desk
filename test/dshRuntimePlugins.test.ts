@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dshRuntimePluginResources, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
+import { dshRuntimePluginResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
 
 describe("DSH runtime plugin inventory", () => {
   it("accepts the complete Loader projection and preserves its order", () => {
@@ -23,5 +23,12 @@ describe("DSH runtime plugin inventory", () => {
     const row = { entryId: "same", configId: "one", moduleName: "demo", enabled: true, fiberPhase: null };
     expect(normalizeDshRuntimePluginSnapshot({ entries: [row, row] })).toBeNull();
     expect(normalizeDshRuntimePluginSnapshot({ entries: [{ ...row, enabled: "yes" }] })).toBeNull();
+  });
+
+  it("expires a runtime inventory after the heartbeat window", () => {
+    const snapshot = normalizeDshRuntimePluginSnapshot({ entries: [] }, 1_000);
+    expect(isDshRuntimePluginSnapshotFresh(snapshot, 15_999)).toBe(true);
+    expect(isDshRuntimePluginSnapshotFresh(snapshot, 16_000)).toBe(false);
+    expect(isDshRuntimePluginSnapshotFresh(null, 1_000)).toBe(false);
   });
 });

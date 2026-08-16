@@ -23,7 +23,7 @@ const snapshot: DshResourceSchemesSnapshot = {
   schemes: [{
     id: "default",
     name: "Default",
-    skills: ["skill:user-dsh:review"],
+    skills: ["skill:name:review"],
     plugins: plugins.map(plugin => plugin.id),
     isProtected: true,
     createdAt: 1,
@@ -31,7 +31,7 @@ const snapshot: DshResourceSchemesSnapshot = {
   }, {
     id: "all",
     name: "All",
-    skills: ["skill:user-dsh:review"],
+    skills: ["skill:name:review"],
     plugins: plugins.map(plugin => plugin.id),
     isProtected: true,
     createdAt: 1,
@@ -39,7 +39,7 @@ const snapshot: DshResourceSchemesSnapshot = {
   }],
   appliedSchemeId: "default",
   inventory: {
-    skills: [{ id: "skill:user-dsh:review", kind: "skill", name: "review", description: "Review repository changes", enabled: true, manageable: true }],
+    skills: [{ id: "skill:name:review", kind: "skill", name: "review", description: "Review repository changes", enabled: true, manageable: true, sourceIds: ["skill:user-dsh:review"] }],
     plugins,
     runtimeConnected: true,
     scannedAt: 1
@@ -104,7 +104,7 @@ describe("DSH resource schemes page", () => {
     fireEvent.click(screen.getByRole("button", { name: /Skills/ }));
     await screen.findByText("review");
     fireEvent.click(screen.getByRole("button", { name: "禁用" }));
-    await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({ schemeId: "default", resourceId: "skill:user-dsh:review", enabled: false }));
+    await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({ schemeId: "default", resourceId: "skill:name:review", enabled: false }));
   });
 
   it("uses one market entry and separates plugin and Skill markets inside it", async () => {
@@ -141,6 +141,24 @@ describe("DSH resource schemes page", () => {
     expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
       skills: [],
       plugins: expect.arrayContaining(["plugin:entry-0"])
+    }));
+  });
+
+  it("keeps a live resource that cannot be selected locked inside the scheme", async () => {
+    const fixedPlugin = { id: "plugin:fixed", kind: "plugin" as const, name: "fixed-plugin", enabled: true, manageable: false, schemeSelectable: false };
+    const fixedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      inventory: { ...snapshot.inventory, plugins: [...snapshot.inventory.plugins, fixedPlugin] }
+    };
+    const mockApi = renderPage(api(fixedSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "fixed-plugin" } });
+    const fixed = await screen.findByRole("button", { name: /fixed-plugin/ });
+    expect((fixed as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
+      plugins: expect.arrayContaining(["plugin:fixed"])
     }));
   });
 
@@ -201,6 +219,87 @@ describe("DSH resource schemes page", () => {
     expect(screen.getAllByRole("article")[0].textContent).toContain("DSH Demo");
     fireEvent.click(stars);
     expect(screen.getAllByRole("article")[0].textContent).toContain("Zulu Plugin");
+  });
+
+  it("keeps the install action available when a plugin is missing from one profile", async () => {
+    const mockApi = api();
+    mockApi.listDshPlugins = vi.fn(async () => ({
+      profiles: [
+        { name: "web", label: "Web", exists: true },
+        { name: "headless", label: "Headless", exists: true }
+      ],
+      plugins: [{
+        packageName: "dsh-demo",
+        name: "DSH Demo",
+        kind: "plugin" as const,
+        protected: false,
+        states: [
+          { profile: "web", enabled: true, materialized: true, bundleCapable: true },
+          { profile: "headless", enabled: false, materialized: false, bundleCapable: null }
+        ]
+      }],
+      dshHome: "C:\\.dsh",
+      npxAvailable: true,
+      scannedAt: 1
+    })) as unknown as typeof mockApi.listDshPlugins;
+    mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
+      ok: true,
+      changedProfiles: ["web", "headless"],
+      restartRequired: true,
+      snapshot: await mockApi.listDshPlugins()
+    })) as unknown as typeof mockApi.installDshMarketplacePlugin;
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    const demoRow = (await screen.findByText("DSH Demo")).closest("article");
+    expect(demoRow).not.toBeNull();
+    const install = within(demoRow as HTMLElement).getByRole("button", { name: "安装" });
+    expect((install as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(install);
+    await waitFor(() => expect(mockApi.installDshMarketplacePlugin).toHaveBeenCalledWith({
+      installSpec: "github:demo/dsh-demo",
+      profiles: ["web", "headless"]
+    }));
+  });
+
+  it("keeps the backend snapshot and reports profiles changed before an install failure", async () => {
+    const mockApi = api();
+    const profiles = [
+      { name: "web", label: "Web", exists: true },
+      { name: "headless", label: "Headless", exists: true }
+    ];
+    mockApi.listDshPlugins = vi.fn(async () => ({ profiles, plugins: [], dshHome: "C:\\.dsh", npxAvailable: true, scannedAt: 1 })) as unknown as typeof mockApi.listDshPlugins;
+    mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
+      ok: false,
+      changedProfiles: ["web"],
+      restartRequired: true,
+      error: "Headless installation failed.",
+      snapshot: {
+        profiles,
+        plugins: [{
+          packageName: "dsh-demo",
+          name: "DSH Demo",
+          kind: "plugin" as const,
+          protected: false,
+          states: [
+            { profile: "web", enabled: true, materialized: true, bundleCapable: true },
+            { profile: "headless", enabled: false, materialized: false, bundleCapable: null }
+          ]
+        }],
+        dshHome: "C:\\.dsh",
+        npxAvailable: true,
+        scannedAt: 2
+      }
+    })) as unknown as typeof mockApi.installDshMarketplacePlugin;
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    const demoRow = (await screen.findByText("DSH Demo")).closest("article");
+    fireEvent.click(within(demoRow as HTMLElement).getByRole("button", { name: "安装" }));
+    expect(await screen.findByText(/已安装到 web，但其他配置安装失败/)).not.toBeNull();
+    expect(screen.getByText(/已完成的配置需重启 DSH 后生效/)).not.toBeNull();
+    await waitFor(() => expect(mockApi.getDshResourceSchemes).toHaveBeenCalledTimes(2));
+    expect(within(demoRow as HTMLElement).getByRole("button", { name: "安装" })).not.toBeNull();
   });
 
   it("shows repository errors instead of presenting a failed Skill market as empty", async () => {

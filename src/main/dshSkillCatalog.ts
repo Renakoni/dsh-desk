@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DshSkillItem, DshSkillSnapshot, DshSkillSource } from "../shared/dshPlugins";
+import type { DshResourceItem } from "../shared/dshResources";
 import { resolveDshHome } from "./dshPaths";
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -156,6 +157,31 @@ export function scanDshSkills(dshHome = resolveDshHome(), agentsHome = resolveDs
     roots: roots.map(root => ({ source: root.source, path: root.path })),
     scannedAt: Date.now()
   };
+}
+
+export function dshSkillResources(snapshot: DshSkillSnapshot, desiredStates: Readonly<Record<string, boolean>>): DshResourceItem[] {
+  const grouped = new Map<string, DshSkillItem[]>();
+  for (const skill of snapshot.skills) {
+    const group = grouped.get(skill.name) ?? [];
+    group.push(skill);
+    grouped.set(skill.name, group);
+  }
+  return [...grouped.entries()].map(([name, sources]) => {
+    const visible = sources.find(skill => skill.active) ?? sources.find(skill => skill.enabled) ?? sources[0];
+    const sourceLabels = [...new Set(sources.map(skill => skill.source === "user-dsh" ? "~/.dsh/skills" : "~/.agents/skills"))];
+    return {
+      id: `skill:name:${name}`,
+      kind: "skill",
+      name,
+      description: visible.description,
+      detail: sourceLabels.join(" + "),
+      enabled: Object.prototype.hasOwnProperty.call(desiredStates, name)
+        ? desiredStates[name]
+        : sources.some(skill => skill.enabled && skill.active),
+      manageable: true,
+      sourceIds: sources.map(skill => skill.id)
+    };
+  });
 }
 
 export function applyDshSkillSelection(selectedIds: ReadonlySet<string>, dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): void {

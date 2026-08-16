@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
-import type { DshResourceInventory, DshResourceItem, DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
+import { isDshResourceSchemeSelectable, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
@@ -33,8 +33,8 @@ export function DshSchemeEditor({
   const { t } = useI18n();
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
-    skills: [...new Set([...inventory.skills.filter(item => item.required).map(item => item.id), ...initial.skills])],
-    plugins: [...new Set([...inventory.plugins.filter(item => item.required).map(item => item.id), ...initial.plugins])]
+    skills: [...new Set([...inventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
+    plugins: [...new Set([...inventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
@@ -64,7 +64,7 @@ export function DshSchemeEditor({
   }
 
   function toggleResource(resource: DshResourceItem) {
-    if (resource.required) return;
+    if (resource.required || !isDshResourceSchemeSelectable(resource)) return;
     if (selected.has(resource.id) && resource.missing) {
       setMissingRemoval(resource);
       return;
@@ -141,7 +141,7 @@ function TransferColumn({ title, side, items, availableIds, hideSensitiveContent
               const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
               const description = presentation.description ?? presentation.detail;
               return (
-                <button type="button" key={resource.id} className={`claude-profile-transfer-option ${resource.required ? "required" : ""}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || resource.required} onClick={() => onMove(resource)}>
+                <button type="button" key={resource.id} className={`claude-profile-transfer-option ${resource.required || !isDshResourceSchemeSelectable(resource) ? "required" : ""}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || resource.required || !isDshResourceSchemeSelectable(resource)} onClick={() => onMove(resource)}>
                   <span className="claude-profile-resource-copy"><strong>{resource.name}</strong>{description ? <small title={description}>{description}</small> : null}</span>
                   <span className={`claude-profile-live-state ${!available ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(!available ? "dshResources.missing" : resource.required ? "dshResources.required" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", !available ? "Missing" : resource.required ? "Required" : resource.enabled ? "Enabled" : "Disabled")}</span>
                 </button>

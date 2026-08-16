@@ -615,6 +615,8 @@
     "repositoryAddFailed": "Couldn't add the repository.",
     "repositoryRemoveFailed": "Couldn't remove the repository.",
     "installationFailed": "Installation failed.",
+    "partialInstallationFailed": "Installed in {profiles}, but installation failed for the remaining profiles.",
+    "restartCompletedProfiles": "Restart DSH to use the completed changes.",
     "nameHeader": "Name",
     "starsHeader": "Stars",
     "sortByName": "Sort by name",

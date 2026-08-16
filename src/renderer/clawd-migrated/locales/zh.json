@@ -615,6 +615,8 @@
     "repositoryAddFailed": "无法添加仓库。",
     "repositoryRemoveFailed": "无法删除仓库。",
     "installationFailed": "安装失败。",
+    "partialInstallationFailed": "已安装到 {profiles}，但其他配置安装失败。",
+    "restartCompletedProfiles": "已完成的配置需重启 DSH 后生效。",
     "nameHeader": "名称",
     "starsHeader": "Stars",
     "sortByName": "按名称排序",

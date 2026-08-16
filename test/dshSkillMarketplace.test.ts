@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DshSkillMarketplace, unzipDshSkillArchive } from "../src/main/dshSkillMarketplace";
+import { discoverSkillsInArchive, DshSkillMarketplace, unzipDshSkillArchive } from "../src/main/dshSkillMarketplace";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -18,6 +18,29 @@ function archive() {
 }
 
 describe("DSH Skill repository marketplace", () => {
+  it("treats a repository-root Skill as the nested discovery boundary", () => {
+    const skills = discoverSkillsInArchive(
+      { owner: "owner", name: "root-skill", branch: "main", enabled: true },
+      {
+        branch: "main",
+        files: {
+          "SKILL.md": strToU8("---\nname: root-skill\ndescription: Root Skill\n---\n"),
+          "nested/SKILL.md": strToU8("---\nname: nested-skill\ndescription: Nested Skill\n---\n"),
+          "scripts/run.js": strToU8("export default true\n")
+        }
+      },
+      new Set()
+    );
+    expect(skills).toEqual([
+      expect.objectContaining({
+        key: "owner/root-skill:.",
+        name: "root-skill",
+        directory: ".",
+        readmeUrl: "https://github.com/owner/root-skill/blob/main/SKILL.md"
+      })
+    ]);
+  });
+
   it("falls back to main, stops below a discovered Skill, and installs its directory", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skill-market-"));
     roots.push(root);

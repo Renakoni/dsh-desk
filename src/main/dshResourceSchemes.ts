@@ -13,7 +13,8 @@ import type {
 import {
   ALL_DSH_SCHEME_ID,
   DEFAULT_DSH_SCHEME_ID,
-  DSH_RESOURCE_SCHEME_VERSION
+  DSH_RESOURCE_SCHEME_VERSION,
+  isDshResourceSchemeSelectable
 } from "../shared/dshResources";
 import { writeTextFileAtomic } from "./filePersistence";
 import { applyDshSkillSelection } from "./dshSkillCatalog";
@@ -124,6 +125,15 @@ function migrateRuntimePluginIds(ids: string[], inventory: DshResourceInventory)
   }))];
 }
 
+function migrateSkillIds(ids: string[], inventory: DshResourceInventory): string[] {
+  const currentBySourceId = new Map<string, string>();
+  for (const resource of inventory.skills) {
+    currentBySourceId.set(resource.id, resource.id);
+    for (const sourceId of resource.sourceIds ?? []) currentBySourceId.set(sourceId, resource.id);
+  }
+  return [...new Set(ids.map(id => currentBySourceId.get(id) ?? id))];
+}
+
 function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory): DshResourceDrift {
   const schemeId = store.appliedSchemeId;
   const scheme = store.schemes.find(item => item.id === schemeId);
@@ -177,13 +187,14 @@ export class DshResourceSchemeManager {
     const next = {
       ...store,
       schemes: store.schemes.map(scheme => {
+        const nextSkills = migrateSkillIds(scheme.skills, inventory);
         const nextPlugins = migrateRuntimePlugins ? migrateRuntimePluginIds(scheme.plugins, inventory) : scheme.plugins;
         if (scheme.id === ALL_DSH_SCHEME_ID) {
           if (arraysEqual(scheme.skills, skills) && arraysEqual(scheme.plugins, plugins)) return scheme;
           return { ...scheme, skills, plugins, updatedAt: timestamp };
         }
-        if (arraysEqual(scheme.plugins, nextPlugins)) return scheme;
-        return { ...scheme, plugins: nextPlugins, updatedAt: timestamp };
+        if (arraysEqual(scheme.skills, nextSkills) && arraysEqual(scheme.plugins, nextPlugins)) return scheme;
+        return { ...scheme, skills: nextSkills, plugins: nextPlugins, updatedAt: timestamp };
       })
     };
     if (next.schemes.every((scheme, index) => scheme === store.schemes[index])) return store;
@@ -203,12 +214,12 @@ export class DshResourceSchemeManager {
     const requestedSkills = stringArray(input.skills);
     const requestedPlugins = stringArray(input.plugins);
     if (!name || requestedSkills === null || requestedPlugins === null) return { ok: false, issues: [issue("invalid-scheme-input", "Scheme content is invalid.")] };
-    const withRequired = (requested: string[], kind: "skills" | "plugins") => [...new Set([
-      ...snapshot.inventory[kind].filter(item => item.required).map(item => item.id),
+    const withFixed = (requested: string[], kind: "skills" | "plugins") => [...new Set([
+      ...snapshot.inventory[kind].filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id),
       ...requested
     ])];
-    const skills = withRequired(requestedSkills, "skills");
-    const plugins = withRequired(requestedPlugins, "plugins");
+    const skills = withFixed(requestedSkills, "skills");
+    const plugins = withFixed(requestedPlugins, "plugins");
     const existing = input.id ? snapshot.schemes.find(scheme => scheme.id === input.id) : undefined;
     if (input.id && !existing) return { ok: false, issues: [issue("scheme-not-found", "Scheme no longer exists.")] };
     if (existing?.id === ALL_DSH_SCHEME_ID) return { ok: false, issues: [issue("protected-scheme", "The All scheme updates automatically.")] };
@@ -259,8 +270,11 @@ export class DshResourceSchemeManager {
 
   private applyRuntime(scheme: DshResourceScheme, inventory: DshResourceInventory): void {
     const selectedSkills = new Set(scheme.skills);
-    applyDshSkillSelection(selectedSkills, this.options.dshHome);
-    this.options.setDesiredSkills(skillStates(inventory.skills, selectedSkills));
+    const selectedSourceIds = new Set(inventory.skills
+      .filter(item => selectedSkills.has(item.id))
+      .flatMap(item => item.sourceIds ?? [item.id]));
+    applyDshSkillSelection(selectedSourceIds, this.options.dshHome);
+    this.options.setDesiredSkills(dshDesiredSkillStates(inventory.skills, selectedSkills));
     const selectedPlugins = new Set(scheme.plugins);
     this.options.setDesiredPlugins(Object.fromEntries(
       inventory.plugins.filter(item => item.manageable).map(item => [item.id.replace(/^plugin:/, ""), selectedPlugins.has(item.id)])
@@ -296,7 +310,7 @@ export class DshResourceSchemeManager {
       if (resource.kind === "skill") {
         const enabled = new Set(snapshot.inventory.skills.filter(item => item.enabled).map(item => item.id));
         if (input.enabled) enabled.add(resource.id); else enabled.delete(resource.id);
-        this.options.setDesiredSkills(skillStates(snapshot.inventory.skills, enabled));
+        this.options.setDesiredSkills(dshDesiredSkillStates(snapshot.inventory.skills, enabled));
       } else {
         this.options.setDesiredPlugins(Object.fromEntries(snapshot.inventory.plugins
           .filter(item => item.manageable)
@@ -309,7 +323,7 @@ export class DshResourceSchemeManager {
   }
 }
 
-function skillStates(resources: DshResourceInventory["skills"], selected: ReadonlySet<string>): Record<string, boolean> {
+export function dshDesiredSkillStates(resources: DshResourceInventory["skills"], selected: ReadonlySet<string>): Record<string, boolean> {
   const states: Record<string, boolean> = {};
   for (const resource of resources.filter(item => item.manageable)) {
     states[resource.name] = Boolean(states[resource.name]) || selected.has(resource.id);

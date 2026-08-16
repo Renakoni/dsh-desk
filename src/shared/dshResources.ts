@@ -9,9 +9,16 @@ export type DshResourceItem = {
   detail?: string;
   enabled: boolean;
   manageable: boolean;
+  schemeSelectable?: boolean;
+  sourceIds?: string[];
   required?: boolean;
   missing?: boolean;
 };
+
+export function isDshResourceSchemeSelectable(resource: DshResourceItem): boolean {
+  if (resource.missing) return true;
+  return resource.schemeSelectable ?? resource.manageable;
+}
 
 export type DshResourceInventory = {
   skills: DshResourceItem[];

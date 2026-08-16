@@ -3,6 +3,7 @@ import type { DshResourceItem } from "../shared/dshResources";
 
 const PHASES = new Set<DshRuntimePluginPhase>(["pending", "loading", "active", "failed", "unloading", null]);
 const MAX_RUNTIME_ENTRIES = 2048;
+export const DSH_RUNTIME_PLUGIN_TTL_MS = 15_000;
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -29,6 +30,15 @@ export function normalizeDshRuntimePluginSnapshot(value: unknown, receivedAt = D
     entries.push({ entryId, configId, moduleName, enabled: entry.enabled, fiberPhase });
   }
   return { entries, receivedAt };
+}
+
+export function isDshRuntimePluginSnapshotFresh(
+  snapshot: DshRuntimePluginSnapshot | null,
+  now = Date.now(),
+  ttl = DSH_RUNTIME_PLUGIN_TTL_MS
+): boolean {
+  if (!snapshot || !Number.isFinite(snapshot.receivedAt) || !Number.isFinite(now) || !Number.isFinite(ttl) || ttl <= 0) return false;
+  return now - snapshot.receivedAt < ttl;
 }
 
 export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | null): DshResourceItem[] {

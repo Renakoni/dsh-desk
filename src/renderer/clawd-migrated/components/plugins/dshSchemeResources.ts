@@ -14,7 +14,7 @@ export function unavailableDshResources(
     .map(resourceId => ({
       id: resourceId,
       kind: tab === "skills" ? "skill" : "plugin",
-      name: resourceId.replace(/^[^:]+:/, ""),
+      name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
       description: missingDescription,
       enabled: false,
       manageable: false,
