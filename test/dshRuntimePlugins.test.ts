@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dshRuntimePluginResources, dshRuntimeSkillResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
+import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
 
 describe("DSH runtime plugin inventory", () => {
   it("accepts the complete Loader projection and preserves its order", () => {
@@ -50,5 +50,39 @@ describe("DSH runtime plugin inventory", () => {
     expect(isDshRuntimePluginSnapshotFresh(snapshot, 15_999)).toBe(true);
     expect(isDshRuntimePluginSnapshotFresh(snapshot, 16_000)).toBe(false);
     expect(isDshRuntimePluginSnapshotFresh(null, 1_000)).toBe(false);
+  });
+
+  it("keeps Web and Headless inventories independently across alternating heartbeats", () => {
+    const snapshots = new DshRuntimeSnapshotSet();
+    const runtime = (instanceId: string, entryId: string, enabled: boolean, receivedAt: number) => normalizeDshRuntimePluginSnapshot({
+      instanceId,
+      entries: [{ entryId, configId: entryId, moduleName: entryId, enabled, fiberPhase: "active" }],
+      skills: []
+    }, receivedAt)!;
+
+    snapshots.update(runtime("web", "shared", true, 1_000));
+    snapshots.update(runtime("headless", "headless-only", true, 2_000));
+    snapshots.update(runtime("web", "shared", false, 3_000));
+
+    expect(snapshots.current(3_000)?.entries).toEqual([
+      expect.objectContaining({ entryId: "shared", enabled: false }),
+      expect.objectContaining({ entryId: "headless-only", enabled: true })
+    ]);
+    expect(snapshots.current(17_500)?.entries).toEqual([
+      expect.objectContaining({ entryId: "shared", enabled: false })
+    ]);
+    expect(snapshots.current(18_000)).toBeNull();
+  });
+
+  it("reports a shared plugin enabled only when every connected runtime enables it", () => {
+    const snapshots = new DshRuntimeSnapshotSet();
+    for (const [instanceId, enabled] of [["web", true], ["headless", false]] as const) {
+      snapshots.update(normalizeDshRuntimePluginSnapshot({
+        instanceId,
+        entries: [{ entryId: "shared", configId: "shared", moduleName: "shared-plugin", enabled, fiberPhase: "active" }],
+        skills: []
+      }, 1_000)!);
+    }
+    expect(dshRuntimePluginResources(snapshots.current(1_000))[0]).toMatchObject({ id: "plugin:shared", enabled: false });
   });
 });

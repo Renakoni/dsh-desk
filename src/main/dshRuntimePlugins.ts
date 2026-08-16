@@ -67,6 +67,37 @@ export function isDshRuntimePluginSnapshotFresh(
   return now - snapshot.receivedAt < ttl;
 }
 
+function aggregateDshRuntimeSnapshots(snapshots: DshRuntimePluginSnapshot[]): DshRuntimePluginSnapshot | null {
+  if (snapshots.length === 0) return null;
+  const entries = new Map<string, DshRuntimePluginEntry>();
+  const skills: DshRuntimeSkillEntry[] = [];
+  let receivedAt = 0;
+  for (const snapshot of snapshots) {
+    receivedAt = Math.max(receivedAt, snapshot.receivedAt);
+    skills.push(...snapshot.skills);
+    for (const entry of snapshot.entries) {
+      const existing = entries.get(entry.entryId);
+      entries.set(entry.entryId, existing ? { ...existing, enabled: existing.enabled && entry.enabled } : entry);
+    }
+  }
+  return { instanceId: "aggregate", entries: [...entries.values()], skills, receivedAt };
+}
+
+export class DshRuntimeSnapshotSet {
+  private readonly snapshots = new Map<string, DshRuntimePluginSnapshot>();
+
+  update(snapshot: DshRuntimePluginSnapshot): void {
+    this.snapshots.set(snapshot.instanceId, snapshot);
+  }
+
+  current(now = Date.now()): DshRuntimePluginSnapshot | null {
+    for (const [instanceId, snapshot] of this.snapshots) {
+      if (!isDshRuntimePluginSnapshotFresh(snapshot, now)) this.snapshots.delete(instanceId);
+    }
+    return aggregateDshRuntimeSnapshots([...this.snapshots.values()]);
+  }
+}
+
 export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | null): DshResourceItem[] {
   if (!snapshot) return [];
   return snapshot.entries.map(entry => {
@@ -104,7 +135,7 @@ export function dshRuntimeSkillResources(snapshot: DshRuntimePluginSnapshot | nu
         name,
         description: visible.description,
         detail: sources.join(" + "),
-        enabled: entries.some(skill => skill.enabled),
+        enabled: entries.every(skill => skill.enabled),
         manageable: true
       };
     });

@@ -91,16 +91,17 @@ import {
   switchDshProvider
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
-import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshRuntimePluginSnapshot, DshSkillRepo } from "../shared/dshPlugins";
+import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
 import type { DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 import { ALL_DSH_SCHEME_ID } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
-import { dshRuntimePluginResources, dshRuntimeSkillResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
+import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
 import { dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
+import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
 type DailyRuntimeStats = {
   events: number;
@@ -154,11 +155,8 @@ let trayMenuWindow: BrowserWindow | null = null;
 // cards while keeping the character anchored to the same desktop position.
 let petExpanded = false;
 let eventServer: ReturnType<typeof createServer> | null = null;
-let dshRuntimePluginSnapshot: DshRuntimePluginSnapshot | null = null;
-let desiredDshSkillStates: Record<string, boolean> = {};
-let desiredDshSkillDefaultEnabled = true;
-let desiredDshPluginStates: Record<string, boolean> = {};
-let desiredDshResourcesRestored = false;
+const dshRuntimeSnapshots = new DshRuntimeSnapshotSet();
+const desiredDshResources = new DshDesiredResourceState();
 let dshSkillMarketplaceInstance: DshSkillMarketplace | null = null;
 let tray: Tray | null = null;
 let startupWarmupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3646,25 +3644,14 @@ function dshPluginCatalog() {
   });
 }
 
-function freshDshRuntimePluginSnapshot(): DshRuntimePluginSnapshot | null {
-  if (isDshRuntimePluginSnapshotFresh(dshRuntimePluginSnapshot)) return dshRuntimePluginSnapshot;
-  if (dshRuntimePluginSnapshot !== null) {
-    dshRuntimePluginSnapshot = null;
-    desiredDshSkillStates = {};
-    desiredDshSkillDefaultEnabled = true;
-    desiredDshPluginStates = {};
-    desiredDshResourcesRestored = false;
-  }
-  return null;
-}
-
 function dshResourceInventory(): DshResourceInventory {
-  const runtimeSnapshot = freshDshRuntimePluginSnapshot();
+  const runtimeSnapshot = dshRuntimeSnapshots.current();
+  const desired = desiredDshResources.current();
   const skillSnapshot = scanDshSkills();
   const localSkills = dshSkillResources(
     skillSnapshot,
-    desiredDshSkillStates,
-    desiredDshResourcesRestored ? desiredDshSkillDefaultEnabled : undefined
+    desired.skills,
+    desired.skillDefaultEnabled
   );
   const skillsById = new Map(localSkills.map(skill => [skill.id, skill]));
   for (const runtimeSkill of dshRuntimeSkillResources(runtimeSnapshot)) {
@@ -3675,18 +3662,16 @@ function dshResourceInventory(): DshResourceInventory {
       ...runtimeSkill,
       ...(local?.sourceIds ? { sourceIds: local.sourceIds } : {}),
       detail: [local?.detail, runtimeSkill.detail].filter(Boolean).join(" + "),
-      enabled: Object.prototype.hasOwnProperty.call(desiredDshSkillStates, name)
-        ? desiredDshSkillStates[name]
-        : desiredDshResourcesRestored
-          ? desiredDshSkillDefaultEnabled
-          : runtimeSkill.enabled
+      enabled: Object.prototype.hasOwnProperty.call(desired.skills, name)
+        ? desired.skills[name]
+        : desired.skillDefaultEnabled
     });
   }
   const skills = [...skillsById.values()].sort((left, right) => left.name.localeCompare(right.name));
   let plugins = dshRuntimePluginResources(runtimeSnapshot).map(plugin => {
     const entryId = plugin.id.replace(/^plugin:/, "");
-    return Object.prototype.hasOwnProperty.call(desiredDshPluginStates, entryId)
-      ? { ...plugin, enabled: desiredDshPluginStates[entryId] }
+    return Object.prototype.hasOwnProperty.call(desired.plugins, entryId)
+      ? { ...plugin, enabled: desired.plugins[entryId] }
       : plugin;
   });
   if (plugins.length === 0) {
@@ -3717,12 +3702,11 @@ function setDesiredDshSkills(states: Record<string, boolean>, defaultEnabled: bo
     join(resolveDshHome(), ".dsh-desk", "skill-policy.json"),
     `${JSON.stringify({ defaultEnabled, states: nextStates }, null, 2)}\n`
   );
-  desiredDshSkillStates = nextStates;
-  desiredDshSkillDefaultEnabled = defaultEnabled;
+  desiredDshResources.setSkills(nextStates, defaultEnabled);
 }
 
 function setDesiredDshPlugins(states: Record<string, boolean>) {
-  desiredDshPluginStates = { ...states };
+  desiredDshResources.setPlugins(states);
 }
 
 function sameBooleanStates(left: Readonly<Record<string, boolean>>, right: Readonly<Record<string, boolean>>): boolean {
@@ -3762,25 +3746,21 @@ function restoreDesiredDshResources() {
         .filter(item => item.manageable)
         .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
     );
-    if (desiredDshResourcesRestored) {
-      const nextSkillStates = { ...desiredDshSkillStates };
-      const nextPluginStates = { ...desiredDshPluginStates };
-      for (const [name, enabled] of Object.entries(schemeSkillStates)) {
-        if (!Object.prototype.hasOwnProperty.call(nextSkillStates, name)) nextSkillStates[name] = enabled;
-      }
-      for (const [entryId, enabled] of Object.entries(schemePluginStates)) {
-        if (!Object.prototype.hasOwnProperty.call(nextPluginStates, entryId)) nextPluginStates[entryId] = enabled;
-      }
-      const defaultEnabled = scheme.id === ALL_DSH_SCHEME_ID;
-      if (defaultEnabled !== desiredDshSkillDefaultEnabled || !sameBooleanStates(nextSkillStates, desiredDshSkillStates)) {
-        setDesiredDshSkills(nextSkillStates, defaultEnabled);
-      }
-      if (!sameBooleanStates(nextPluginStates, desiredDshPluginStates)) setDesiredDshPlugins(nextPluginStates);
-    } else {
-      setDesiredDshSkills(schemeSkillStates, scheme.id === ALL_DSH_SCHEME_ID);
-      setDesiredDshPlugins(schemePluginStates);
+    const current = desiredDshResources.current();
+    const next = desiredDshResources.reconcileScheme(
+      schemeSkillStates,
+      scheme.id === ALL_DSH_SCHEME_ID,
+      schemePluginStates
+    );
+    const initialized = desiredDshResources.isInitialized();
+    if (!initialized
+      || next.skillDefaultEnabled !== current.skillDefaultEnabled
+      || !sameBooleanStates(next.skills, current.skills)) {
+      setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
     }
-    desiredDshResourcesRestored = true;
+    if (!initialized || !sameBooleanStates(next.plugins, current.plugins)) {
+      setDesiredDshPlugins(next.plugins);
+    }
   } catch {
     // A malformed scheme file is reported by the resource page; never block the event bridge.
   }
@@ -3895,30 +3875,24 @@ function startEventServer() {
 
     if (req.method === "POST" && req.url === "/dsh-plugin-inventory") {
       try {
-        freshDshRuntimePluginSnapshot();
         const snapshot = normalizeDshRuntimePluginSnapshot(await readJson(req));
         if (!snapshot) {
           sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
           return;
         }
-        if (dshRuntimePluginSnapshot !== null && dshRuntimePluginSnapshot.instanceId !== snapshot.instanceId) {
-          desiredDshSkillStates = {};
-          desiredDshSkillDefaultEnabled = true;
-          desiredDshPluginStates = {};
-          desiredDshResourcesRestored = false;
-        }
-        dshRuntimePluginSnapshot = snapshot;
+        dshRuntimeSnapshots.update(snapshot);
         restoreDesiredDshResources();
         if (panelWindow && !panelWindow.isDestroyed()) {
           panelWindow.webContents.send("companion:dsh-resources-updated");
         }
+        const desired = desiredDshResources.current();
         sendJson(res, 200, {
           ok: true,
-          desiredSkills: desiredDshSkillStates,
-          desiredPlugins: desiredDshPluginStates,
+          desiredSkills: desired.skills,
+          desiredPlugins: desired.plugins,
           skillPolicy: {
-            defaultEnabled: desiredDshSkillDefaultEnabled,
-            states: desiredDshSkillStates
+            defaultEnabled: desired.skillDefaultEnabled,
+            states: desired.skills
           }
         });
       } catch {
@@ -3975,6 +3949,7 @@ app.whenReady().then(() => {
   } catch (error) {
     console.warn("Could not restore legacy DSH Desk Skill files.", error);
   }
+  restoreDesiredDshResources();
   loadCompanionSettings();
   loadRuntimeStats();
   currencyRatesSnapshot = loadCachedCurrencyRates();
