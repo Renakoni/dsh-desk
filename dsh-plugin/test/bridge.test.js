@@ -41,6 +41,24 @@ describe('DeepSeek Harness event mapping', () => {
     assert.equal(event.hook, 'agent/session-start')
     assert.equal(event.event, 'idle')
     assert.equal(event.sessionId, 'session-1')
+    assert.equal(event.title, 'DSH')
+    assert.equal(event.message, 'Ready')
+  })
+
+  it('shows the first user question instead of raw argument JSON', () => {
+    const event = mapSessionEvent('session-1', {
+      type: 'tool/call',
+      data: {
+        callId: 'call-question',
+        name: 'ask_user_question',
+        arguments: JSON.stringify({
+          questions: [{ id: 'confirm', question: 'May I show you the plan before proceeding?' }],
+        }),
+      },
+    }, new Map())
+
+    assert.equal(event.tool, 'ask_user_question')
+    assert.equal(event.detail, 'May I show you the plan before proceeding?')
   })
 
   it('pairs tool calls and results without forwarding result content', () => {
