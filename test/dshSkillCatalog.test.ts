@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { canRevealDshSkillPath, dshSkillResources, scanDshSkills } from "../src/main/dshSkillCatalog";
+import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "../src/main/dshSkillCatalog";
 
 const roots: string[] = [];
 
@@ -47,5 +47,23 @@ describe("DSH skill inventory", () => {
       sourceIds: ["skill:user-dsh:shared-skill", "skill:user-agents:shared-skill"]
     });
     expect(dshSkillResources(snapshot, { "shared-skill": false }).find(resource => resource.name === "shared-skill")?.enabled).toBe(false);
+  });
+
+  it("restores legacy hidden Skills without overwriting an active collision", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skills-restore-"));
+    roots.push(root);
+    const dshHome = join(root, "dsh");
+    skill(join(dshHome, "skills"), "shared-skill", "name: shared-skill\ndescription: Active copy");
+    skill(join(dshHome, ".dsh-desk", "disabled-skills"), "shared-skill", "name: shared-skill\ndescription: Hidden copy");
+    skill(join(dshHome, ".dsh-desk", "disabled-skills"), "hidden-only", "name: hidden-only\ndescription: Hidden only");
+    writeFileSync(join(dshHome, "skills", "flat-skill.md"), "---\nname: flat-skill\ndescription: Active flat copy\n---\n");
+    writeFileSync(join(dshHome, ".dsh-desk", "disabled-skills", "flat-skill.md"), "---\nname: flat-skill\ndescription: Hidden flat copy\n---\n");
+
+    expect(restoreLegacyDisabledDshSkills(dshHome)).toBe(3);
+    const snapshot = scanDshSkills(dshHome, join(root, "agents"));
+    expect(snapshot.skills.filter(item => item.name === "shared-skill")).toHaveLength(2);
+    expect(snapshot.skills.filter(item => item.name === "flat-skill")).toHaveLength(2);
+    expect(snapshot.skills.find(item => item.name === "hidden-only")?.enabled).toBe(true);
+    expect(restoreLegacyDisabledDshSkills(dshHome)).toBe(0);
   });
 });

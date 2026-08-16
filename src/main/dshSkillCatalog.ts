@@ -159,7 +159,11 @@ export function scanDshSkills(dshHome = resolveDshHome(), agentsHome = resolveDs
   };
 }
 
-export function dshSkillResources(snapshot: DshSkillSnapshot, desiredStates: Readonly<Record<string, boolean>>): DshResourceItem[] {
+export function dshSkillResources(
+  snapshot: DshSkillSnapshot,
+  desiredStates: Readonly<Record<string, boolean>>,
+  defaultEnabled?: boolean
+): DshResourceItem[] {
   const grouped = new Map<string, DshSkillItem[]>();
   for (const skill of snapshot.skills) {
     const group = grouped.get(skill.name) ?? [];
@@ -177,40 +181,42 @@ export function dshSkillResources(snapshot: DshSkillSnapshot, desiredStates: Rea
       detail: sourceLabels.join(" + "),
       enabled: Object.prototype.hasOwnProperty.call(desiredStates, name)
         ? desiredStates[name]
-        : sources.some(skill => skill.enabled && skill.active),
+        : defaultEnabled ?? sources.some(skill => skill.enabled && skill.active),
       manageable: true,
       sourceIds: sources.map(skill => skill.id)
     };
   });
 }
 
-export function applyDshSkillSelection(selectedIds: ReadonlySet<string>, dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): void {
-  const snapshot = scanDshSkills(dshHome, agentsHome);
+export function restoreLegacyDisabledDshSkills(dshHome = resolveDshHome()): number {
   const activeRoot = join(dshHome, "skills");
   const disabledRoot = dshDisabledSkillsRoot(dshHome);
-  const moves: Array<{ from: string; to: string }> = [];
-  for (const skill of snapshot.skills) {
-    if (!skill.manageable) continue;
-    const shouldEnable = selectedIds.has(skill.id);
-    if (skill.enabled === shouldEnable) continue;
-    const from = skill.storagePath;
-    const to = join(shouldEnable ? activeRoot : disabledRoot, skill.storageName);
-    if (existsSync(to)) throw new Error(`Skill target already exists: ${to}`);
-    moves.push({ from, to });
-  }
-  const completed: Array<{ from: string; to: string }> = [];
+  if (!existsSync(disabledRoot)) return 0;
+  let entries;
   try {
-    for (const move of moves) {
-      mkdirSync(dirname(move.to), { recursive: true });
-      renameSync(move.from, move.to);
-      completed.push(move);
-    }
-  } catch (error) {
-    for (const move of completed.reverse()) {
-      try { renameSync(move.to, move.from); } catch { /* Keep the original failure; the caller reports that reconciliation is required. */ }
-    }
-    throw error;
+    entries = readdirSync(disabledRoot, { withFileTypes: true });
+  } catch {
+    return 0;
   }
+  mkdirSync(activeRoot, { recursive: true });
+  let restored = 0;
+  for (const entry of entries) {
+    const from = join(disabledRoot, entry.name);
+    let to = join(activeRoot, entry.name);
+    if (existsSync(to)) {
+      const extension = entryKind(from, entry.isDirectory(), entry.isFile(), entry.isSymbolicLink()) === "file"
+        ? extname(entry.name)
+        : "";
+      const stem = extension ? entry.name.slice(0, -extension.length) : entry.name;
+      let suffix = 1;
+      do {
+        to = join(activeRoot, `${stem}.dsh-desk-restored-${suffix++}${extension}`);
+      } while (existsSync(to));
+    }
+    renameSync(from, to);
+    restored += 1;
+  }
+  return restored;
 }
 
 export function canRevealDshSkillPath(filePath: string, dshHome = resolveDshHome(), agentsHome = resolveDshAgentsHome()): boolean {

@@ -17,15 +17,13 @@ import {
   isDshResourceSchemeSelectable
 } from "../shared/dshResources";
 import { writeTextFileAtomic } from "./filePersistence";
-import { applyDshSkillSelection } from "./dshSkillCatalog";
 
 type JsonObject = Record<string, unknown>;
 
 export type DshResourceSchemeManagerOptions = {
   storePath: string;
-  dshHome: string;
   inventory: () => DshResourceInventory;
-  setDesiredSkills: (states: Record<string, boolean>) => void;
+  setDesiredSkills: (states: Record<string, boolean>, defaultEnabled: boolean) => void;
   setDesiredPlugins: (states: Record<string, boolean>) => void;
   now?: () => number;
 };
@@ -270,11 +268,10 @@ export class DshResourceSchemeManager {
 
   private applyRuntime(scheme: DshResourceScheme, inventory: DshResourceInventory): void {
     const selectedSkills = new Set(scheme.skills);
-    const selectedSourceIds = new Set(inventory.skills
-      .filter(item => selectedSkills.has(item.id))
-      .flatMap(item => item.sourceIds ?? [item.id]));
-    applyDshSkillSelection(selectedSourceIds, this.options.dshHome);
-    this.options.setDesiredSkills(dshDesiredSkillStates(inventory.skills, selectedSkills));
+    this.options.setDesiredSkills(
+      dshDesiredSkillStates(inventory.skills, selectedSkills),
+      scheme.id === ALL_DSH_SCHEME_ID
+    );
     const selectedPlugins = new Set(scheme.plugins);
     this.options.setDesiredPlugins(Object.fromEntries(
       inventory.plugins.filter(item => item.manageable).map(item => [item.id.replace(/^plugin:/, ""), selectedPlugins.has(item.id)])
@@ -310,7 +307,7 @@ export class DshResourceSchemeManager {
       if (resource.kind === "skill") {
         const enabled = new Set(snapshot.inventory.skills.filter(item => item.enabled).map(item => item.id));
         if (input.enabled) enabled.add(resource.id); else enabled.delete(resource.id);
-        this.options.setDesiredSkills(dshDesiredSkillStates(snapshot.inventory.skills, enabled));
+        this.options.setDesiredSkills(dshDesiredSkillStates(snapshot.inventory.skills, enabled), false);
       } else {
         this.options.setDesiredPlugins(Object.fromEntries(snapshot.inventory.plugins
           .filter(item => item.manageable)

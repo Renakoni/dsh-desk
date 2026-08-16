@@ -22,7 +22,6 @@ describe("DSH resource schemes", () => {
     let live = false;
     const manager = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome: join(root, "dsh"),
       inventory: () => ({
         skills: [],
       plugins: live
@@ -49,6 +48,7 @@ describe("DSH resource schemes", () => {
     writeSkill(dshHome, "second-skill");
     const desired: Array<Record<string, boolean>> = [];
     const desiredSkills: Array<Record<string, boolean>> = [];
+    const desiredSkillDefaults: boolean[] = [];
     let desiredSkillStates: Record<string, boolean> = {};
     const inventory = (): DshResourceInventory => ({
       skills: dshSkillResources(scanDshSkills(dshHome, agentsHome), desiredSkillStates),
@@ -61,9 +61,12 @@ describe("DSH resource schemes", () => {
     });
     const manager = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome,
       inventory,
-      setDesiredSkills: states => { desiredSkills.push(states); desiredSkillStates = { ...states }; },
+      setDesiredSkills: (states, defaultEnabled) => {
+        desiredSkills.push(states);
+        desiredSkillDefaults.push(defaultEnabled);
+        desiredSkillStates = { ...states };
+      },
       setDesiredPlugins: states => desired.push(states),
       now: () => 10
     });
@@ -72,12 +75,18 @@ describe("DSH resource schemes", () => {
     const schemeId = created.ok ? created.schemeId : "";
     expect(manager.apply(schemeId).ok).toBe(true);
     expect(existsSync(join(dshHome, "skills", "first-skill", "SKILL.md"))).toBe(true);
-    expect(existsSync(join(dshHome, ".dsh-desk", "disabled-skills", "second-skill", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(dshHome, "skills", "second-skill", "SKILL.md"))).toBe(true);
     expect(desired.at(-1)).toEqual({ third: false });
     expect(desiredSkills.at(-1)).toEqual({ "first-skill": true, "second-skill": false });
+    expect(desiredSkillDefaults.at(-1)).toBe(false);
     expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:name:second-skill")?.enabled).toBe(false);
 
     const memberSkills = manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.skills;
+    expect(manager.setResourceState({ schemeId, resourceId: "skill:name:second-skill", enabled: true }).ok).toBe(true);
+    expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:name:second-skill")?.enabled).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.skills).toEqual(memberSkills);
+    expect(manager.setResourceState({ schemeId, resourceId: "skill:name:second-skill", enabled: false }).ok).toBe(true);
+
     expect(manager.setResourceState({ schemeId, resourceId: "skill:name:first-skill", enabled: false }).ok).toBe(true);
     expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.skills).toEqual(memberSkills);
     expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:name:first-skill")?.enabled).toBe(false);
@@ -86,7 +95,6 @@ describe("DSH resource schemes", () => {
     desiredSkillStates = {};
     const restarted = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome,
       inventory,
       setDesiredSkills: states => { desiredSkills.push(states); desiredSkillStates = { ...states }; },
       setDesiredPlugins: states => desired.push(states),
@@ -99,6 +107,8 @@ describe("DSH resource schemes", () => {
     expect(manager.apply(schemeId).ok).toBe(true);
     expect(manager.snapshot().inventory.skills.find(skill => skill.id === "skill:name:first-skill")?.enabled).toBe(true);
     expect(manager.setResourceState({ schemeId, resourceId: "plugin:core", enabled: false }).ok).toBe(false);
+    expect(manager.apply("all").ok).toBe(true);
+    expect(desiredSkillDefaults.at(-1)).toBe(true);
   });
 
   it("treats same-name Skill sources as one runtime capability", () => {
@@ -118,7 +128,6 @@ describe("DSH resource schemes", () => {
     });
     const manager = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome,
       inventory,
       setDesiredSkills: states => { published.push(states); desiredSkillStates = { ...states }; },
       setDesiredPlugins: () => undefined,
@@ -133,7 +142,7 @@ describe("DSH resource schemes", () => {
     const schemeId = created.ok ? created.schemeId : "";
     expect(manager.apply(schemeId).ok).toBe(true);
     expect(published.at(-1)).toEqual({ "shared-skill": false });
-    expect(existsSync(join(dshHome, ".dsh-desk", "disabled-skills", "shared-skill", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(dshHome, "skills", "shared-skill", "SKILL.md"))).toBe(true);
     expect(existsSync(join(agentsHome, "skills", "shared-skill", "SKILL.md"))).toBe(true);
   });
 
@@ -155,7 +164,6 @@ describe("DSH resource schemes", () => {
     }));
     const manager = new DshResourceSchemeManager({
       storePath,
-      dshHome,
       inventory: () => ({
         skills: dshSkillResources(scanDshSkills(dshHome, agentsHome), {}),
         plugins: [],
@@ -194,7 +202,6 @@ describe("DSH resource schemes", () => {
     const desired: Array<Record<string, boolean>> = [];
     const manager = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome: join(root, "dsh"),
       inventory,
       setDesiredSkills: () => undefined,
       setDesiredPlugins: states => desired.push(states),
@@ -219,7 +226,6 @@ describe("DSH resource schemes", () => {
     let installed = true;
     const manager = new DshResourceSchemeManager({
       storePath: join(root, "schemes.json"),
-      dshHome: join(root, "dsh"),
       inventory: () => ({
         skills: [],
         plugins: installed ? [{ id: missingId, kind: "plugin", name: "dsh-chara-desk", enabled: true, manageable: false }] : [],

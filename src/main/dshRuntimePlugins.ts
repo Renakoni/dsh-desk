@@ -1,8 +1,10 @@
-import type { DshRuntimePluginEntry, DshRuntimePluginPhase, DshRuntimePluginSnapshot } from "../shared/dshPlugins";
+import type { DshRuntimePluginEntry, DshRuntimePluginPhase, DshRuntimePluginSnapshot, DshRuntimeSkillEntry } from "../shared/dshPlugins";
 import type { DshResourceItem } from "../shared/dshResources";
 
 const PHASES = new Set<DshRuntimePluginPhase>(["pending", "loading", "active", "failed", "unloading", null]);
 const MAX_RUNTIME_ENTRIES = 2048;
+const MAX_RUNTIME_SKILLS = 4096;
+const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const DSH_RUNTIME_PLUGIN_TTL_MS = 15_000;
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -15,7 +17,10 @@ function boundedString(value: unknown, maximum: number): string | null {
 
 export function normalizeDshRuntimePluginSnapshot(value: unknown, receivedAt = Date.now()): DshRuntimePluginSnapshot | null {
   const payload = objectValue(value);
-  if (!payload || !Array.isArray(payload.entries) || payload.entries.length > MAX_RUNTIME_ENTRIES) return null;
+  if (!payload || !Array.isArray(payload.entries) || payload.entries.length > MAX_RUNTIME_ENTRIES
+    || (payload.skills !== undefined && (!Array.isArray(payload.skills) || payload.skills.length > MAX_RUNTIME_SKILLS))) return null;
+  const instanceId = payload.instanceId === undefined ? "legacy" : boundedString(payload.instanceId, 128);
+  if (!instanceId) return null;
   const entries: DshRuntimePluginEntry[] = [];
   const ids = new Set<string>();
   for (const candidate of payload.entries) {
@@ -29,7 +34,28 @@ export function normalizeDshRuntimePluginSnapshot(value: unknown, receivedAt = D
     ids.add(entryId);
     entries.push({ entryId, configId, moduleName, enabled: entry.enabled, fiberPhase });
   }
-  return { entries, receivedAt };
+  const skills: DshRuntimeSkillEntry[] = [];
+  for (const candidate of payload.skills ?? []) {
+    const skill = objectValue(candidate);
+    if (!skill) return null;
+    const name = boundedString(skill.name, 256);
+    const description = boundedString(skill.description, 4000);
+    const source = boundedString(skill.source, 256);
+    const provider = boundedString(skill.provider, 512);
+    if (!name || !SKILL_NAME.test(name) || !description || !source || !provider
+      || typeof skill.modelInvocable !== "boolean" || typeof skill.userInvocable !== "boolean"
+      || typeof skill.enabled !== "boolean") return null;
+    skills.push({
+      name,
+      description,
+      source,
+      provider,
+      modelInvocable: skill.modelInvocable,
+      userInvocable: skill.userInvocable,
+      enabled: skill.enabled
+    });
+  }
+  return { instanceId, entries, skills, receivedAt };
 }
 
 export function isDshRuntimePluginSnapshotFresh(
@@ -57,4 +83,29 @@ export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | n
       required: protectedEntry
     };
   });
+}
+
+export function dshRuntimeSkillResources(snapshot: DshRuntimePluginSnapshot | null): DshResourceItem[] {
+  if (!snapshot) return [];
+  const grouped = new Map<string, DshRuntimeSkillEntry[]>();
+  for (const skill of snapshot.skills) {
+    const entries = grouped.get(skill.name) ?? [];
+    entries.push(skill);
+    grouped.set(skill.name, entries);
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, entries]) => {
+      const visible = entries.find(skill => skill.enabled) ?? entries[0];
+      const sources = [...new Set(entries.map(skill => `${skill.source} - ${skill.provider}`))];
+      return {
+        id: `skill:name:${name}`,
+        kind: "skill" as const,
+        name,
+        description: visible.description,
+        detail: sources.join(" + "),
+        enabled: entries.some(skill => skill.enabled),
+        manageable: true
+      };
+    });
 }

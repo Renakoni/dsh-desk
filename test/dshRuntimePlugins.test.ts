@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dshRuntimePluginResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
+import { dshRuntimePluginResources, dshRuntimeSkillResources, isDshRuntimePluginSnapshotFresh, normalizeDshRuntimePluginSnapshot } from "../src/main/dshRuntimePlugins";
 
 describe("DSH runtime plugin inventory", () => {
   it("accepts the complete Loader projection and preserves its order", () => {
@@ -10,8 +10,8 @@ describe("DSH runtime plugin inventory", () => {
       enabled: index % 3 !== 0,
       fiberPhase: "active"
     }));
-    const snapshot = normalizeDshRuntimePluginSnapshot({ entries }, 123);
-    expect(snapshot).toMatchObject({ receivedAt: 123 });
+    const snapshot = normalizeDshRuntimePluginSnapshot({ instanceId: "runtime-1", entries, skills: [] }, 123);
+    expect(snapshot).toMatchObject({ instanceId: "runtime-1", receivedAt: 123 });
     expect(snapshot?.entries).toHaveLength(160);
     expect(snapshot?.entries[159].entryId).toBe("root:entry-159");
     const resources = dshRuntimePluginResources(snapshot);
@@ -23,6 +23,26 @@ describe("DSH runtime plugin inventory", () => {
     const row = { entryId: "same", configId: "one", moduleName: "demo", enabled: true, fiberPhase: null };
     expect(normalizeDshRuntimePluginSnapshot({ entries: [row, row] })).toBeNull();
     expect(normalizeDshRuntimePluginSnapshot({ entries: [{ ...row, enabled: "yes" }] })).toBeNull();
+  });
+
+  it("projects project, custom, bundled, and provider Skills by logical name", () => {
+    const snapshot = normalizeDshRuntimePluginSnapshot({
+      instanceId: "runtime-1",
+      entries: [],
+      skills: [
+        { name: "project-skill", description: "Project", source: "project-dsh", provider: "skill-filesystem", modelInvocable: true, userInvocable: true, enabled: true },
+        { name: "custom-skill", description: "Custom", source: "custom", provider: "skill-filesystem", modelInvocable: true, userInvocable: false, enabled: false },
+        { name: "bundled-skill", description: "Bundled", source: "bundled", provider: "bundle", modelInvocable: true, userInvocable: true, enabled: true },
+        { name: "provider-skill", description: "Provider", source: "remote", provider: "remote-provider", modelInvocable: false, userInvocable: true, enabled: true }
+      ]
+    }, 123);
+
+    expect(dshRuntimeSkillResources(snapshot)).toEqual([
+      expect.objectContaining({ id: "skill:name:bundled-skill", detail: "bundled - bundle", enabled: true, manageable: true }),
+      expect.objectContaining({ id: "skill:name:custom-skill", detail: "custom - skill-filesystem", enabled: false, manageable: true }),
+      expect.objectContaining({ id: "skill:name:project-skill", detail: "project-dsh - skill-filesystem", enabled: true, manageable: true }),
+      expect.objectContaining({ id: "skill:name:provider-skill", detail: "remote - remote-provider", enabled: true, manageable: true })
+    ]);
   });
 
   it("expires a runtime inventory after the heartbeat window", () => {

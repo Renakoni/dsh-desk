@@ -44,8 +44,25 @@ export type DshRuntimePluginEntry = {
   fiberPhase: DshRuntimePluginPhase;
 };
 
+export type DshSkillPolicy = {
+  defaultEnabled: boolean;
+  states: Record<string, boolean>;
+};
+
+export type DshRuntimeSkillEntry = {
+  name: string;
+  description: string;
+  source: string;
+  provider: string;
+  modelInvocable: boolean;
+  userInvocable: boolean;
+  enabled: boolean;
+};
+
 export type DshRuntimePluginSnapshot = {
+  instanceId: string;
   entries: DshRuntimePluginEntry[];
+  skills: DshRuntimeSkillEntry[];
   receivedAt: number;
 };
 
