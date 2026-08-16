@@ -1,728 +1,244 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  Code2,
-  Copy,
-  Package,
-  Pencil,
-  Plus,
-  PlugZap,
-  Power,
-  PowerOff,
-  RefreshCw,
-  Search,
-  Server
-} from "lucide-react";
+import { Check, ChevronDown, Code2, Copy, Package, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 import {
-  ALL_CLAUDE_PROFILE_ID,
-  createEmptyClaudeProfilesSnapshot,
-  DEFAULT_CLAUDE_PROFILE_ID,
-  type ClaudeProfile,
-  type ClaudeProfileResource,
-  type ClaudeProfileSaveInput,
-  type ClaudeProfilesSnapshot
-} from "../../../../shared/claudeProfiles";
-import { useI18n } from "../../useI18n";
+  ALL_DSH_SCHEME_ID,
+  DEFAULT_DSH_SCHEME_ID,
+  createEmptyDshResourceSchemesSnapshot,
+  type DshResourceItem,
+  type DshResourceScheme,
+  type DshResourceSchemeSaveInput,
+  type DshResourceSchemesSnapshot
+} from "../../../../shared/dshResources";
+import { type I18nTranslate, useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { RoutingToaster } from "../dsh-routing/RoutingToaster";
-import { ClaudeProfileEditor } from "./ClaudeProfileEditor";
-import {
-  filterProfileResources,
-  unavailableProfileResources,
-  type ClaudeProfileResourceTab
-} from "./claudeProfileResources";
+import { DshMarketPanel } from "./DshMarketPanel";
+import { DshSchemeEditor } from "./DshSchemeEditor";
+import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
-type ResourceTab = ClaudeProfileResourceTab;
 type BusyAction = "refresh" | "save" | "delete" | "apply" | "resource" | null;
+type EditorState = { key: string; initial: DshResourceSchemeSaveInput; protectedScheme: boolean };
 
-const PROFILE_STATUS_REFRESH_MS = 10 * 60 * 1000;
+const emptySnapshot = createEmptyDshResourceSchemesSnapshot();
+const ROW_HEIGHT = 76;
 
-const emptySnapshot: ClaudeProfilesSnapshot = createEmptyClaudeProfilesSnapshot();
-
-type EditorState = {
-  key: string;
-  initial: ClaudeProfileSaveInput;
-  protectedProfile: boolean;
-};
-
-// Only `hideSensitiveContent` is read from settings here, so take that slice
-// directly instead of the whole `settings` object. A settings save (e.g. an
-// animation-slider drag) mints a fresh `settings` reference every time; passing
-// the object would defeat React.memo on every such change, while a primitive
-// boolean lets it bail unless the flag itself actually flips.
 function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensitiveContent: boolean; active?: boolean }) {
-  const { locale } = useI18n();
-  const zh = locale === "zh";
-  const [activeTab, setActiveTab] = useState<ResourceTab>("skills");
+  const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [snapshot, setSnapshot] = useState<ClaudeProfilesSnapshot>(emptySnapshot);
-  const [selectedProfileId, setSelectedProfileId] = useState(DEFAULT_CLAUDE_PROFILE_ID);
+  const [snapshot, setSnapshot] = useState<DshResourceSchemesSnapshot>(emptySnapshot);
+  const [selectedSchemeId, setSelectedSchemeId] = useState(DEFAULT_DSH_SCHEME_ID);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [busyResourceId, setBusyResourceId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [profileQuery, setProfileQuery] = useState("");
+  const [schemeMenuOpen, setSchemeMenuOpen] = useState(false);
+  const [schemeQuery, setSchemeQuery] = useState("");
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const profileTriggerRef = useRef<HTMLButtonElement>(null);
-  const profileOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const restoreProfileFocusRef = useRef(false);
-  const newProfileTriggerRef = useRef<HTMLButtonElement>(null);
-  const busyActionRef = useRef<BusyAction>(null);
-  const wasActiveRef = useRef(active);
-  const initiallyActiveRef = useRef(active);
+  const [marketOpen, setMarketOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const newTriggerRef = useRef<HTMLButtonElement>(null);
+  const busyRef = useRef<BusyAction>(null);
 
-  const refresh = useCallback(async (force = false) => {
+  const refresh = useCallback(async () => {
     setBusyAction("refresh");
     setLoadError(null);
-    try {
-      const next = await window.companion.getClaudeProfiles(force);
-      setSnapshot(next ?? emptySnapshot);
-    } catch {
-      setLoadError(zh ? "无法读取配置方案。" : "Claude profiles could not be loaded.");
-    } finally {
-      setLoading(false);
-      setBusyAction(null);
-    }
-  }, [zh]);
+    try { setSnapshot(await window.companion.getDshResourceSchemes()); }
+    catch { setLoadError(t("dshResources.loadSchemesFailed", "Couldn't load the schemes.")); }
+    finally { setLoading(false); setBusyAction(null); }
+  }, [t]);
 
-  useEffect(() => { busyActionRef.current = busyAction; }, [busyAction]);
-
+  useEffect(() => { busyRef.current = busyAction; }, [busyAction]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => window.companion.onDshResourcesUpdated(() => { if (active && busyRef.current === null) void refresh(); }), [active, refresh]);
   useEffect(() => {
-    void refresh(initiallyActiveRef.current);
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!active) return undefined;
-    const timer = window.setInterval(() => {
-      if (busyActionRef.current === null) void refresh(true);
-    }, PROFILE_STATUS_REFRESH_MS);
+    if (!active) return;
+    const timer = window.setInterval(() => { if (busyRef.current === null) void refresh(); }, 30_000);
     return () => window.clearInterval(timer);
   }, [active, refresh]);
-
   useEffect(() => {
-    const wasActive = wasActiveRef.current;
-    wasActiveRef.current = active;
-    if (active && !wasActive && busyActionRef.current === null) void refresh(true);
-  }, [active, refresh]);
-
-  useEffect(() => {
-    const appliedProfileId = snapshot.appliedProfileId;
-    setSelectedProfileId(appliedProfileId && snapshot.profiles.some(profile => profile.id === appliedProfileId)
-      ? appliedProfileId
-      : snapshot.profiles[0]?.id ?? "");
-  }, [snapshot.appliedProfileId, snapshot.profiles]);
-
+    const applied = snapshot.appliedSchemeId;
+    setSelectedSchemeId(applied && snapshot.schemes.some(scheme => scheme.id === applied)
+      ? applied
+      : snapshot.schemes[0]?.id ?? "");
+  }, [snapshot.appliedSchemeId, snapshot.schemes]);
   useEffect(() => setQuery(""), [activeTab]);
 
-  useEffect(() => {
-    if (profileMenuOpen || busyAction !== null || !restoreProfileFocusRef.current) return;
-    restoreProfileFocusRef.current = false;
-    profileTriggerRef.current?.focus();
-  }, [busyAction, profileMenuOpen, selectedProfileId]);
-
-  const selectedProfile = snapshot.profiles.find(profile => profile.id === selectedProfileId) ?? snapshot.profiles[0];
-  const editorProfile = editor?.initial.id
-    ? snapshot.profiles.find(profile => profile.id === editor.initial.id)
-    : undefined;
-  const profileActionsAvailable = snapshot.mcpStatus === "ready" && !loading && !loadError;
-  const selectedProfileEditable = selectedProfile?.id !== ALL_CLAUDE_PROFILE_ID;
-  const profileOptions = useMemo(() => {
-    const needle = profileQuery.trim().toLocaleLowerCase();
-    return snapshot.profiles
-      .filter(profile => !needle || profile.name.toLocaleLowerCase().includes(needle))
-      .sort((left, right) => {
-        if (left.id === selectedProfile?.id) return -1;
-        if (right.id === selectedProfile?.id) return 1;
-        const groupDelta = profileNameSortGroup(left.name) - profileNameSortGroup(right.name);
-        return groupDelta || left.name.localeCompare(right.name, "en", { numeric: true, sensitivity: "base" });
-      });
-  }, [profileQuery, selectedProfile?.id, snapshot.profiles]);
-
-  const tabs = [
-    { id: "skills" as const, label: "Skills", icon: Code2 },
-    { id: "plugins" as const, label: "Plugins", icon: Package },
-    { id: "mcpServers" as const, label: "MCP", icon: Server }
-  ];
-  const activeTabLabel = tabs.find(tab => tab.id === activeTab)?.label ?? activeTab;
-  const items = useMemo(() => {
-    const availableResources = snapshot.inventory[activeTab];
-    const memberIds = selectedProfile?.[activeTab] ?? [];
-    const members = new Set(memberIds);
-    return [
-      ...availableResources.filter(item => members.has(item.id)),
-      ...unavailableProfileResources(memberIds, availableResources, activeTab, zh)
-    ];
-  }, [activeTab, selectedProfile, snapshot.inventory, zh]);
-  const filteredItems = useMemo(
-    () => filterProfileResources(items, deferredQuery, hideSensitiveContent),
-    [deferredQuery, items, hideSensitiveContent]
-  );
-
-  function closeProfileMenu(restoreFocus = false) {
-    setProfileMenuOpen(false);
-    if (restoreFocus) profileTriggerRef.current?.focus();
-  }
-
-  function selectProfileOption(profile: ClaudeProfile) {
-    const current = profile.id === selectedProfile?.id;
-    closeProfileMenu();
-    if (!current || snapshot.drift.isDrifted) {
-      restoreProfileFocusRef.current = true;
-      void switchProfile(profile.id, profile.name);
-    } else {
-      profileTriggerRef.current?.focus();
-    }
-  }
-
-  function handleProfileMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (!profileMenuOpen) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeProfileMenu(true);
-      return;
-    }
-
-    const currentIndex = profileOptionRefs.current.findIndex(option => option === document.activeElement);
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (profileOptions.length === 0) return;
-      const offset = event.key === "ArrowDown" ? 1 : -1;
-      const nextIndex = currentIndex < 0
-        ? (offset > 0 ? 0 : profileOptions.length - 1)
-        : (currentIndex + offset + profileOptions.length) % profileOptions.length;
-      profileOptionRefs.current[nextIndex]?.focus();
-      return;
-    }
-
-    if ((event.key === "Enter" || event.key === " ") && currentIndex >= 0) {
-      event.preventDefault();
-      profileOptionRefs.current[currentIndex]?.click();
-    }
-  }
-
-  function startEdit(profile: ClaudeProfile) {
-    setActionError(null);
-    setEditor({
-      key: `edit:${profile.id}:${profile.updatedAt}`,
-      initial: profileInput(profile),
-      protectedProfile: profile.isProtected
+  const selectedScheme = snapshot.schemes.find(scheme => scheme.id === selectedSchemeId) ?? snapshot.schemes[0];
+  const editorScheme = editor?.initial.id ? snapshot.schemes.find(scheme => scheme.id === editor.initial.id) : undefined;
+  const schemeOptions = useMemo(() => {
+    const needle = schemeQuery.trim().toLocaleLowerCase();
+    return snapshot.schemes.filter(scheme => !needle || [scheme.name, schemeDisplayName(scheme, t)].some(name => name.toLocaleLowerCase().includes(needle))).sort((left, right) => {
+      if (left.id === selectedScheme?.id) return -1;
+      if (right.id === selectedScheme?.id) return 1;
+      return schemeSortGroup(left.id) - schemeSortGroup(right.id) || left.name.localeCompare(right.name);
     });
+  }, [schemeQuery, selectedScheme?.id, snapshot.schemes, t]);
+  const tabs = [
+    { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
+    { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
+  ];
+  const items = useMemo(() => {
+    const available = snapshot.inventory[activeTab];
+    const memberIds = selectedScheme?.[activeTab] ?? [];
+    const members = new Set(memberIds);
+    return [...available.filter(item => members.has(item.id)), ...unavailableDshResources(memberIds, available, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))];
+  }, [activeTab, selectedScheme, snapshot.inventory, t]);
+  const filteredItems = useMemo(() => filterDshResources(items, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, items]);
+
+  function startEdit(scheme: DshResourceScheme) {
+    setActionError(null);
+    setEditor({ key: `edit:${scheme.id}:${scheme.updatedAt}`, initial: schemeInput(scheme, t), protectedScheme: scheme.isProtected });
   }
 
   function startCreate(copyCurrent: boolean) {
-    const source = copyCurrent ? selectedProfile : undefined;
+    const source = copyCurrent ? selectedScheme : undefined;
     setNewMenuOpen(false);
-    setActionError(null);
     setEditor({
-      key: `create:${copyCurrent ? source?.id ?? "empty" : "empty"}:${Date.now()}`,
+      key: `create:${source?.id ?? "empty"}:${Date.now()}`,
       initial: {
-        name: source ? nextCopyName(source.name, snapshot.profiles) : "",
+        name: source ? nextCopyName(schemeDisplayName(source, t), snapshot.schemes, t) : "",
         ...(source?.description ? { description: source.description } : {}),
         skills: source ? [...source.skills] : [],
-        plugins: source ? [...source.plugins] : [],
-        mcpServers: source ? [...source.mcpServers] : []
+        plugins: source ? [...source.plugins] : []
       },
-      protectedProfile: false
+      protectedScheme: false
     });
   }
 
-  async function saveProfile(input: ClaudeProfileSaveInput) {
-    setBusyAction("save");
-    setActionError(null);
-    let result;
-    try {
-      result = await window.companion.saveClaudeProfile(input);
-    } catch {
-      const message = actionFailureMessage("save", zh);
-      setBusyAction(null);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
-    if (!result.ok) {
-      setBusyAction(null);
-      const message = issueMessage(result.issues, zh);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
-    setSnapshot(result.snapshot);
-    setEditor(null);
-    const profileName = result.snapshot.profiles.find(profile => profile.id === result.profileId)?.name ?? input.name;
-    await switchProfile(result.profileId, profileName);
+  async function saveScheme(input: DshResourceSchemeSaveInput) {
+    setBusyAction("save"); setActionError(null);
+    const result = await window.companion.saveDshResourceScheme(input).catch(() => null);
+    setBusyAction(null);
+    if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.saveSchemeFailed", "Couldn't save the scheme."); setActionError(message); toast.error(message); return; }
+    setSnapshot(result.snapshot); setEditor(null);
+    const saved = result.snapshot.schemes.find(scheme => scheme.id === result.schemeId);
+    await switchScheme(result.schemeId, saved ? schemeDisplayName(saved, t) : input.name);
   }
 
-  async function deleteProfile(profileId: string) {
-    const profile = snapshot.profiles.find(item => item.id === profileId);
-    if (!profile) return;
-    setDeleteConfirm(false);
-    if (profile.id === snapshot.appliedProfileId) {
-      const fallback = snapshot.profiles.find(item => item.id === DEFAULT_CLAUDE_PROFILE_ID);
-      if (!fallback || !await switchProfile(fallback.id, fallback.name, false)) return;
-    }
-    setBusyAction("delete");
-    setActionError(null);
-    let result;
-    try {
-      result = await window.companion.deleteClaudeProfile(profile.id);
-    } catch {
-      const message = actionFailureMessage("delete", zh);
-      setBusyAction(null);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
+  async function switchScheme(schemeId: string, name: string, notify = true) {
+    setBusyAction("apply"); setActionError(null);
+    const result = await window.companion.applyDshResourceScheme(schemeId).catch(() => null);
     setBusyAction(null);
-    if (!result.ok) {
-      const message = issueMessage(result.issues, zh);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
-    setSnapshot(result.snapshot);
-    setSelectedProfileId(result.snapshot.appliedProfileId ?? result.snapshot.profiles[0]?.id ?? "");
-    setEditor(null);
-    toast.success(zh ? "配置方案已删除" : "Profile deleted");
-  }
-
-  async function switchProfile(profileId: string, profileName: string, notify = true) {
-    setBusyAction("apply");
-    setActionError(null);
-    let result;
-    try {
-      result = await window.companion.applyClaudeProfile(profileId);
-    } catch {
-      const message = actionFailureMessage("apply", zh);
-      setBusyAction(null);
-      setActionError(message);
-      toast.error(message);
-      return false;
-    }
-    setBusyAction(null);
-    if (!result.ok) {
-      const message = issueMessage(result.issues, zh);
-      setActionError(message);
-      toast.error(message);
-      return false;
-    }
-    setSnapshot(result.snapshot);
-    setSelectedProfileId(result.profileId);
-    if (notify) toast.success(zh ? `已成功切换：${profileName}` : `Switched to: ${profileName}`);
+    if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.applySchemeFailed", "Couldn't apply the scheme."); setActionError(message); toast.error(message); return false; }
+    setSnapshot(result.snapshot); setSelectedSchemeId(schemeId); setSchemeMenuOpen(false);
+    if (notify) toast.success(t("dshResources.switchedTo", "Switched to \"{name}\".", { name }));
     return true;
   }
 
-  async function changeResourceState(item: ClaudeProfileResource, enabled: boolean) {
-    if (!selectedProfile) return;
-    setBusyAction("resource");
-    setBusyResourceId(item.id);
-    setActionError(null);
-    let result;
-    try {
-      result = await window.companion.setClaudeProfileResourceState({
-        profileId: selectedProfile.id,
-        resourceId: item.id,
-        enabled
-      });
-    } catch {
-      const message = zh ? "无法更新资源状态。" : "The resource state could not be changed.";
-      setBusyAction(null);
-      setBusyResourceId(null);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
+  async function deleteScheme(schemeId: string) {
+    const scheme = snapshot.schemes.find(item => item.id === schemeId);
+    if (!scheme) return;
+    setDeleteConfirm(false);
+    const defaultScheme = snapshot.schemes.find(item => item.id === DEFAULT_DSH_SCHEME_ID);
+    if (scheme.id === snapshot.appliedSchemeId && !await switchScheme(DEFAULT_DSH_SCHEME_ID, defaultScheme ? schemeDisplayName(defaultScheme, t) : t("dshResources.defaultScheme", "Default"), false)) return;
+    setBusyAction("delete");
+    const result = await window.companion.deleteDshResourceScheme(schemeId).catch(() => null);
     setBusyAction(null);
-    setBusyResourceId(null);
-    if (!result.ok) {
-      const message = issueMessage(result.issues, zh);
-      setActionError(message);
-      toast.error(message);
-      return;
-    }
-    setSnapshot(result.snapshot);
-    toast.success(enabled
-      ? (zh ? `已启用：${item.name}` : `Enabled: ${item.name}`)
-      : (zh ? `已禁用：${item.name}` : `Disabled: ${item.name}`));
+    if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.deleteSchemeFailed", "Couldn't delete the scheme."); setActionError(message); return; }
+    setSnapshot(result.snapshot); setEditor(null); setSelectedSchemeId(result.snapshot.appliedSchemeId ?? DEFAULT_DSH_SCHEME_ID);
   }
 
-  if (editor) {
-    return (
-      <div className="claude-resources-page claude-resources-page-dark claude-profiles-page">
-        <RoutingToaster />
-        <ClaudeProfileEditor
-          key={editor.key}
-          initial={editor.initial}
-          inventory={snapshot.inventory}
-          protectedProfile={editor.protectedProfile}
-          canDelete={Boolean(editor.initial.id && !editor.protectedProfile)}
-          busy={busyAction === "save" || busyAction === "delete" || busyAction === "apply"}
-          hideSensitiveContent={hideSensitiveContent}
-          zh={zh}
-          onCancel={() => setEditor(null)}
-          onSave={input => void saveProfile(input)}
-          onDelete={() => setDeleteConfirm(true)}
-        />
-        {actionError ? <section className="connection-error"><PlugZap size={18} />{actionError}</section> : null}
-        {deleteConfirm && editorProfile ? (
-          <ConfirmDialog
-            title={zh ? "删除配置方案？" : "Delete profile?"}
-            cancelLabel={zh ? "取消" : "Cancel"}
-            confirmLabel={zh ? "删除" : "Delete"}
-            danger
-            onCancel={() => setDeleteConfirm(false)}
-            onConfirm={() => void deleteProfile(editorProfile.id)}
-          >
-            <p>{editorProfile.id === snapshot.appliedProfileId
-              ? (zh ? `将先切换到 Default，然后永久删除“${editorProfile.name}”。` : `Default will become current, then “${editorProfile.name}” will be permanently deleted.`)
-              : (zh ? `“${editorProfile.name}”将被永久删除。` : `“${editorProfile.name}” will be permanently deleted.`)}</p>
-          </ConfirmDialog>
-        ) : null}
-      </div>
-    );
+  async function changeResourceState(resource: DshResourceItem, enabled: boolean) {
+    if (!selectedScheme) return;
+    setBusyAction("resource"); setBusyResourceId(resource.id);
+    const result = await window.companion.setDshResourceState({ schemeId: selectedScheme.id, resourceId: resource.id, enabled }).catch(() => null);
+    setBusyAction(null); setBusyResourceId(null);
+    if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.updateStateFailed", "Couldn't update the resource."); setActionError(message); toast.error(message); return; }
+    setSnapshot(result.snapshot);
   }
+
+  if (marketOpen) return <div className="claude-resources-page claude-resources-page-dark claude-profiles-page"><DshMarketPanel onBack={() => setMarketOpen(false)} onChanged={() => void refresh()} /></div>;
+
+  if (editor) return (
+    <div className="claude-resources-page claude-resources-page-dark claude-profiles-page">
+      <RoutingToaster />
+      <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => setEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
+      {deleteConfirm && editorScheme ? <ConfirmDialog title={t("dshResources.deleteSchemeTitle", "Delete scheme?")} cancelLabel={t("common.cancel", "Cancel")} confirmLabel={t("common.delete", "Delete")} danger onCancel={() => setDeleteConfirm(false)} onConfirm={() => void deleteScheme(editorScheme.id)}><p>{t("dshResources.deleteSchemeMessage", "Delete \"{name}\" permanently?", { name: schemeDisplayName(editorScheme, t) })}</p></ConfirmDialog> : null}
+    </div>
+  );
 
   return (
     <div className="claude-resources-page claude-resources-page-dark claude-profiles-page">
       <RoutingToaster />
       <div className="claude-profile-top-row">
         <section className="claude-profile-toolbar">
-          <div className="claude-profile-picker">
-            <span>{zh ? "方案" : "Profile"}</span>
-            <div className="claude-profile-dropdown" onBlur={event => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeProfileMenu();
-            }} onKeyDown={handleProfileMenuKeyDown}>
-              <button
-                ref={profileTriggerRef}
-                type="button"
-                className="claude-profile-select-button"
-                onClick={() => {
-                  setNewMenuOpen(false);
-                  if (!profileMenuOpen) setProfileQuery("");
-                  setProfileMenuOpen(!profileMenuOpen);
-                }}
-                disabled={!profileActionsAvailable || busyAction !== null}
-                aria-haspopup="listbox"
-                aria-expanded={profileMenuOpen}
-                aria-label={zh ? `方案：${selectedProfile?.name ?? ""}` : `Profile: ${selectedProfile?.name ?? ""}`}
-              >
-                <span>{selectedProfile?.name ?? ""}</span>
-                <ChevronDown size={15} aria-hidden="true" />
-              </button>
-              {profileMenuOpen ? (
-                <div className="claude-profile-options">
-                  <label className="claude-profile-options-search">
-                    <Search size={13} aria-hidden="true" />
-                    <input
-                      value={profileQuery}
-                      onChange={event => setProfileQuery(event.target.value)}
-                      placeholder={zh ? "搜索方案" : "Search profiles"}
-                      aria-label={zh ? "搜索方案" : "Search profiles"}
-                    />
-                  </label>
-                  <div className="claude-profile-options-list" role="listbox" aria-label={zh ? "配置方案" : "Profiles"}>
-                    {profileOptions.length === 0 ? (
-                      <span className="claude-profile-options-empty">{zh ? "没有匹配方案" : "No matching profiles"}</span>
-                    ) : profileOptions.map((profile, index) => {
-                      const current = profile.id === selectedProfile?.id;
-                      return (
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={current}
-                          key={profile.id}
-                          className={current ? "current" : undefined}
-                          ref={node => { profileOptionRefs.current[index] = node; }}
-                          onClick={() => selectProfileOption(profile)}
-                        >
-                          <span>{profile.name}</span>
-                          {current ? <Check size={13} aria-hidden="true" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
+          <div className="claude-profile-picker"><span>{t("dshResources.scheme", "Scheme")}</span><div className="claude-profile-dropdown" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSchemeMenuOpen(false); }}>
+            <button ref={triggerRef} type="button" className="claude-profile-select-button" onClick={() => { setNewMenuOpen(false); setSchemeQuery(""); setSchemeMenuOpen(value => !value); }} disabled={loading || busyAction !== null} aria-haspopup="listbox" aria-expanded={schemeMenuOpen}><span>{selectedScheme ? schemeDisplayName(selectedScheme, t) : t("dshResources.noScheme", "No scheme")}</span><ChevronDown size={14} /></button>
+            {schemeMenuOpen ? <div className="claude-profile-options"><label className="claude-profile-options-search"><Search size={13} /><input autoFocus value={schemeQuery} onChange={event => setSchemeQuery(event.target.value)} placeholder={t("dshResources.searchSchemes", "Search schemes")} /></label><div className="claude-profile-options-list" role="listbox">{schemeOptions.map(scheme => { const name = schemeDisplayName(scheme, t); return <button type="button" key={scheme.id} className={scheme.id === selectedScheme?.id ? "current" : ""} onClick={() => void switchScheme(scheme.id, name)}><span>{name}</span>{scheme.id === snapshot.appliedSchemeId ? <Check size={13} /> : null}</button>; })}</div></div> : null}
+          </div></div>
           <div className="claude-profile-toolbar-actions">
-            <button type="button" className="claude-profile-icon-button" onClick={() => selectedProfile && startEdit(selectedProfile)} disabled={!profileActionsAvailable || !selectedProfile || !selectedProfileEditable || busyAction !== null} aria-label={zh ? "编辑配置方案" : "Edit profile"} title={!selectedProfileEditable ? (zh ? "All 方案自动更新" : "All updates automatically") : (zh ? "编辑" : "Edit")}>
-              <Pencil size={16} />
-            </button>
-            <div className="claude-profile-new-menu" onBlur={event => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNewMenuOpen(false);
-            }} onKeyDown={event => {
-              if (event.key !== "Escape" || !newMenuOpen) return;
-              event.preventDefault();
-              setNewMenuOpen(false);
-              newProfileTriggerRef.current?.focus();
-            }}>
-              <button ref={newProfileTriggerRef} type="button" className="claude-profile-icon-button" onClick={() => {
-                setProfileMenuOpen(false);
-                setNewMenuOpen(open => !open);
-              }} disabled={!profileActionsAvailable || busyAction !== null} aria-label={zh ? "新建配置方案" : "New profile"} aria-haspopup="menu" aria-expanded={newMenuOpen} title={zh ? "新建" : "New"}>
-                <Plus size={17} />
-              </button>
-              {newMenuOpen ? (
-                <div className="claude-profile-new-options" role="menu">
-                  <button type="button" role="menuitem" onClick={() => startCreate(false)}><Plus size={15} /><span><b>{zh ? "空白方案" : "Empty profile"}</b><small>{zh ? "从零开始选择" : "Start with no resources"}</small></span></button>
-                  <button type="button" role="menuitem" onClick={() => startCreate(true)} disabled={!selectedProfile}><Copy size={15} /><span><b>{zh ? "复制当前方案" : "Copy selected"}</b><small>{selectedProfile?.name}</small></span></button>
-                </div>
-              ) : null}
+            <button type="button" className="claude-profile-icon-button" onClick={() => selectedScheme && startEdit(selectedScheme)} disabled={!selectedScheme || selectedScheme.id === ALL_DSH_SCHEME_ID || busyAction !== null} title={t("common.edit", "Edit")}><Pencil size={16} /></button>
+            <div className="claude-profile-new-menu" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNewMenuOpen(false); }}>
+              <button ref={newTriggerRef} type="button" className="claude-profile-icon-button" onClick={() => { setSchemeMenuOpen(false); setNewMenuOpen(value => !value); }} disabled={busyAction !== null} title={t("dshResources.newScheme", "New scheme")}><Plus size={17} /></button>
+              {newMenuOpen ? <div className="claude-profile-new-options"><button type="button" onClick={() => startCreate(false)}><Plus size={15} /><span><b>{t("dshResources.blankScheme", "Blank scheme")}</b><small>{t("dshResources.blankSchemeHint", "Choose resources from scratch")}</small></span></button><button type="button" onClick={() => startCreate(true)}><Copy size={15} /><span><b>{t("dshResources.copyCurrentScheme", "Duplicate current scheme")}</b><small>{selectedScheme ? schemeDisplayName(selectedScheme, t) : ""}</small></span></button></div> : null}
             </div>
           </div>
-
         </section>
 
-        <nav className="claude-resource-subtabs compact claude-profile-resource-tabs" aria-label={zh ? "资源类型" : "Resource type"}>
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}>
-                <Icon size={16} />
-                <span><b>{tab.label}</b></span>
-                <small>{selectedProfile?.[tab.id].length ?? 0}</small>
-              </button>
-            );
-          })}
+        <nav className="claude-resource-subtabs compact claude-profile-resource-tabs dsh-resource-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
+          {tabs.map(tab => { const Icon = tab.icon; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{selectedScheme?.[tab.id].length ?? 0}</small></button>; })}
+          <button type="button" className="claude-resource-subtab claude-resource-refresh-tab dsh-market-button" onClick={() => setMarketOpen(true)} aria-label={t("dshResources.marketplace", "Marketplace")} title={t("dshResources.marketplace", "Marketplace")}><Store size={17} /></button>
         </nav>
       </div>
 
-      {snapshot.mcpStatus !== "ready" ? (
-        <section className="claude-profile-unavailable"><AlertTriangle size={16} />{snapshot.mcpStatus === "config-unreadable" ? (zh ? "暂时无法读取 ~/.claude.json，方案操作已暂停。" : "~/.claude.json is temporarily unreadable. Profile actions are paused.") : (zh ? "MCP 保全清单暂时不可用，方案操作已暂停。" : "The MCP preservation inventory is unavailable. Profile actions are paused.")}</section>
-      ) : null}
-      {loadError || actionError ? <section className="connection-error"><PlugZap size={18} />{loadError ?? actionError}</section> : null}
-
-      <section className="claude-resource-list-toolbar">
-        <div className="claude-resource-search dark">
-          <Search size={16} />
-          <input value={query} onChange={event => setQuery(event.target.value)} placeholder={zh ? `搜索 ${activeTabLabel}` : `Search ${activeTabLabel}`} />
-        </div>
-        <button type="button" className="claude-resource-search-refresh" onClick={() => void refresh(true)} disabled={busyAction !== null} aria-label={zh ? "刷新" : "Refresh"} title={zh ? "刷新" : "Refresh"}>
-          <RefreshCw size={17} className={busyAction === "refresh" ? "spinning" : undefined} />
-        </button>
-      </section>
-
-      <ProfileResourceTable
-        items={filteredItems}
-        availableIds={new Set(snapshot.inventory[activeTab].map(item => item.id))}
-        loading={loading}
-        emptyLabel={deferredQuery.trim() ? (zh ? "没有匹配项" : "No matches") : emptyText(activeTab, zh)}
-        hideSensitiveContent={hideSensitiveContent}
-        zh={zh}
-        actionsAvailable={profileActionsAvailable && busyAction === null}
-        busyResourceId={busyResourceId}
-        resetKey={`${activeTab}:${deferredQuery}:${selectedProfileId}`}
-        onSetEnabled={(item, enabled) => void changeResourceState(item, enabled)}
-      />
-
-      <p className="note claude-resource-path-note dark">
-        {zh ? "全局用户范围" : "Global user scope"}
-        {snapshot.inventory.scannedAt ? ` · ${new Date(snapshot.inventory.scannedAt).toLocaleTimeString()}` : ""}
-      </p>
-
+      {loadError || actionError ? <section className="connection-error">{loadError ?? actionError}</section> : null}
+      <section className="claude-resource-list-toolbar"><div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(activeTab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", activeTab === "plugins" ? "Search plugins" : "Search skills")} /></div><button type="button" className="claude-resource-search-refresh" onClick={() => void refresh()} disabled={busyAction !== null} aria-label={t("dshResources.refresh", "Refresh")}><RefreshCw size={17} className={busyAction === "refresh" ? "spinning" : undefined} /></button></section>
+      <ResourceTable items={filteredItems} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} onState={changeResourceState} />
     </div>
   );
 }
 
-function ProfileResourceTable({
-  items,
-  availableIds,
-  loading,
-  emptyLabel,
-  hideSensitiveContent,
-  zh,
-  actionsAvailable,
-  busyResourceId,
-  resetKey,
-  onSetEnabled
-}: {
-  items: ClaudeProfileResource[];
-  availableIds: Set<string>;
-  loading: boolean;
-  emptyLabel: string;
-  hideSensitiveContent: boolean;
-  zh: boolean;
-  actionsAvailable: boolean;
-  busyResourceId: string | null;
-  resetKey: string;
-  onSetEnabled: (item: ClaudeProfileResource, enabled: boolean) => void;
-}) {
-  const rowHeight = 76;
-  const virtual = useVirtualRows(items, rowHeight, resetKey);
+function ResourceTable({ items, loading, busyResourceId, hideSensitiveContent, onState }: { items: DshResourceItem[]; loading: boolean; busyResourceId: string | null; hideSensitiveContent: boolean; onState: (resource: DshResourceItem, enabled: boolean) => void }) {
+  const { t } = useI18n();
+  const virtual = useVirtualRows(items, ROW_HEIGHT, `${items.map(item => item.id).join("|")}:${loading}`, 5);
   return (
-    <section ref={virtual.viewportRef} className="claude-resource-table" aria-busy={loading} onScroll={event => virtual.onScroll(event.currentTarget.scrollTop)}>
-      {loading ? (
-        <div className="claude-resource-empty">{zh ? "正在读取 Claude Code 配置方案..." : "Loading Claude Code profiles..."}</div>
-      ) : items.length === 0 ? (
-        <div className="claude-resource-empty">{emptyLabel}</div>
-      ) : (
-        <>
-          <div className="claude-resource-table-head">
-            <span>{zh ? "资源" : "Resource"}</span>
-            <span>{zh ? "状态" : "Status"}</span>
-            <span>{zh ? "操作" : "Action"}</span>
-          </div>
-          <div className="claude-profile-readonly-space" style={{ height: virtual.totalHeight }}>
-            {virtual.visible.map((item, offset) => {
-              const index = virtual.start + offset;
-              return (
-                <ResourceRow
-                  key={item.id}
-                  item={item}
-                  available={availableIds.has(item.id)}
-                  hideSensitiveContent={hideSensitiveContent}
-                  zh={zh}
-                  actionsAvailable={actionsAvailable}
-                  busy={busyResourceId === item.id}
-                  style={{ height: rowHeight, transform: `translateY(${index * rowHeight}px)` }}
-                  onSetEnabled={onSetEnabled}
-                />
-              );
-            })}
-          </div>
-        </>
+    <section ref={virtual.viewportRef} className="claude-resource-table" onScroll={event => virtual.onScroll(event.currentTarget.scrollTop)}>
+      <header className="claude-resource-table-head"><span>{t("dshResources.resource", "Resource")}</span><span>{t("dshResources.status", "Status")}</span><span>{t("dshResources.action", "Action")}</span></header>
+      {loading && items.length === 0 ? <div className="claude-resource-empty">{t("dshResources.scanning", "Scanning...")}</div> : items.length === 0 ? <div className="claude-resource-empty">{t("dshResources.noResources", "This scheme has no resources of this type.")}</div> : (
+        <div className="claude-profile-readonly-space" style={{ height: virtual.totalHeight }}>
+          {virtual.visible.map((resource, offset) => {
+            const index = virtual.start + offset;
+            const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
+            const busy = busyResourceId === resource.id;
+            return (
+              <article key={resource.id} className="claude-resource-row claude-profile-readonly-row" style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }}>
+                <div className="claude-resource-row-main"><div className="claude-resource-name-line"><strong>{resource.name}</strong></div>{presentation.description ? <p title={presentation.description}>{presentation.description}</p> : null}{presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}</div>
+                <span className={`claude-resource-status ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.enabled ? "Enabled" : "Disabled")}</span>
+                {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
+              </article>
+            );
+          })}
+        </div>
       )}
     </section>
   );
 }
 
-function ResourceRow({ item, available, hideSensitiveContent, zh, actionsAvailable, busy, style, onSetEnabled }: {
-  item: ClaudeProfileResource;
-  available: boolean;
-  hideSensitiveContent: boolean;
-  zh: boolean;
-  actionsAvailable: boolean;
-  busy: boolean;
-  style?: React.CSSProperties;
-  onSetEnabled: (item: ClaudeProfileResource, enabled: boolean) => void;
-}) {
-  const description = hideSensitiveContent
-    ? fallbackDescription(item.kind, zh)
-    : item.description ?? item.detail ?? fallbackDescription(item.kind, zh);
-  return (
-    <article className="claude-resource-row claude-profile-readonly-row" style={style} data-resource-id={item.id}>
-      <div className="claude-resource-row-main">
-        <div className="claude-resource-name-line"><strong>{item.name}</strong></div>
-        <p title={description}>{description}</p>
-      </div>
-      <div className={`claude-resource-status ${!available ? "missing" : item.enabled ? "active" : "idle"}`}>
-        <span>{!available ? (zh ? "缺失" : "Missing") : item.enabled ? (zh ? "已启用" : "Enabled") : (zh ? "已禁用" : "Disabled")}</span>
-      </div>
-      {available ? (
-        <button
-          type="button"
-          className="claude-profile-resource-action"
-          disabled={!actionsAvailable || busy}
-          onClick={() => onSetEnabled(item, !item.enabled)}
-          aria-label={`${item.enabled ? (zh ? "禁用" : "Disable") : (zh ? "启用" : "Enable")} ${item.name}`}
-        >
-          {item.enabled ? <PowerOff size={13} aria-hidden="true" /> : <Power size={13} aria-hidden="true" />}
-          {busy ? "..." : item.enabled ? (zh ? "禁用" : "Disable") : (zh ? "启用" : "Enable")}
-        </button>
-      ) : <span className="claude-profile-resource-unavailable">{zh ? "不可操作" : "Unavailable"}</span>}
-    </article>
-  );
-}
-
-function profileInput(profile: ClaudeProfile): ClaudeProfileSaveInput {
-  return {
-    id: profile.id,
-    name: profile.name,
-    ...(profile.description ? { description: profile.description } : {}),
-    skills: [...profile.skills],
-    plugins: [...profile.plugins],
-    mcpServers: [...profile.mcpServers]
+function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins] }; }
+function nextCopyName(name: string, schemes: DshResourceScheme[], t: I18nTranslate) { let index = 1; let value = t("dshResources.copyName", "{name} Copy", { name }); while (schemes.some(scheme => scheme.name.toLocaleLowerCase() === value.toLocaleLowerCase())) value = t("dshResources.copyNameNumbered", "{name} Copy {index}", { name, index: ++index }); return value; }
+function schemeDisplayName(scheme: DshResourceScheme, t: I18nTranslate) { return scheme.id === DEFAULT_DSH_SCHEME_ID ? t("dshResources.defaultScheme", "Default") : scheme.id === ALL_DSH_SCHEME_ID ? t("dshResources.allScheme", "All") : scheme.name; }
+function schemeSortGroup(id: string) { return id === DEFAULT_DSH_SCHEME_ID ? 0 : id === ALL_DSH_SCHEME_ID ? 1 : 2; }
+function issueMessage(issues: Array<{ code: string; message: string }>, t: I18nTranslate) {
+  const keys: Record<string, string> = {
+    "invalid-scheme-input": "invalidScheme",
+    "scheme-not-found": "schemeNotFound",
+    "protected-scheme": "protectedScheme",
+    "duplicate-scheme-name": "duplicateSchemeName",
+    "inactive-scheme": "inactiveScheme",
+    "missing-resource": "missingResource",
+    "protected-resource": "requiredResource",
+    "scheme-apply-failed": "applySchemeFailed",
+    "resource-state-failed": "updateStateFailed"
   };
+  const key = keys[issues[0]?.code];
+  return key ? t(`dshResources.${key}`, issues[0]?.message) : t("dshResources.operationFailed", "The operation failed.");
 }
 
-function nextCopyName(sourceName: string, profiles: ClaudeProfile[]) {
-  const names = new Set(profiles.map(profile => profile.name.toLocaleLowerCase()));
-  let candidate = `${sourceName} copy`;
-  let index = 2;
-  while (names.has(candidate.toLocaleLowerCase())) candidate = `${sourceName} copy ${index++}`;
-  return candidate;
-}
-
-function profileNameSortGroup(name: string) {
-  const first = name.trim().charAt(0);
-  if (!first || /^[0-9]$/.test(first) || !/^\p{L}$/u.test(first)) return 0;
-  if (/^[A-Za-z]$/.test(first)) return 1;
-  return 2;
-}
-
-function issueMessage(issues: Array<{ code: string; message: string; resourceId?: string }>, zh: boolean) {
-  const first = issues.find(item => item.code === "rollback-failed") ?? issues[0];
-  if (!first) return zh ? "操作失败。" : "The operation failed.";
-  if (!zh) return first.message;
-  const localized = ZH_ISSUE_MESSAGES[first.code];
-  if (!localized) return first.message || "操作失败。";
-  return first.resourceId ? `${localized} (${first.resourceId})` : localized;
-}
-
-const ZH_ISSUE_MESSAGES: Record<string, string> = {
-  "invalid-profile-input": "方案内容无效。",
-  "invalid-profile-reference": "配置方案不存在或已失效。",
-  "duplicate-profile-name": "方案名称已存在。",
-  "duplicate-profile-id": "生成的方案 ID 已存在，请重试。",
-  "protected-profile": "内置方案受保护，无法执行此操作。",
-  "applied-profile": "请先应用其他方案，再删除此方案。",
-  "profile-delete-blocked": "该方案当前无法删除。",
-  "missing-skill": "方案引用的 Skill 已不存在。",
-  "missing-plugin": "方案引用的 Plugin 已不存在。",
-  "missing-mcp-server": "方案引用的 MCP Server 已不存在。",
-  "mcp-state-unavailable": "MCP 状态暂时不可用，请刷新后重试。",
-  "invalid-settings": "Claude settings.json 格式无效。",
-  "settings-read-failed": "无法读取 Claude settings.json。",
-  "invalid-claude-config": "无法安全读取 ~/.claude.json。",
-  "invalid-mcp-inventory": "MCP 保全清单无效。",
-  "mcp-inventory-write-failed": "无法更新 MCP 保全清单。",
-  "settings-backup-failed": "无法备份 Claude settings.json。",
-  "mcp-backup-failed": "无法备份 ~/.claude.json。",
-  "settings-write-failed": "无法更新 Claude settings.json。",
-  "mcp-write-failed": "无法更新 ~/.claude.json。",
-  "profile-pointer-write-failed": "配置已恢复，但无法保存当前方案。",
-  "rollback-failed": "应用失败，且自动恢复未完全成功，请检查备份文件。",
-  "profile-store-write-failed": "无法保存配置方案。",
-  "profile-preview-failed": "无法生成方案预览。",
-  "profile-apply-failed": "无法应用配置方案。",
-  "resource-state-failed": "无法更新资源状态。"
-};
-
-function actionFailureMessage(action: "save" | "delete" | "apply", zh: boolean) {
-  if (zh) {
-    if (action === "save") return "无法保存配置方案。";
-    if (action === "delete") return "无法删除配置方案。";
-    return "无法应用配置方案。";
-  }
-  if (action === "save") return "The profile could not be saved.";
-  if (action === "delete") return "The profile could not be deleted.";
-  return "The profile could not be applied.";
-}
-
-function fallbackDescription(kind: ClaudeProfileResource["kind"], zh: boolean) {
-  if (kind === "skill") return "Claude Code Skill";
-  if (kind === "plugin") return "Claude Code Plugin";
-  return zh ? "Claude Code MCP 服务器" : "Claude Code MCP server";
-}
-
-function emptyText(tab: ResourceTab, zh: boolean) {
-  if (tab === "skills") return zh ? "当前方案未启用 Skills。" : "No Skills are enabled in this profile.";
-  if (tab === "plugins") return zh ? "当前方案未启用 Plugins。" : "No Plugins are enabled in this profile.";
-  return zh ? "当前方案未启用 MCP。" : "No MCP servers are enabled in this profile.";
-}
-
-// Keep-mounted under the tab container: memoized so an unrelated settings change
-// or a tab switch doesn't re-render the profile + resource lists. Props are all
-// primitives (a boolean flag), so the default shallow compare bails on every
-// settings save that doesn't flip `hideSensitiveContent`.
 export const PluginsPage = React.memo(PluginsPageInner);

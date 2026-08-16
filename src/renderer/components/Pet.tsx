@@ -5,12 +5,9 @@ import type { SpritesheetAssets } from "../../shared/petPackAssets";
 import { MINATO_AQUA_CATALOG, type PetThemeCatalog } from "../../shared/petThemeCatalog";
 import { SpritesheetSprite } from "./SpritesheetSprite";
 import completedImage from "../assets/pet/completed.webp";
-import extraAction5Image from "../assets/pet/extra-action-5.webp";
 import extraAction7Image from "../assets/pet/extra-action-7.webp";
 import extraAction8Image from "../assets/pet/extra-action-8.webp";
-import extraAction9Image from "../assets/pet/extra-action-9.webp";
 import extraActionAquaBocchiImage from "../assets/pet/extra-action-aqua-bocchi.png";
-import extraActionAquaPixelImage from "../assets/pet/extra-action-aqua-pixel.gif";
 import idleImage from "../assets/pet/idle.png";
 import permissionPromptImage from "../assets/pet/permission-prompt.webp";
 import runningImage from "../assets/pet/running.webp";
@@ -25,12 +22,9 @@ const animationImages: Partial<Record<PetAnimationKey, string>> = {
   running: runningImage,
   waiting_permission: permissionPromptImage,
   done: completedImage,
-  extra_action_5: extraAction5Image,
   extra_action_7: extraAction7Image,
   extra_action_8: extraAction8Image,
-  extra_action_9: extraAction9Image,
-  extra_action_aqua_bocchi: extraActionAquaBocchiImage,
-  extra_action_aqua_pixel: extraActionAquaPixelImage
+  extra_action_aqua_bocchi: extraActionAquaBocchiImage
 };
 
 interface PetProps {

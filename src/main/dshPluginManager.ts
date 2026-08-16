@@ -4,6 +4,7 @@ import { delimiter, dirname, join } from "node:path";
 import type { DshProfileName, DshProfilePluginStatus, HookOperationResult, HookStatus } from "../shared/hooks";
 
 const PLUGIN_NAME = "dsh-desk-plugin";
+const LEGACY_PLUGIN_NAME = "dsh-chara-desk";
 const PROFILES: DshProfileName[] = ["web", "headless"];
 
 type JsonObject = Record<string, unknown>;
@@ -50,6 +51,19 @@ function readProfileStatus(profilesRoot: string, name: DshProfileName): DshProfi
   }
 }
 
+function registeredDeskPlugins(profilesRoot: string, name: DshProfileName): string[] {
+  try {
+    const pkg = asObject(JSON.parse(readFileSync(join(profilesRoot, name, "package.json"), "utf8")));
+    const dependencies = asObject(pkg?.dependencies);
+    const profile = asObject(asObject(pkg?.dsh)?.profile);
+    const bundles = Array.isArray(profile?.bundles) ? profile.bundles : [];
+    return [PLUGIN_NAME, LEGACY_PLUGIN_NAME].filter(packageName =>
+      typeof dependencies?.[packageName] === "string" || bundles.includes(packageName));
+  } catch {
+    return [];
+  }
+}
+
 export function getDshPluginStatus(options: DshPluginManagerOptions): HookStatus {
   const profiles = PROFILES.map(name => readProfileStatus(options.profilesRoot, name));
   const hookCount = profiles.filter(profile => profile.installed).length;
@@ -68,7 +82,7 @@ export function getDshPluginStatus(options: DshPluginManagerOptions): HookStatus
   };
 }
 
-function defaultRunner(command: string, args: string[]): Promise<void> {
+export function runDshCommand(command: string, args: string[]): Promise<void> {
   const invocation = resolveNpxInvocation(command, args);
   return new Promise((resolve, reject) => {
     execFile(invocation.command, invocation.args, { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 }, error => {
@@ -102,11 +116,14 @@ function operationPreflight(options: DshPluginManagerOptions): HookOperationResu
   return null;
 }
 
-export async function installDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = defaultRunner): Promise<HookOperationResult> {
+export async function installDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const preflight = operationPreflight(options);
   if (preflight) return preflight;
   try {
     for (const profile of PROFILES) {
+      if (registeredDeskPlugins(options.profilesRoot, profile).includes(LEGACY_PLUGIN_NAME)) {
+        await run(options.npxPath!, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", LEGACY_PLUGIN_NAME]);
+      }
       await run(options.npxPath!, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", options.pluginPath]);
     }
     const status = getDshPluginStatus(options);
@@ -116,7 +133,7 @@ export async function installDshPlugin(options: DshPluginManagerOptions, run: Ds
   }
 }
 
-export async function removeDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = defaultRunner): Promise<HookOperationResult> {
+export async function removeDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const statusBefore = getDshPluginStatus(options);
   if (!options.npxPath) {
     return { success: false, errorKind: "npx-missing", error: "npx was not found on PATH", status: statusBefore };
@@ -124,12 +141,18 @@ export async function removeDshPlugin(options: DshPluginManagerOptions, run: Dsh
   let removed = 0;
   try {
     for (const profile of statusBefore.profiles) {
-      if (!profile.dependencyRegistered && !profile.bundleRegistered) continue;
-      await run(options.npxPath, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile.name, "remove", PLUGIN_NAME]);
+      const registered = registeredDeskPlugins(options.profilesRoot, profile.name);
+      if (registered.length === 0) continue;
+      for (const packageName of registered) {
+        await run(options.npxPath, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile.name, "remove", packageName]);
+      }
       removed += 1;
     }
     const status = getDshPluginStatus(options);
-    const removedEverywhere = status.profiles.every(profile => !profile.dependencyRegistered && !profile.bundleRegistered && !profile.installed);
+    const removedEverywhere = status.profiles.every(profile => !profile.dependencyRegistered
+      && !profile.bundleRegistered
+      && !profile.installed
+      && registeredDeskPlugins(options.profilesRoot, profile.name).length === 0);
     return { success: removedEverywhere && !status.configReadError, removed, status };
   } catch (error) {
     return { success: false, removed, error: error instanceof Error ? error.message : String(error), status: getDshPluginStatus(options) };

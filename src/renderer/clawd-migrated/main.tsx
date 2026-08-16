@@ -43,6 +43,7 @@ import { OverviewSection } from "./features/overview/OverviewSection";
 import { SettingsSection } from "./features/settings/SettingsSection";
 import { AnimationSection } from "./features/animation/AnimationSection";
 import { DataSection } from "./features/data/DataSection";
+import { PluginsPage } from "./components/plugins/PluginsPage";
 import { connectionSurfaceKey } from "./features/overview/connectionState";
 import { useConnectionSurface } from "./features/overview/useConnectionSurface";
 import { petAnimationAssets } from "./utils/petAnimationAssets";
@@ -900,6 +901,7 @@ function SettingsApp() {
         {[
           { id: "general", icon: <Gauge size={16} />, label: t("settings.tabs.general", "总览") },
           { id: "animation", icon: <Wand2 size={16} />, label: t("settings.tabs.animation", "动画") },
+          { id: "plugins", icon: <PlugZap size={16} />, label: t("settings.tabs.plugins", "插件") },
           { id: "data", icon: <FileText size={16} />, label: t("settings.tabs.data", "数据") },
           { id: "settings", icon: <Wrench size={16} />, label: t("settings.tabs.settings", "设置") }
         ].map(tab => (
@@ -959,6 +961,12 @@ function SettingsApp() {
         {(activeSection === "animation" || backgroundSectionsMounted) && (
           <div style={{ display: activeSection === "animation" ? "contents" : "none" }} aria-hidden={activeSection !== "animation"}>
             <AnimationSection active={activeSection === "animation"} settings={settings} updateSettings={stableUpdateSettings} catalog={activeThemeCatalog} spritesheet={activeThemeSheet} />
+          </div>
+        )}
+
+        {(activeSection === "plugins" || backgroundSectionsMounted) && (
+          <div style={{ display: activeSection === "plugins" ? "contents" : "none" }} aria-hidden={activeSection !== "plugins"}>
+            <PluginsPage active={activeSection === "plugins"} hideSensitiveContent={settings.hideSensitiveContent} />
           </div>
         )}
 

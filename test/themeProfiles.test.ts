@@ -7,8 +7,8 @@ const PACK_THEME = "codex-pet:yuexinmiao";
 const BUILTIN = "minato-aqua";
 const packs = [makePackManifest()];
 
-const aquaMappings = { running: "extra_action_5" };
-const aquaIdle = { enabled: true, selectedSprites: ["idle", "extra_action_9"], intervalMin: 10, intervalMax: 20, repeatMin: 1, repeatMax: 2 };
+const aquaMappings = { running: "extra_action_7" };
+const aquaIdle = { enabled: true, selectedSprites: ["idle", "extra_action_8"], intervalMin: 10, intervalMax: 20, repeatMin: 1, repeatMax: 2 };
 
 function builtinSettings() {
   return {

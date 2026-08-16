@@ -8,6 +8,7 @@ import {
   sessionStartEvent,
   usageRecordForSessionEvent,
 } from '../src/bridge.js'
+import { apply as applyPlugin, applyDesiredPluginStates, createAgentSkillPolicy, loaderInventory } from '../src/index.js'
 
 const servers = new Set()
 
@@ -29,6 +30,7 @@ function config(port) {
     eventTimeoutMs: 500,
     permissionCreateTimeoutMs: 500,
     permissionWaitTimeoutMs: 500,
+    inventoryPublishMs: 3000,
   }
 }
 
@@ -213,5 +215,129 @@ describe('DSH Desk loopback transport', () => {
     }
     assert.equal(await bridge.requestApproval(request), 'allowed-once')
     assert.equal(await bridge.requestApproval(request), undefined)
+  })
+})
+
+describe('DSH Loader inventory bridge', () => {
+  it('waits for the initial policy exchange before plugin startup settles', async () => {
+    let release
+    const { port } = await listen((_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      release = () => response.end('{"ok":true,"skillPolicy":{"defaultEnabled":false,"states":{}}}')
+    })
+    const disposers = []
+    const ctx = {
+      loader: { entries: () => [] },
+      effect: create => { disposers.push(create()) },
+      on: () => undefined,
+    }
+    let settled = false
+    const startup = applyPlugin(ctx, config(port)).then(() => { settled = true })
+    for (let attempt = 0; release === undefined && attempt < 20; attempt += 1) {
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(settled, false)
+    assert.equal(typeof release, 'function')
+
+    release()
+    await startup
+    assert.equal(settled, true)
+    await Promise.all(disposers.map(dispose => dispose()))
+  })
+
+  it('publishes the complete non-group Loader order', () => {
+    const entries = Array.from({ length: 160 }, (_, index) => ({
+      id: `root:entry-${index}`,
+      disabled: index % 2 === 0,
+      options: { id: `entry-${index}`, name: `@deepseek-ai/plugin-${index}`, group: false },
+      fiber: { state: 2 },
+    }))
+    assert.equal(loaderInventory({ entries: () => entries }).entries.length, 160)
+    assert.deepEqual(loaderInventory({ entries: () => entries }).entries[159], {
+      entryId: 'root:entry-159',
+      configId: 'entry-159',
+      moduleName: '@deepseek-ai/plugin-159',
+      enabled: true,
+      fiberPhase: 'active',
+    })
+  })
+
+  it('applies only third-party desired states and persists through the owning tree', async () => {
+    const updates = []
+    const tree = { update: async (id, value) => { updates.push([id, value]) } }
+    const entries = [{ id: 'core', disabled: false, options: { id: 'core', name: '@deepseek-ai/core' }, parent: { tree } }, {
+      id: 'third', disabled: false, options: { id: 'third-config', name: 'third-party-plugin' }, parent: { tree },
+    }]
+    await applyDesiredPluginStates({ entries: () => entries }, { core: false, third: false })
+    assert.deepEqual(updates, [['third-config', { disabled: true }]])
+  })
+
+  it('registers disabled Skill policy in the exact agent scope', async () => {
+    let provider
+    let invalidations = 0
+    const original = {
+      name: 'review',
+      description: 'Project review Skill',
+      invocation: { modelInvocable: true, userInvocable: true },
+      source: 'project-dsh',
+      provider: 'skill-filesystem',
+    }
+    const skills = {
+      snapshot: async () => ({ skills: [original], complete: true }),
+      registerProvider: create => {
+        provider = create({ signal: new AbortController().signal, invalidate: () => { invalidations += 1 } })
+        return () => undefined
+      },
+    }
+    const agent = { session: { header: { cwd: 'C:\\workspace' } } }
+
+    const policy = await createAgentSkillPolicy(skills, agent, {
+      defaultEnabled: true,
+      states: { review: false },
+    })
+    const candidates = await provider.list({})
+    assert.deepEqual(candidates, [{
+      ...original,
+      invocation: { modelInvocable: false, userInvocable: false },
+      provider: 'dsh-desk-policy',
+      rank: -Number.MAX_SAFE_INTEGER,
+      locator: 'review',
+    }])
+    assert.equal(policy.inventory()[0].enabled, false)
+
+    policy.update({ defaultEnabled: true, states: { review: true } })
+    assert.deepEqual(await provider.list({}), [])
+    assert.equal(invalidations, 1)
+  })
+
+  it('blocks newly discovered Skills when the active scheme is default-deny', async () => {
+    let provider
+    let visible = [{
+      name: 'known', description: 'Known', invocation: { modelInvocable: true, userInvocable: true },
+      source: 'bundled', provider: 'bundle',
+    }]
+    const skills = {
+      snapshot: async () => ({ skills: visible, complete: true }),
+      registerProvider: create => {
+        provider = create({ signal: new AbortController().signal, invalidate: () => undefined })
+        return () => undefined
+      },
+    }
+    const policy = await createAgentSkillPolicy(skills, { session: { header: {} } }, {
+      defaultEnabled: false,
+      states: { known: true },
+    })
+    assert.deepEqual(await provider.list({}), [])
+
+    visible = [...visible, {
+      name: 'late-skill', description: 'Late provider Skill', invocation: { modelInvocable: true, userInvocable: true },
+      source: 'custom', provider: 'remote-provider',
+    }]
+    await policy.refresh()
+    assert.deepEqual((await provider.list({})).map(candidate => candidate.name), ['late-skill'])
+    assert.deepEqual(policy.inventory().map(skill => [skill.name, skill.source, skill.enabled]), [
+      ['known', 'bundled', true],
+      ['late-skill', 'custom', false],
+    ])
   })
 })

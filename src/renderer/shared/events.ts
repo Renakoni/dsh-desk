@@ -664,7 +664,7 @@ export const defaultSettings: CompanionSettings = {
   },
   idleAnim: {
     enabled: true,
-    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_5", "extra_action_7", "extra_action_8", "extra_action_9", "extra_action_aqua_bocchi", "extra_action_aqua_pixel"],
+    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
     intervalMin: 15,
     intervalMax: 40,
     repeatMin: 2,

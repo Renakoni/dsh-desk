@@ -91,8 +91,17 @@ import {
   switchDshProvider
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
+import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
+import type { DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
+import { ALL_DSH_SCHEME_ID } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
+import { DshPluginCatalog } from "./dshPluginCatalog";
+import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
+import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
+import { dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { DshSkillMarketplace } from "./dshSkillMarketplace";
+import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
 type DailyRuntimeStats = {
   events: number;
@@ -146,6 +155,9 @@ let trayMenuWindow: BrowserWindow | null = null;
 // cards while keeping the character anchored to the same desktop position.
 let petExpanded = false;
 let eventServer: ReturnType<typeof createServer> | null = null;
+const dshRuntimeSnapshots = new DshRuntimeSnapshotSet();
+const desiredDshResources = new DshDesiredResourceState();
+let dshSkillMarketplaceInstance: DshSkillMarketplace | null = null;
 let tray: Tray | null = null;
 let startupWarmupTimer: ReturnType<typeof setTimeout> | null = null;
 let startupWarmupStarted = false;
@@ -1196,6 +1208,14 @@ function claudeProfilesPath() {
 
 function claudeMcpInventoryPath() {
   return join(app.getPath("userData"), "claude-mcp-inventory.json");
+}
+
+function dshResourceSchemesPath() {
+  return join(app.getPath("userData"), "dsh-resource-schemes.json");
+}
+
+function dshSkillRepositoriesPath() {
+  return join(app.getPath("userData"), "dsh-skill-repositories.json");
 }
 
 const CLAUDE_RESOURCE_CACHE_TTL = 30 * 1000;
@@ -3616,6 +3636,136 @@ function dshPluginManagerOptions(): DshPluginManagerOptions {
   };
 }
 
+function dshPluginCatalog() {
+  return new DshPluginCatalog({
+    dshHome: resolveDshHome(),
+    npxPath: findNpxExecutable(),
+    marketplaceCachePath: join(app.getPath("userData"), "awesome-dsh-plugin-cache.json")
+  });
+}
+
+function dshResourceInventory(): DshResourceInventory {
+  const runtimeSnapshot = dshRuntimeSnapshots.current();
+  const desired = desiredDshResources.current();
+  const skillSnapshot = scanDshSkills();
+  const localSkills = dshSkillResources(
+    skillSnapshot,
+    desired.skills,
+    desired.skillDefaultEnabled
+  );
+  const skillsById = new Map(localSkills.map(skill => [skill.id, skill]));
+  for (const runtimeSkill of dshRuntimeSkillResources(runtimeSnapshot)) {
+    const local = skillsById.get(runtimeSkill.id);
+    const name = runtimeSkill.name;
+    skillsById.set(runtimeSkill.id, {
+      ...local,
+      ...runtimeSkill,
+      ...(local?.sourceIds ? { sourceIds: local.sourceIds } : {}),
+      detail: [local?.detail, runtimeSkill.detail].filter(Boolean).join(" + "),
+      enabled: Object.prototype.hasOwnProperty.call(desired.skills, name)
+        ? desired.skills[name]
+        : desired.skillDefaultEnabled
+    });
+  }
+  const skills = [...skillsById.values()].sort((left, right) => left.name.localeCompare(right.name));
+  let plugins = dshRuntimePluginResources(runtimeSnapshot).map(plugin => {
+    const entryId = plugin.id.replace(/^plugin:/, "");
+    return Object.prototype.hasOwnProperty.call(desired.plugins, entryId)
+      ? { ...plugin, enabled: desired.plugins[entryId] }
+      : plugin;
+  });
+  if (plugins.length === 0) {
+    plugins = dshPluginCatalog().snapshot().plugins.map(plugin => ({
+      id: `plugin:package:${plugin.packageName}`,
+      kind: "plugin" as const,
+      name: plugin.name,
+      packageName: plugin.packageName,
+      ...(plugin.description ? { description: plugin.description } : {}),
+      detail: plugin.packageName,
+      enabled: plugin.states.some(state => state.enabled),
+      manageable: false,
+      schemeSelectable: true,
+      required: plugin.protected
+    }));
+  }
+  return {
+    skills,
+    plugins,
+    scannedAt: Date.now(),
+    runtimeConnected: runtimeSnapshot !== null
+  };
+}
+
+function setDesiredDshSkills(states: Record<string, boolean>, defaultEnabled: boolean) {
+  const nextStates = { ...states };
+  writeTextFileAtomic(
+    join(resolveDshHome(), ".dsh-desk", "skill-policy.json"),
+    `${JSON.stringify({ defaultEnabled, states: nextStates }, null, 2)}\n`
+  );
+  desiredDshResources.setSkills(nextStates, defaultEnabled);
+}
+
+function setDesiredDshPlugins(states: Record<string, boolean>) {
+  desiredDshResources.setPlugins(states);
+}
+
+function sameBooleanStates(left: Readonly<Record<string, boolean>>, right: Readonly<Record<string, boolean>>): boolean {
+  const leftEntries = Object.entries(left);
+  return leftEntries.length === Object.keys(right).length
+    && leftEntries.every(([key, value]) => right[key] === value);
+}
+
+function dshResourceSchemeManager() {
+  return new DshResourceSchemeManager({
+    storePath: dshResourceSchemesPath(),
+    inventory: dshResourceInventory,
+    setDesiredSkills: setDesiredDshSkills,
+    setDesiredPlugins: setDesiredDshPlugins
+  });
+}
+
+function dshSkillMarketplace() {
+  dshSkillMarketplaceInstance ??= new DshSkillMarketplace({
+    dshHome: resolveDshHome(),
+    storePath: dshSkillRepositoriesPath(),
+    cachePath: join(app.getPath("userData"), "dsh-skill-marketplace-cache.json")
+  });
+  return dshSkillMarketplaceInstance;
+}
+
+function restoreDesiredDshResources() {
+  try {
+    const snapshot = dshResourceSchemeManager().snapshot();
+    const scheme = snapshot.schemes.find(item => item.id === snapshot.appliedSchemeId);
+    if (!scheme) return;
+    const selected = new Set(scheme.plugins);
+    const selectedSkills = new Set(scheme.skills);
+    const schemeSkillStates = dshDesiredSkillStates(snapshot.inventory.skills, selectedSkills);
+    const schemePluginStates = Object.fromEntries(
+      snapshot.inventory.plugins
+        .filter(item => item.manageable)
+        .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
+    );
+    const current = desiredDshResources.current();
+    const next = desiredDshResources.reconcileScheme(
+      schemeSkillStates,
+      scheme.id === ALL_DSH_SCHEME_ID,
+      schemePluginStates
+    );
+    const initialized = desiredDshResources.isInitialized();
+    if (!initialized
+      || next.skillDefaultEnabled !== current.skillDefaultEnabled
+      || !sameBooleanStates(next.skills, current.skills)) {
+      setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
+    }
+    if (!initialized || !sameBooleanStates(next.plugins, current.plugins)) {
+      setDesiredDshPlugins(next.plugins);
+    }
+  } catch {
+    // A malformed scheme file is reported by the resource page; never block the event bridge.
+  }
+}
+
 function getHooksStatus(): HookStatus {
   return getDshPluginStatus(dshPluginManagerOptions());
 }
@@ -3723,6 +3873,34 @@ function startEventServer() {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/dsh-plugin-inventory") {
+      try {
+        const snapshot = normalizeDshRuntimePluginSnapshot(await readJson(req));
+        if (!snapshot) {
+          sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
+          return;
+        }
+        dshRuntimeSnapshots.update(snapshot);
+        restoreDesiredDshResources();
+        if (panelWindow && !panelWindow.isDestroyed()) {
+          panelWindow.webContents.send("companion:dsh-resources-updated");
+        }
+        const desired = desiredDshResources.current();
+        sendJson(res, 200, {
+          ok: true,
+          desiredSkills: desired.skills,
+          desiredPlugins: desired.plugins,
+          skillPolicy: {
+            defaultEnabled: desired.skillDefaultEnabled,
+            states: desired.skills
+          }
+        });
+      } catch {
+        sendJson(res, 400, { ok: false, error: "invalid_plugin_inventory" });
+      }
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/dsh-usage") {
       try {
         const record = normalizeDshUsageRecord(await readJson(req));
@@ -3766,6 +3944,12 @@ function startEventServer() {
 
 if (singleInstanceLock) {
 app.whenReady().then(() => {
+  try {
+    restoreLegacyDisabledDshSkills();
+  } catch (error) {
+    console.warn("Could not restore legacy DSH Desk Skill files.", error);
+  }
+  restoreDesiredDshResources();
   loadCompanionSettings();
   loadRuntimeStats();
   currencyRatesSnapshot = loadCachedCurrencyRates();
@@ -4018,6 +4202,27 @@ app.whenReady().then(() => {
     discardDownloadedPetPack(String(zipPath ?? ""), petDownloadsDir()));
   ipcMain.handle("companion:get-monitors", () => screen.getAllDisplays().map(display => ({ id: String(display.id), label: display.label || `Display ${display.id}`, bounds: display.bounds, workArea: display.workArea, scaleFactor: display.scaleFactor })));
   ipcMain.handle("companion:get-plugins", () => companionSettings.customPlugins);
+  ipcMain.handle("companion:dsh-plugins-list", () => dshPluginCatalog().snapshot());
+  ipcMain.handle("companion:dsh-plugins-marketplace", (_, force?: boolean) => dshPluginCatalog().marketplace(Boolean(force)));
+  ipcMain.handle("companion:dsh-plugins-set-enabled", (_, input: DshPluginStateInput) => dshPluginCatalog().setEnabled(input));
+  ipcMain.handle("companion:dsh-plugins-install", (_, input: DshPluginInstallInput) => dshPluginCatalog().install(input));
+  ipcMain.handle("companion:dsh-plugins-remove", (_, input: DshPluginRemoveInput) => dshPluginCatalog().remove(input));
+  ipcMain.handle("companion:dsh-skills-list", () => scanDshSkills());
+  ipcMain.handle("companion:dsh-resource-schemes", () => dshResourceSchemeManager().snapshot());
+  ipcMain.handle("companion:dsh-resource-scheme-save", (_, input: DshResourceSchemeSaveInput) => dshResourceSchemeManager().save(input));
+  ipcMain.handle("companion:dsh-resource-scheme-delete", (_, schemeId: unknown) => dshResourceSchemeManager().delete(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-resource-scheme-apply", (_, schemeId: unknown) => dshResourceSchemeManager().apply(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-resource-state", (_, input: DshResourceStateInput) => dshResourceSchemeManager().setResourceState(input));
+  ipcMain.handle("companion:dsh-skill-marketplace", (_, force?: boolean) => dshSkillMarketplace().snapshot(Boolean(force)));
+  ipcMain.handle("companion:dsh-skill-repo-add", (_, repo: DshSkillRepo) => dshSkillMarketplace().addRepo(repo));
+  ipcMain.handle("companion:dsh-skill-repo-remove", (_, owner: unknown, name: unknown) => dshSkillMarketplace().removeRepo(String(owner ?? ""), String(name ?? "")));
+  ipcMain.handle("companion:dsh-skill-install", (_, skill: DshMarketplaceSkill) => dshSkillMarketplace().install(skill));
+  ipcMain.handle("companion:dsh-skill-reveal", (_, targetPath: unknown) => {
+    if (typeof targetPath !== "string" || !canRevealDshSkillPath(targetPath)) return false;
+    if (existsSync(targetPath) && statSync(targetPath).isFile()) shell.showItemInFolder(targetPath);
+    else void shell.openPath(targetPath);
+    return true;
+  });
   ipcMain.handle("companion:get-claude-resources", (_, force?: boolean) => getClaudeResourcesSnapshot(Boolean(force)));
   ipcMain.handle("companion:get-claude-profiles", (_, force?: boolean) => getClaudeProfilesSnapshot(Boolean(force)));
   ipcMain.handle("companion:save-claude-profile", (_, input: unknown) => saveClaudeProfileFromRenderer(input));

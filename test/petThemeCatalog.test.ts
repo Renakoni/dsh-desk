@@ -29,12 +29,9 @@ describe("built-in catalog contract", () => {
       "running",
       "waiting_permission",
       "done",
-      "extra_action_5",
       "extra_action_7",
       "extra_action_8",
-      "extra_action_9",
-      "extra_action_aqua_bocchi",
-      "extra_action_aqua_pixel"
+      "extra_action_aqua_bocchi"
     ]);
     // The built-in theme has no dedicated error clip; errors reuse running.
     expect(MINATO_AQUA_CATALOG.roleDefaults).toEqual({
@@ -123,18 +120,18 @@ describe("catalog-scoped validation", () => {
   const packCatalog = catalogFromPetPack(makePackManifest());
 
   it("treats canonical-but-foreign keys exactly like unknown strings", () => {
-    // extra_action_5 is canonical but the pack does not provide it.
-    expect(isCatalogAnimationKey(packCatalog, "extra_action_5")).toBe(false);
+    // extra_action_7 is canonical but the pack does not provide it.
+    expect(isCatalogAnimationKey(packCatalog, "extra_action_7")).toBe(false);
     expect(isCatalogAnimationKey(MINATO_AQUA_CATALOG, "jumping")).toBe(false);
-    expect(normalizeCatalogAnimationKey(packCatalog, "extra_action_5", "idle")).toBe("idle");
+    expect(normalizeCatalogAnimationKey(packCatalog, "extra_action_7", "idle")).toBe("idle");
     expect(normalizeCatalogAnimationKey(MINATO_AQUA_CATALOG, "jumping", "running")).toBe("running");
   });
 
   it("filters pools to the theme's keys and dedupes", () => {
-    expect(normalizeCatalogAnimationKeys(packCatalog, ["idle", "jumping", "extra_action_5", "jumping", "bogus"]))
+    expect(normalizeCatalogAnimationKeys(packCatalog, ["idle", "jumping", "extra_action_7", "jumping", "bogus"]))
       .toEqual(["idle", "jumping"]);
-    expect(normalizeCatalogAnimationKeys(MINATO_AQUA_CATALOG, ["idle", "jumping", "extra_action_5"]))
-      .toEqual(["idle", "extra_action_5"]);
+    expect(normalizeCatalogAnimationKeys(MINATO_AQUA_CATALOG, ["idle", "jumping", "extra_action_7"]))
+      .toEqual(["idle", "extra_action_7"]);
   });
 });
 

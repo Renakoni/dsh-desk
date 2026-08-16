@@ -4,11 +4,11 @@ import { planIdleAnimation } from "../src/renderer/state/petIdleAnimator";
 
 describe("normalizeAnimationKeys: one empty-pool rule for UI, preview, and pet", () => {
   it("keeps canonical entries and dedupes", () => {
-    expect(normalizeAnimationKeys(["idle", "extra_action_5", "extra_action_5"])).toEqual(["idle", "extra_action_5"]);
+    expect(normalizeAnimationKeys(["idle", "extra_action_7", "extra_action_7"])).toEqual(["idle", "extra_action_7"]);
   });
 
   it("drops invalid entries without translating aliases", () => {
-    expect(normalizeAnimationKeys(["extra-action-5", "thinking", "extra_action_9"])).toEqual(["extra_action_9"]);
+    expect(normalizeAnimationKeys(["retired-action", "thinking", "extra_action_8"])).toEqual(["extra_action_8"]);
   });
 
   it("returns an empty pool as empty — no fallback to 'all' or 'idle'", () => {
@@ -17,7 +17,7 @@ describe("normalizeAnimationKeys: one empty-pool rule for UI, preview, and pet",
     // halt, matching the live pet.
     expect(normalizeAnimationKeys([])).toEqual([]);
     expect(normalizeAnimationKeys(undefined)).toEqual([]);
-    expect(normalizeAnimationKeys(["bogus", "extra-action-5"])).toEqual([]);
+    expect(normalizeAnimationKeys(["bogus", "retired-action"])).toEqual([]);
   });
 
   it("agrees with the live pet: an empty persisted pool halts rotation everywhere", () => {
@@ -29,15 +29,15 @@ describe("normalizeAnimationKeys: one empty-pool rule for UI, preview, and pet",
 
 describe("toggleIdlePoolSprite: the pool never drops below one sprite", () => {
   it("adds and removes sprites normally", () => {
-    expect(toggleIdlePoolSprite(["idle"], "extra_action_5")).toEqual(["idle", "extra_action_5"]);
-    expect(toggleIdlePoolSprite(["idle", "extra_action_5"], "idle")).toEqual(["extra_action_5"]);
+    expect(toggleIdlePoolSprite(["idle"], "extra_action_7")).toEqual(["idle", "extra_action_7"]);
+    expect(toggleIdlePoolSprite(["idle", "extra_action_7"], "idle")).toEqual(["extra_action_7"]);
   });
 
   it("refuses to deselect the last remaining sprite, returning the same array", () => {
     // Disabling rotation is the master switch's job; the pool can no longer
     // reach the ambiguous empty state through the UI.
-    const pool = ["extra_action_5"] as ReturnType<typeof normalizeAnimationKeys>;
-    expect(toggleIdlePoolSprite(pool, "extra_action_5")).toBe(pool);
+    const pool = ["extra_action_7"] as ReturnType<typeof normalizeAnimationKeys>;
+    expect(toggleIdlePoolSprite(pool, "extra_action_7")).toBe(pool);
   });
 
   it("can walk down to exactly one sprite and back up to the full set", () => {

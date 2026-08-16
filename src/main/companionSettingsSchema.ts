@@ -105,7 +105,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   currentClaudeProviderId: "claude-official",
   idleAnim: {
     enabled: true,
-    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_5", "extra_action_7", "extra_action_8", "extra_action_9", "extra_action_aqua_bocchi", "extra_action_aqua_pixel"],
+    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
     intervalMin: 12,
     intervalMax: 28,
     repeatMin: 1,

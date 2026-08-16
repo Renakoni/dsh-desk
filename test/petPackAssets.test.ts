@@ -13,7 +13,7 @@ describe("spritesheetAssetsFromPack", () => {
     expect(assets.cellHeight).toBe(208);
     expect(assets.animations.waiting_permission).toMatchObject({ row: 6, frameCount: 8 });
     expect(assets.animations.idle).toMatchObject({ row: 0, frameCount: 6 });
-    expect(assets.animations.extra_action_5).toBeUndefined();
+    expect(assets.animations.extra_action_7).toBeUndefined();
   });
 
   it("only exposes rows the pack provides", () => {

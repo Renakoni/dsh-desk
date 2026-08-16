@@ -83,6 +83,32 @@ describe("DSH plugin operations", () => {
     ]);
   });
 
+  it("removes the legacy bridge before installing the unified plugin", async () => {
+    const options = fixture();
+    for (const profile of ["web", "headless"] as const) {
+      const root = join(options.profilesRoot, profile);
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, "package.json"), JSON.stringify({
+        dependencies: { "dsh-chara-desk": "file:legacy.tgz" },
+        dsh: { profile: { bundles: ["dsh-chara-desk"] } }
+      }), "utf8");
+    }
+    const calls: string[][] = [];
+    const run: DshCommandRunner = async (_command, args) => {
+      calls.push(args);
+      const profile = args[args.indexOf("--profile") + 1] as "web" | "headless";
+      if (args.at(-2) === "add") writeProfile(options.profilesRoot, profile, true);
+    };
+
+    expect((await installDshPlugin(options, run)).success).toBe(true);
+    expect(calls.map(args => args.slice(-3))).toEqual([
+      ["web", "remove", "dsh-chara-desk"],
+      ["web", "add", options.pluginPath],
+      ["headless", "remove", "dsh-chara-desk"],
+      ["headless", "add", options.pluginPath]
+    ]);
+  });
+
   it("removes only registered profiles", async () => {
     const options = fixture();
     writeProfile(options.profilesRoot, "web", true);

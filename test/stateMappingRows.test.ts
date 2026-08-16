@@ -55,7 +55,7 @@ describe("displayedMappingKey agrees with runtime resolution", () => {
   it("shows the row default for stale built-in mappings under an imported theme", () => {
     // A stored profile can reference an animation the (re)imported pack no
     // longer provides, or a built-in key that never existed in the pack.
-    const stale = { running: "extra_action_5", jumping: "extra_action_9" };
+    const stale = { running: "retired_action", jumping: "removed_action" };
     const rows = stateMappingRowsFor(packCatalog);
     for (const row of rows) {
       expect(displayedMappingKey(packCatalog, stale, row)).toBe(row.key);
@@ -64,10 +64,10 @@ describe("displayedMappingKey agrees with runtime resolution", () => {
 
   it("matches resolvePetAnimation for every state, valid or stale", () => {
     const cases = [
-      { catalog: MINATO_AQUA_CATALOG, mappings: { running: "extra_action_7", done: "extra_action_9" } },
+      { catalog: MINATO_AQUA_CATALOG, mappings: { running: "extra_action_7", done: "extra_action_8" } },
       { catalog: MINATO_AQUA_CATALOG, mappings: { running: "jumping" } }, // foreign canonical key
       { catalog: packCatalog, mappings: { running: "waving", jumping: "review", failed: "waving" } },
-      { catalog: packCatalog, mappings: { running: "extra_action_5", failed: "bogus" } }, // stale + junk
+      { catalog: packCatalog, mappings: { running: "extra_action_7", failed: "bogus" } }, // foreign + junk
       { catalog: packCatalog, mappings: { running: "running_left", jumping: "running_right" } } // drag-only keys
     ] as const;
 
