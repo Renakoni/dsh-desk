@@ -11,6 +11,18 @@ describe("DSH desired resource state", () => {
     });
   });
 
+  it("does not initialize plugin directives when only Skill state was restored offline", () => {
+    const state = new DshDesiredResourceState();
+    state.setSkills({ local: true }, false);
+
+    expect(state.isSkillsInitialized()).toBe(true);
+    expect(state.isPluginsInitialized()).toBe(false);
+    expect(state.current().plugins).toEqual({});
+    expect(state.reconcileScheme({ local: false }, false, { runtimePlugin: true }).plugins).toEqual({
+      runtimePlugin: true
+    });
+  });
+
   it("preserves offline live overrides and only fills newly discovered resources", () => {
     const state = new DshDesiredResourceState();
     state.setSkills({ local: true }, false);

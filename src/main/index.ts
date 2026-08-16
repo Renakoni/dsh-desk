@@ -99,7 +99,7 @@ import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { dshDesiredPluginStates, dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3741,24 +3741,22 @@ function restoreDesiredDshResources() {
     const selected = new Set(scheme.plugins);
     const selectedSkills = new Set(scheme.skills);
     const schemeSkillStates = dshDesiredSkillStates(snapshot.inventory.skills, selectedSkills);
-    const schemePluginStates = Object.fromEntries(
-      snapshot.inventory.plugins
-        .filter(item => item.manageable)
-        .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
-    );
+    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected);
     const current = desiredDshResources.current();
     const next = desiredDshResources.reconcileScheme(
       schemeSkillStates,
       scheme.id === ALL_DSH_SCHEME_ID,
       schemePluginStates
     );
-    const initialized = desiredDshResources.isInitialized();
-    if (!initialized
+    const skillsInitialized = desiredDshResources.isSkillsInitialized();
+    const pluginsInitialized = desiredDshResources.isPluginsInitialized();
+    if (!skillsInitialized
       || next.skillDefaultEnabled !== current.skillDefaultEnabled
       || !sameBooleanStates(next.skills, current.skills)) {
       setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
     }
-    if (!initialized || !sameBooleanStates(next.plugins, current.plugins)) {
+    if (snapshot.inventory.runtimeConnected
+      && (!pluginsInitialized || !sameBooleanStates(next.plugins, current.plugins))) {
       setDesiredDshPlugins(next.plugins);
     }
   } catch {

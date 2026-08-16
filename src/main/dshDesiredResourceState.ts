@@ -19,10 +19,15 @@ export class DshDesiredResourceState {
   private skills: Record<string, boolean> = {};
   private skillDefaultEnabled = true;
   private plugins: Record<string, boolean> = {};
-  private initialized = false;
+  private skillsInitialized = false;
+  private pluginsInitialized = false;
 
-  isInitialized(): boolean {
-    return this.initialized;
+  isSkillsInitialized(): boolean {
+    return this.skillsInitialized;
+  }
+
+  isPluginsInitialized(): boolean {
+    return this.pluginsInitialized;
   }
 
   current(): DshDesiredResourceSnapshot {
@@ -36,12 +41,12 @@ export class DshDesiredResourceState {
   setSkills(states: Readonly<Record<string, boolean>>, defaultEnabled: boolean): void {
     this.skills = { ...states };
     this.skillDefaultEnabled = defaultEnabled;
-    this.initialized = true;
+    this.skillsInitialized = true;
   }
 
   setPlugins(states: Readonly<Record<string, boolean>>): void {
     this.plugins = { ...states };
-    this.initialized = true;
+    this.pluginsInitialized = true;
   }
 
   reconcileScheme(
@@ -49,17 +54,10 @@ export class DshDesiredResourceState {
     skillDefaultEnabled: boolean,
     pluginBaseline: Readonly<Record<string, boolean>>
   ): DshDesiredResourceSnapshot {
-    if (!this.initialized) {
-      return {
-        skills: { ...skillBaseline },
-        skillDefaultEnabled,
-        plugins: { ...pluginBaseline }
-      };
-    }
     return {
-      skills: withMissingStates(this.skills, skillBaseline),
+      skills: this.skillsInitialized ? withMissingStates(this.skills, skillBaseline) : { ...skillBaseline },
       skillDefaultEnabled,
-      plugins: withMissingStates(this.plugins, pluginBaseline)
+      plugins: this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline }
     };
   }
 }

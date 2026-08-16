@@ -39,6 +39,106 @@ describe("DSH resource schemes", () => {
     expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:runtime-entry"]);
   });
 
+  it("builds a safe live baseline for bundle entries, later profiles, and runtime disconnects", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-runtime-baseline-"));
+    roots.push(root);
+    type Phase = "offline" | "web" | "web-headless";
+    let phase: Phase = "offline";
+    const desired: Array<Record<string, boolean>> = [];
+    const offlinePlugins: DshResourceInventory["plugins"] = [
+      { id: "plugin:package:@deepseek-ai/dsh-base", kind: "plugin", name: "DSH Base", packageName: "@deepseek-ai/dsh-base", enabled: true, manageable: false, schemeSelectable: true, required: true },
+      { id: "plugin:package:third-party", kind: "plugin", name: "third-party", packageName: "third-party", enabled: true, manageable: false, schemeSelectable: true },
+      { id: "plugin:package:other-plugin", kind: "plugin", name: "other-plugin", packageName: "other-plugin", enabled: false, manageable: false, schemeSelectable: true }
+    ];
+    const webPlugins: DshResourceInventory["plugins"] = [
+      { id: "plugin:web:include", kind: "plugin", name: "include", packageName: "include", enabled: true, manageable: true },
+      { id: "plugin:web:third", kind: "plugin", name: "third-party", packageName: "third-party", enabled: true, manageable: true },
+      { id: "plugin:web:other", kind: "plugin", name: "other-plugin", packageName: "other-plugin", enabled: true, manageable: true }
+    ];
+    const inventory = (): DshResourceInventory => ({
+      skills: [],
+      plugins: phase === "offline"
+        ? offlinePlugins
+        : phase === "web"
+          ? webPlugins
+          : [...webPlugins, { id: "plugin:headless:timer", kind: "plugin", name: "timer", packageName: "timer", enabled: true, manageable: true }],
+      scannedAt: 1,
+      runtimeConnected: phase !== "offline"
+    });
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:@deepseek-ai/dsh-base",
+      "plugin:package:third-party"
+    ]);
+
+    phase = "web";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:web:third",
+      "plugin:web:include"
+    ]);
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({
+      "web:include": true,
+      "web:third": true,
+      "web:other": false
+    });
+
+    phase = "web-headless";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toContain("plugin:headless:timer");
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)?.["headless:timer"]).toBe(true);
+
+    const liveAll = manager.snapshot().schemes.find(scheme => scheme.id === "all")?.plugins;
+    phase = "offline";
+    const disconnected = manager.snapshot();
+    expect(disconnected.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual(liveAll);
+    expect(disconnected.schemes.find(scheme => scheme.id === "default")?.plugins).toContain("plugin:headless:timer");
+  });
+
+  it("never turns unresolved package placeholders into bulk disable directives", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-unresolved-runtime-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:package:unknown-bundle", "plugin:known-runtime"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:package:unknown-bundle", "plugin:known-runtime"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      appliedSchemeId: "default"
+    }));
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [
+          { id: "plugin:known-runtime", kind: "plugin", name: "known", enabled: true, manageable: true },
+          { id: "plugin:new-runtime", kind: "plugin", name: "new", enabled: true, manageable: true }
+        ],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.apply("default").ok).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:known-runtime",
+      "plugin:new-runtime"
+    ]);
+    expect(Object.values(desired.at(-1) ?? {})).not.toContain(false);
+  });
+
   it("applies Skill membership without deletion and publishes manageable plugin state", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-"));
     roots.push(root);
