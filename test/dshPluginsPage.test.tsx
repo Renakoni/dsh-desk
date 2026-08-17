@@ -20,6 +20,7 @@ const plugins = Array.from({ length: 160 }, (_, index) => ({
 
 const snapshot: DshResourceSchemesSnapshot = {
   schemaVersion: 1,
+  pluginRuntimePackages: {},
   schemes: [{
     id: "default",
     name: "Default",
@@ -327,10 +328,15 @@ describe("DSH resource schemes page", () => {
 
   it("does not report a retained Headless runtime ID as uninstalled", async () => {
     const runtimeId = "plugin:headless-entry";
+    const aliasId = "plugin:package:headless-plugin";
     const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
     const partialSnapshot: DshResourceSchemesSnapshot = {
       ...snapshot,
-      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [runtimeId, webPlugin.id] })),
+      pluginRuntimePackages: { [runtimeId]: "headless-plugin" },
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: scheme.id === "all" ? [aliasId, webPlugin.id] : [runtimeId, webPlugin.id]
+      })),
       inventory: { ...snapshot.inventory, plugins: [webPlugin] }
     };
     const mockApi = renderPage(api(partialSnapshot));
@@ -343,6 +349,8 @@ describe("DSH resource schemes page", () => {
     fireEvent.click(screen.getByTitle("编辑"));
     fireEvent.click(await screen.findByRole("button", { name: /headless-entry/ }));
     expect(screen.queryByRole("alertdialog", { name: "删除缺失记录？" })).toBeNull();
+    const unselectedRuntime = await screen.findByRole("button", { name: /headless-entry/ });
+    expect(unselectedRuntime.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];

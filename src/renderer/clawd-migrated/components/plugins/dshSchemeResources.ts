@@ -5,12 +5,12 @@ export type DshResourceTab = "skills" | "plugins";
 export function visibleDshSchemeResourceIds(
   resourceIds: string[],
   runtimeConnected: boolean,
-  allPluginIds: string[],
+  knownPluginIds: string[],
   tab: DshResourceTab,
   availableResources: DshResourceItem[]
 ): string[] {
   if (tab === "skills") return resourceIds;
-  const known = new Set(allPluginIds);
+  const known = new Set(knownPluginIds);
   const available = new Set(availableResources.map(resource => resource.id));
   const runtimePackages = new Set(availableResources
     .filter(resource => !resource.id.startsWith("plugin:package:"))

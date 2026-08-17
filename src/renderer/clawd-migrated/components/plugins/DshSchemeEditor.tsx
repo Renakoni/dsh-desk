@@ -12,7 +12,7 @@ const OVERSCAN = 5;
 export function DshSchemeEditor({
   initial,
   inventory,
-  allPluginIds,
+  knownPluginIds,
   protectedScheme,
   canDelete,
   busy,
@@ -23,7 +23,7 @@ export function DshSchemeEditor({
 }: {
   initial: DshResourceSchemeSaveInput;
   inventory: DshResourceInventory;
-  allPluginIds: string[];
+  knownPluginIds: string[];
   protectedScheme: boolean;
   canDelete: boolean;
   busy: boolean;
@@ -48,23 +48,32 @@ export function DshSchemeEditor({
   ];
   const availableResources = inventory[activeTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources),
-    [activeTab, allPluginIds, availableResources, draft, inventory.runtimeConnected]
+    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, knownPluginIds, activeTab, availableResources),
+    [activeTab, availableResources, draft, inventory.runtimeConnected, knownPluginIds]
   );
-  const visibleKnownPackageIds = useMemo(
+  const visibleKnownCandidateIds = useMemo(
     () => activeTab === "plugins"
-      ? visibleDshSchemeResourceIds(allPluginIds.filter(id => id.startsWith("plugin:package:")), inventory.runtimeConnected, allPluginIds, activeTab, availableResources)
+      ? visibleDshSchemeResourceIds(
+        [...new Set([
+          ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
+          ...initial.plugins.filter(id => knownPluginIds.includes(id))
+        ])],
+        inventory.runtimeConnected,
+        knownPluginIds,
+        activeTab,
+        availableResources
+      )
       : [],
-    [activeTab, allPluginIds, availableResources, inventory.runtimeConnected]
+    [activeTab, availableResources, initial.plugins, inventory.runtimeConnected, knownPluginIds]
   );
   const candidateIds = useMemo(
-    () => [...new Set([...visibleDraftIds, ...visibleKnownPackageIds])],
-    [visibleDraftIds, visibleKnownPackageIds]
+    () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],
+    [visibleDraftIds, visibleKnownCandidateIds]
   );
   const resources = useMemo<DshResourceItem[]>(() => [
     ...availableResources,
-    ...unavailableDshResources(candidateIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), allPluginIds)
-  ], [activeTab, allPluginIds, availableResources, candidateIds, t]);
+    ...unavailableDshResources(candidateIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+  ], [activeTab, availableResources, candidateIds, knownPluginIds, t]);
   const selected = useMemo(() => new Set(visibleDraftIds), [visibleDraftIds]);
   const filtered = useMemo(() => filterDshResources(resources, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, resources]);
   const unselected = useMemo(() => filtered.filter(resource => !selected.has(resource.id)), [filtered, selected]);
@@ -77,7 +86,7 @@ export function DshSchemeEditor({
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => {
-      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources));
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, knownPluginIds, activeTab, availableResources));
       let hidden = current[activeTab].filter(id => !visible.has(id));
       if (activeTab === "plugins" && removing && !resource.id.startsWith("plugin:package:")) {
         const packageAlias = `plugin:package:${resource.packageName ?? resource.name}`;
