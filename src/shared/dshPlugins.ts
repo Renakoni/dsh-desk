@@ -40,6 +40,7 @@ export type DshRuntimePluginEntry = {
   entryId: string;
   configId: string;
   moduleName: string;
+  ownerPackage?: string;
   enabled: boolean;
   fiberPhase: DshRuntimePluginPhase;
 };

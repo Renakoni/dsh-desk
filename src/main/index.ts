@@ -99,7 +99,7 @@ import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager, inheritDshPluginPackageStates } from "./dshResourceSchemes";
+import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3668,26 +3668,26 @@ function dshResourceInventory(): DshResourceInventory {
     });
   }
   const skills = [...skillsById.values()].sort((left, right) => left.name.localeCompare(right.name));
-  let plugins = dshRuntimePluginResources(runtimeSnapshot).map(plugin => {
-    const entryId = plugin.id.replace(/^plugin:/, "");
-    return Object.prototype.hasOwnProperty.call(desired.plugins, entryId)
-      ? { ...plugin, enabled: desired.plugins[entryId] }
-      : plugin;
-  });
-  if (plugins.length === 0) {
-    plugins = dshPluginCatalog().snapshot().plugins.map(plugin => ({
+  const runtimePlugins = new Map(dshRuntimePluginResources(runtimeSnapshot)
+    .map(plugin => [plugin.packageName ?? plugin.name, plugin]));
+  const plugins = dshPluginCatalog().snapshot().plugins.map(plugin => {
+    const runtime = runtimePlugins.get(plugin.packageName);
+    return {
       id: `plugin:package:${plugin.packageName}`,
       kind: "plugin" as const,
       name: plugin.name,
       packageName: plugin.packageName,
       ...(plugin.description ? { description: plugin.description } : {}),
-      detail: plugin.packageName,
-      enabled: plugin.states.some(state => state.enabled),
-      manageable: false,
+      detail: runtime?.detail ?? plugin.packageName,
+      ...(runtime?.sourceIds ? { sourceIds: runtime.sourceIds } : {}),
+      enabled: Object.prototype.hasOwnProperty.call(desired.plugins, plugin.packageName)
+        ? desired.plugins[plugin.packageName]
+        : plugin.states.some(state => state.enabled),
+      manageable: !plugin.protected,
       schemeSelectable: true,
       required: plugin.protected
-    }));
-  }
+    };
+  });
   return {
     skills,
     plugins,
@@ -3758,12 +3758,7 @@ function restoreDesiredDshResources() {
       || !sameBooleanStates(next.skills, current.skills)) {
       setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
     }
-    const nextPlugins = inheritDshPluginPackageStates(
-      snapshot.inventory.plugins,
-      next.plugins,
-      pluginsInitialized && allowPluginDisable ? current.plugins : {},
-      snapshot.pluginRuntimePackages
-    );
+    const nextPlugins = next.plugins;
     if (snapshot.inventory.runtimeConnected
       && (!pluginsInitialized || !sameBooleanStates(nextPlugins, current.plugins))) {
       setDesiredDshPlugins(nextPlugins);
@@ -3896,7 +3891,7 @@ function startEventServer() {
         sendJson(res, 200, {
           ok: true,
           desiredSkills: desired.skills,
-          desiredPlugins: desired.plugins,
+          desiredPluginPackages: desired.plugins,
           skillPolicy: {
             defaultEnabled: desired.skillDefaultEnabled,
             states: desired.skills

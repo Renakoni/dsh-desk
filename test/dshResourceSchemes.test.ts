@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DshResourceSchemeManager, inheritDshPluginPackageStates } from "../src/main/dshResourceSchemes";
+import { DshResourceSchemeManager, dshDesiredPluginStates, inheritDshPluginPackageStates } from "../src/main/dshResourceSchemes";
 import { dshSkillResources, scanDshSkills } from "../src/main/dshSkillCatalog";
 import type { DshResourceInventory } from "../src/shared/dshResources";
 
@@ -399,6 +399,81 @@ describe("DSH resource schemes", () => {
       "plugin:package:known"
     ]);
     expect(desired.at(-1)).toEqual({ "known-runtime": true, "new-runtime": false });
+  });
+
+  it("removes legacy internal-module aliases when package inventory becomes authoritative", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-package-migration-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        {
+          id: "default",
+          name: "Default",
+          skills: [],
+          plugins: ["plugin:package:aggregate-bundle", "plugin:package:internal-helper", "plugin:package:removed-bundle"],
+          isProtected: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "all",
+          name: "All",
+          skills: [],
+          plugins: ["plugin:package:aggregate-bundle", "plugin:package:internal-helper"],
+          isProtected: true,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      pluginRuntimePackages: { "plugin:include:helper": "internal-helper" },
+      legacyRuntimePluginIds: [],
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:aggregate-bundle",
+          kind: "plugin",
+          name: "aggregate-bundle",
+          packageName: "aggregate-bundle",
+          enabled: true,
+          manageable: true,
+          schemeSelectable: true,
+          sourceIds: ["plugin:include:helper"]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const snapshot = manager.snapshot();
+    expect(snapshot.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual([
+      "plugin:package:aggregate-bundle"
+    ]);
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:aggregate-bundle",
+      "plugin:package:removed-bundle"
+    ]);
+    expect(snapshot.pluginRuntimePackages).toEqual({ "plugin:include:helper": "aggregate-bundle" });
+  });
+
+  it("publishes one desired state per top-level package alias", () => {
+    const resources: DshResourceInventory["plugins"] = [
+      { id: "plugin:package:aggregate-bundle", kind: "plugin", name: "Aggregate", packageName: "aggregate-bundle", enabled: true, manageable: true },
+      { id: "plugin:package:other-bundle", kind: "plugin", name: "Other", packageName: "other-bundle", enabled: true, manageable: true }
+    ];
+    expect(dshDesiredPluginStates(
+      resources,
+      new Set(["plugin:package:aggregate-bundle"]),
+      new Set(["aggregate-bundle", "other-bundle"])
+    )).toEqual({ "aggregate-bundle": true, "other-bundle": false });
   });
 
   it("recovers a non-active scheme package selection when Headless connects after Web", () => {

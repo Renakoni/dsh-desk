@@ -7,6 +7,7 @@ describe("DSH runtime plugin inventory", () => {
       entryId: `root:entry-${index}`,
       configId: `entry-${index}`,
       moduleName: index === 159 ? "third-party-plugin" : `@deepseek-ai/plugin-${index}`,
+      ownerPackage: index === 159 ? "third-party-bundle" : "@deepseek-ai/dsh-base",
       enabled: index % 3 !== 0,
       fiberPhase: "active"
     }));
@@ -15,14 +16,28 @@ describe("DSH runtime plugin inventory", () => {
     expect(snapshot?.entries).toHaveLength(160);
     expect(snapshot?.entries[159].entryId).toBe("root:entry-159");
     const resources = dshRuntimePluginResources(snapshot);
-    expect(resources[0]).toMatchObject({ manageable: false, required: true });
-    expect(resources[159]).toMatchObject({ id: "plugin:root:entry-159", manageable: true });
+    expect(resources).toEqual([
+      expect.objectContaining({ id: "plugin:package:@deepseek-ai/dsh-base", manageable: false, required: true }),
+      expect.objectContaining({
+        id: "plugin:package:third-party-bundle",
+        manageable: true,
+        required: false,
+        sourceIds: ["plugin:root:entry-159"]
+      })
+    ]);
   });
 
   it("rejects duplicate or malformed entry identities", () => {
     const row = { entryId: "same", configId: "one", moduleName: "demo", enabled: true, fiberPhase: null };
     expect(normalizeDshRuntimePluginSnapshot({ entries: [row, row] })).toBeNull();
     expect(normalizeDshRuntimePluginSnapshot({ entries: [{ ...row, enabled: "yes" }] })).toBeNull();
+  });
+
+  it("keeps entries without reliable bundle ownership outside resource scheme control", () => {
+    const snapshot = normalizeDshRuntimePluginSnapshot({
+      entries: [{ entryId: "include", configId: "include", moduleName: "cordis:include", enabled: true, fiberPhase: "active" }]
+    });
+    expect(dshRuntimePluginResources(snapshot)).toEqual([]);
   });
 
   it("projects project, custom, bundled, and provider Skills by logical name", () => {
@@ -74,15 +89,40 @@ describe("DSH runtime plugin inventory", () => {
     expect(snapshots.current(18_000)).toBeNull();
   });
 
-  it("reports a shared plugin enabled only when every connected runtime enables it", () => {
+  it("projects Web and Headless entries owned by one bundle as one package resource", () => {
     const snapshots = new DshRuntimeSnapshotSet();
     for (const [instanceId, enabled] of [["web", true], ["headless", false]] as const) {
       snapshots.update(normalizeDshRuntimePluginSnapshot({
         instanceId,
-        entries: [{ entryId: "shared", configId: "shared", moduleName: "shared-plugin", enabled, fiberPhase: "active" }],
+        entries: [{
+          entryId: `${instanceId}:entry`,
+          configId: `${instanceId}-entry`,
+          moduleName: `${instanceId}-module`,
+          ownerPackage: "shared-bundle",
+          enabled,
+          fiberPhase: "active"
+        }],
         skills: []
       }, 1_000)!);
     }
-    expect(dshRuntimePluginResources(snapshots.current(1_000))[0]).toMatchObject({ id: "plugin:shared", enabled: false });
+    expect(dshRuntimePluginResources(snapshots.current(1_000))).toEqual([
+      expect.objectContaining({ id: "plugin:package:shared-bundle", enabled: true, detail: "2 Loader entries" })
+    ]);
+  });
+
+  it("automatically includes a new internal entry after its bundle is updated", () => {
+    const snapshot = normalizeDshRuntimePluginSnapshot({
+      entries: ["first", "second", "added-later"].map(configId => ({
+        entryId: `include:${configId}`,
+        configId,
+        moduleName: `${configId}-module`,
+        ownerPackage: "aggregate-bundle",
+        enabled: true,
+        fiberPhase: "active"
+      }))
+    });
+    expect(dshRuntimePluginResources(snapshot)).toEqual([
+      expect.objectContaining({ id: "plugin:package:aggregate-bundle", detail: "3 Loader entries" })
+    ]);
   });
 });

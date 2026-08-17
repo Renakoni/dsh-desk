@@ -29,10 +29,12 @@ export function normalizeDshRuntimePluginSnapshot(value: unknown, receivedAt = D
     const entryId = boundedString(entry.entryId, 512);
     const configId = boundedString(entry.configId, 256);
     const moduleName = boundedString(entry.moduleName, 512);
+    const ownerPackage = entry.ownerPackage === undefined ? undefined : boundedString(entry.ownerPackage, 512);
     const fiberPhase = entry.fiberPhase as DshRuntimePluginPhase;
-    if (!entryId || !configId || !moduleName || typeof entry.enabled !== "boolean" || !PHASES.has(fiberPhase) || ids.has(entryId)) return null;
+    if (!entryId || !configId || !moduleName || entry.ownerPackage !== undefined && !ownerPackage
+      || typeof entry.enabled !== "boolean" || !PHASES.has(fiberPhase) || ids.has(entryId)) return null;
     ids.add(entryId);
-    entries.push({ entryId, configId, moduleName, enabled: entry.enabled, fiberPhase });
+    entries.push({ entryId, configId, moduleName, ...(ownerPackage ? { ownerPackage } : {}), enabled: entry.enabled, fiberPhase });
   }
   const skills: DshRuntimeSkillEntry[] = [];
   for (const candidate of payload.skills ?? []) {
@@ -77,7 +79,11 @@ function aggregateDshRuntimeSnapshots(snapshots: DshRuntimePluginSnapshot[]): Ds
     skills.push(...snapshot.skills);
     for (const entry of snapshot.entries) {
       const existing = entries.get(entry.entryId);
-      entries.set(entry.entryId, existing ? { ...existing, enabled: existing.enabled && entry.enabled } : entry);
+      entries.set(entry.entryId, existing ? {
+        ...existing,
+        ...(existing.ownerPackage === entry.ownerPackage ? {} : { ownerPackage: undefined }),
+        enabled: existing.enabled && entry.enabled
+      } : entry);
     }
   }
   return { instanceId: "aggregate", entries: [...entries.values()], skills, receivedAt };
@@ -100,18 +106,33 @@ export class DshRuntimeSnapshotSet {
 
 export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | null): DshResourceItem[] {
   if (!snapshot) return [];
-  return snapshot.entries.map(entry => {
-    const protectedEntry = entry.moduleName.startsWith("@deepseek-ai/") || entry.moduleName === "dsh-desk-plugin" || entry.configId === "dsh-desk";
+  const grouped = new Map<string, DshRuntimePluginEntry[]>();
+  for (const entry of snapshot.entries) {
+    if (!entry.ownerPackage) continue;
+    const owned = grouped.get(entry.ownerPackage) ?? [];
+    owned.push(entry);
+    grouped.set(entry.ownerPackage, owned);
+  }
+  const protectedPackages = new Set([
+    "@deepseek-ai/dsh-base",
+    "@deepseek-ai/dsh-web-app",
+    "@deepseek-ai/dsh-headless",
+    "dsh-desk-plugin"
+  ]);
+  return [...grouped.entries()].map(([packageName, entries]) => {
+    const protectedPackage = protectedPackages.has(packageName);
     return {
-      id: `plugin:${entry.entryId}`,
+      id: `plugin:package:${packageName}`,
       kind: "plugin" as const,
-      name: entry.moduleName,
-      packageName: entry.moduleName,
-      detail: entry.entryId,
-      description: entry.fiberPhase === null ? "DSH Loader" : `DSH Loader - ${entry.fiberPhase}`,
-      enabled: entry.enabled,
-      manageable: !protectedEntry,
-      required: protectedEntry
+      name: packageName,
+      packageName,
+      detail: `${entries.length} Loader ${entries.length === 1 ? "entry" : "entries"}`,
+      description: "DSH plugin bundle",
+      enabled: entries.some(entry => entry.enabled),
+      manageable: !protectedPackage,
+      schemeSelectable: true,
+      sourceIds: entries.map(entry => `plugin:${entry.entryId}`),
+      required: protectedPackage
     };
   });
 }

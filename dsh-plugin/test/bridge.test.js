@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, it } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import {
   agentErrorEvent,
   createBridge,
@@ -8,14 +12,43 @@ import {
   sessionStartEvent,
   usageRecordForSessionEvent,
 } from '../src/bridge.js'
-import { apply as applyPlugin, applyDesiredPluginStates, createAgentSkillPolicy, loaderInventory } from '../src/index.js'
+import {
+  apply as applyPlugin,
+  bundleConfigOwners,
+  createAgentSkillPolicy,
+  createPluginPackageController,
+  loaderInventory,
+  runtimeEntryOwners,
+} from '../src/index.js'
 
 const servers = new Set()
+const temporaryDirectories = new Set()
 
 afterEach(async () => {
   await Promise.all([...servers].map(server => new Promise(resolve => server.close(resolve))))
   servers.clear()
+  for (const directory of temporaryDirectories) rmSync(directory, { recursive: true, force: true })
+  temporaryDirectories.clear()
 })
+
+function loaderFixture(rows) {
+  const subtree = {}
+  const include = {
+    id: 'include',
+    disabled: false,
+    options: { id: 'include', name: 'cordis:include', config: {} },
+    subtree,
+    parent: { tree: {} },
+  }
+  const entries = [include, ...rows.map(row => ({
+    disabled: false,
+    fiber: { state: 2 },
+    ...row,
+    options: { group: false, ...row.options },
+    parent: row.parent ?? { tree: subtree },
+  }))]
+  return { include, entries, loader: { entries: () => entries } }
+}
 
 async function listen(handler) {
   const server = http.createServer(handler)
@@ -264,30 +297,192 @@ describe('DSH Loader inventory bridge', () => {
   })
 
   it('publishes the complete non-group Loader order', () => {
-    const entries = Array.from({ length: 160 }, (_, index) => ({
-      id: `root:entry-${index}`,
+    const rows = Array.from({ length: 160 }, (_, index) => ({
+      id: `include:entry-${index}`,
       disabled: index % 2 === 0,
-      options: { id: `entry-${index}`, name: `@deepseek-ai/plugin-${index}`, group: false },
-      fiber: { state: 2 },
+      options: { id: `entry-${index}`, name: `@deepseek-ai/plugin-${index}` },
     }))
-    assert.equal(loaderInventory({ entries: () => entries }).entries.length, 160)
-    assert.deepEqual(loaderInventory({ entries: () => entries }).entries[159], {
-      entryId: 'root:entry-159',
+    const { loader } = loaderFixture(rows)
+    const configOwners = new Map(rows.map(row => [row.options.id, 'aggregate-bundle']))
+    assert.equal(loaderInventory(loader, configOwners).entries.length, 161)
+    assert.deepEqual(loaderInventory(loader, configOwners).entries[160], {
+      entryId: 'include:entry-159',
       configId: 'entry-159',
       moduleName: '@deepseek-ai/plugin-159',
+      ownerPackage: 'aggregate-bundle',
       enabled: true,
       fiberPhase: 'active',
     })
   })
 
-  it('applies only third-party desired states and persists through the owning tree', async () => {
+  it('loads top-level bundle ownership from the profile patch that inserted each entry', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-desk-bundle-owner-'))
+    temporaryDirectories.add(root)
+    const bundleRoot = join(root, 'node_modules', 'aggregate-bundle')
+    const overlayRoot = join(root, 'node_modules', 'overlay-bundle')
+    mkdirSync(bundleRoot, { recursive: true })
+    mkdirSync(overlayRoot, { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({
+      dsh: { profile: { bundles: ['aggregate-bundle', 'overlay-bundle'] } },
+    }))
+    writeFileSync(join(root, 'cordis.yml'), '[]\n')
+    writeFileSync(join(bundleRoot, 'package.json'), JSON.stringify({
+      name: 'aggregate-bundle',
+      main: 'index.js',
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(bundleRoot, 'index.js'), 'export default {}\n')
+    writeFileSync(join(bundleRoot, 'cordis.patch.yml'), [
+      '- insert:',
+      '    - id: aggregate',
+      '      name: aggregate-plugin',
+      '    - id: helper',
+      '      name: helper-plugin',
+      '    - id: grouped',
+      '      name: cordis:group',
+      '      group: true',
+      '      config:',
+      '        - id: old-child',
+      '          name: old-child-plugin',
+      '- id: aggregate',
+      '  config:',
+      '    enabled: !!js process.env.DEMO',
+      '',
+    ].join('\n'))
+    writeFileSync(join(overlayRoot, 'package.json'), JSON.stringify({
+      name: 'overlay-bundle',
+      main: 'index.js',
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(overlayRoot, 'index.js'), 'export default {}\n')
+    writeFileSync(join(overlayRoot, 'cordis.patch.yml'), [
+      '- id: grouped',
+      '  config:',
+      '    - id: replacement-child',
+      '      name: replacement-child-plugin',
+      '',
+    ].join('\n'))
+    const fixture = loaderFixture([])
+    fixture.include.options.config.path = pathToFileURL(join(root, 'cordis.yml')).href
+
+    assert.deepEqual([...bundleConfigOwners(fixture.loader)], [
+      ['aggregate', 'aggregate-bundle'],
+      ['helper', 'aggregate-bundle'],
+      ['grouped', 'aggregate-bundle'],
+      ['replacement-child', 'overlay-bundle'],
+    ])
+  })
+
+  it('projects dynamically-created children to their top-level aggregate bundle', () => {
+    const nestedTree = {}
+    const { loader } = loaderFixture([
+      { id: 'include:aggregate', options: { id: 'aggregate', name: 'aggregate-plugin' } },
+      { id: 'include:aggregate:child-a', options: { id: 'child-a', name: 'child-a' }, parent: { tree: nestedTree } },
+      { id: 'include:aggregate:child-b', options: { id: 'child-b', name: 'child-b' }, parent: { tree: nestedTree } },
+    ])
+    assert.deepEqual([...runtimeEntryOwners(loader, new Map([['aggregate', 'aggregate-bundle']]))], [
+      ['include:aggregate', 'aggregate-bundle'],
+      ['include:aggregate:child-a', 'aggregate-bundle'],
+      ['include:aggregate:child-b', 'aggregate-bundle'],
+    ])
+  })
+
+  it('switches every top-level entry in a bundle and restores configured disabled values', async () => {
     const updates = []
-    const tree = { update: async (id, value) => { updates.push([id, value]) } }
-    const entries = [{ id: 'core', disabled: false, options: { id: 'core', name: '@deepseek-ai/core' }, parent: { tree } }, {
-      id: 'third', disabled: false, options: { id: 'third-config', name: 'third-party-plugin' }, parent: { tree },
-    }]
-    await applyDesiredPluginStates({ entries: () => entries }, { core: false, third: false })
-    assert.deepEqual(updates, [['third-config', { disabled: true }]])
+    const configuredDisabled = { __jsExpr: 'process.platform === "win32"' }
+    const rows = [
+      { id: 'include:base', options: { id: 'base', name: '@deepseek-ai/core' } },
+      { id: 'include:first', options: { id: 'first', name: 'first-plugin' } },
+      { id: 'include:second', options: { id: 'second', name: 'second-plugin', disabled: configuredDisabled } },
+      { id: 'include:other', options: { id: 'other', name: 'other-plugin' } },
+    ]
+    const { loader } = loaderFixture(rows)
+    for (const entry of loader.entries()) {
+      entry.update = async patch => {
+        updates.push([entry.options.id, patch])
+        if (patch.disabled === null) delete entry.options.disabled
+        else entry.options.disabled = patch.disabled
+      }
+    }
+    const controller = createPluginPackageController(loader, new Map([
+      ['base', '@deepseek-ai/dsh-base'],
+      ['first', 'aggregate-bundle'],
+      ['second', 'aggregate-bundle'],
+      ['other', 'other-bundle'],
+    ]))
+
+    await controller.apply({ '@deepseek-ai/dsh-base': false, 'aggregate-bundle': false })
+    assert.deepEqual(updates, [
+      ['first', { disabled: true }],
+      ['second', { disabled: true }],
+    ])
+    assert.equal(rows[3].options.disabled, undefined)
+
+    updates.length = 0
+    await controller.apply({ 'aggregate-bundle': true })
+    assert.deepEqual(updates, [
+      ['first', { disabled: null }],
+      ['second', { disabled: configuredDisabled }],
+    ])
+  })
+
+  it('mutates an owned aggregate root once and lets its internal subtree inherit the switch', async () => {
+    const updates = []
+    const nestedTree = {}
+    const { loader } = loaderFixture([
+      { id: 'include:aggregate', options: { id: 'aggregate', name: 'aggregate-plugin' } },
+      { id: 'include:aggregate:child', options: { id: 'child', name: 'child-plugin' }, parent: { tree: nestedTree } },
+    ])
+    for (const entry of loader.entries()) {
+      entry.update = async patch => { updates.push(entry.options.id); entry.options.disabled = patch.disabled }
+    }
+    const controller = createPluginPackageController(loader, new Map([['aggregate', 'aggregate-bundle']]))
+    await controller.apply({ 'aggregate-bundle': false })
+    assert.deepEqual(updates, ['aggregate'])
+  })
+
+  it('rolls back a bundle switch when one owned entry cannot update', async () => {
+    const { loader } = loaderFixture([
+      { id: 'include:first', options: { id: 'first', name: 'first-plugin' } },
+      { id: 'include:second', options: { id: 'second', name: 'second-plugin' } },
+    ])
+    const entries = [...loader.entries()].slice(1)
+    entries[0].update = async patch => {
+      if (patch.disabled === null) delete entries[0].options.disabled
+      else entries[0].options.disabled = patch.disabled
+    }
+    entries[1].update = async () => { throw new Error('update failed') }
+    const controller = createPluginPackageController(loader, new Map([
+      ['first', 'aggregate-bundle'],
+      ['second', 'aggregate-bundle'],
+    ]))
+
+    await assert.rejects(controller.apply({ 'aggregate-bundle': false }), /update failed/)
+    assert.equal(entries[0].options.disabled, undefined)
+    assert.equal(entries[1].options.disabled, undefined)
+  })
+
+  it('restores a new configured disabled value written while a bundle is temporarily off', async () => {
+    const { loader } = loaderFixture([
+      { id: 'include:entry', options: { id: 'entry', name: 'entry-plugin' } },
+    ])
+    const entry = [...loader.entries()][1]
+    entry.update = async patch => {
+      if (patch.disabled === null) delete entry.options.disabled
+      else entry.options.disabled = patch.disabled
+    }
+    const controller = createPluginPackageController(loader, new Map([['entry', 'aggregate-bundle']]))
+    await controller.apply({ 'aggregate-bundle': false })
+
+    const configuredDisabled = { __jsExpr: 'process.env.DISABLE_ENTRY' }
+    const previousOptions = { ...entry.options }
+    entry.options.disabled = configuredDisabled
+    controller.observe(entry, previousOptions)
+    await controller.apply({ 'aggregate-bundle': false })
+    assert.equal(entry.options.disabled, true)
+
+    await controller.apply({ 'aggregate-bundle': true })
+    assert.deepEqual(entry.options.disabled, configuredDisabled)
   })
 
   it('registers disabled Skill policy in the exact agent scope', async () => {
