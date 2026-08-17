@@ -284,7 +284,7 @@ function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory
     const packageName = item.packageName ?? item.name;
     const states = componentStates[packageName];
     if (!states || !selectedPlugins.has(`${PACKAGE_PLUGIN_PREFIX}${packageName}`)) return false;
-    return (item.components ?? []).some(component => component.manageable
+    return (item.components ?? []).some(component => component.manageable && component.runtimeObserved !== false
       && Object.prototype.hasOwnProperty.call(states, component.key)
       && states[component.key] !== component.enabled);
   });

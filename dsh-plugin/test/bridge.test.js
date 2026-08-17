@@ -74,7 +74,7 @@ describe('DeepSeek Harness event mapping', () => {
     assert.equal(event.hook, 'agent/session-start')
     assert.equal(event.event, 'idle')
     assert.equal(event.sessionId, 'session-1')
-    assert.equal(event.title, 'DSH')
+    assert.equal(event.title, 'DSH is online')
     assert.equal(event.message, 'Ready')
   })
 

@@ -25,7 +25,7 @@
   grid-template-columns: repeat(2, minmax(136px, 1fr)) 40px;
 }
 .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
-  grid-template-columns: repeat(2, minmax(136px, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) !important;
 }
 .dsh-market-button {
   grid-template-columns: 1fr !important;
@@ -1070,7 +1070,7 @@
 }
 
 .dsh-plugins-page .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
-  grid-template-columns: repeat(2, minmax(110px, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) !important;
 }
 
 .dsh-plugins-page .claude-resource-subtabs.compact .claude-resource-subtab {
@@ -1336,6 +1336,7 @@
   min-width: 0;
   display: grid;
   gap: 3px;
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 }
 
 .dsh-component-copy strong {
@@ -1343,6 +1344,7 @@
   color: var(--settings-ink);
   font-size: 12px;
   font-weight: 680;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1350,7 +1352,9 @@
 .dsh-component-copy code {
   overflow: hidden;
   color: var(--settings-faint);
-  font-size: 10px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1360,7 +1364,7 @@
   align-items: center;
   gap: 5px;
   color: var(--settings-muted);
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1413,7 +1417,8 @@
   border-radius: 0;
   color: var(--settings-muted);
   background: transparent;
-  font-size: 10px;
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1440,7 +1445,65 @@
 .dsh-component-locked {
   justify-self: end;
   color: var(--settings-faint);
-  font-size: 10px;
+  font-size: 11px;
+}
+
+.dsh-scheme-component-list {
+  min-height: 210px;
+  overflow-y: auto;
+  border: 1px solid var(--settings-line);
+  border-radius: 8px;
+  background: var(--settings-surface);
+  scrollbar-color: color-mix(in oklch, var(--settings-muted) 45%, transparent) transparent;
+}
+
+.dsh-scheme-component-bundle:not(:last-child) {
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.dsh-scheme-component-bundle > header {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--settings-line);
+  color: var(--settings-ink);
+  background: var(--settings-surface-raised);
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.dsh-scheme-component-bundle > header strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-scheme-component-bundle > header span {
+  flex: 0 0 auto;
+  color: var(--settings-faint);
+  font-size: 11px;
+}
+
+.dsh-scheme-component-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 248px;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px 8px 26px;
+}
+
+.dsh-scheme-component-row:not(:last-child) {
+  border-bottom: 1px solid color-mix(in oklch, var(--settings-line) 72%, transparent);
+}
+
+.dsh-scheme-component-row:hover {
+  background: color-mix(in oklch, var(--settings-surface-hover) 58%, transparent);
 }
 
 .dsh-plugins-page .claude-resource-empty,
@@ -1670,6 +1733,8 @@
   .dsh-component-row { grid-template-columns: 12px minmax(0, 1fr) auto; }
   .dsh-component-segments { width: 100%; grid-column: 2 / -1; }
   .dsh-component-locked { grid-column: 3; }
+  .dsh-scheme-component-row { grid-template-columns: minmax(0, 1fr); padding-left: 14px; }
+  .dsh-scheme-component-row .dsh-component-segments { grid-column: 1; }
   .dsh-plugins-page .dsh-market-list-head,
   .dsh-plugins-page .dsh-market-row {
     grid-template-columns: 34px minmax(0, 1fr) 94px;

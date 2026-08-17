@@ -10,6 +10,7 @@ export type DshPluginComponent = {
   enabled: boolean;
   manageable: boolean;
   fiberPhase: DshRuntimePluginPhase;
+  runtimeObserved?: boolean;
 };
 
 export type DshResourceItem = {

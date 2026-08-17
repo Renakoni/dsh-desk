@@ -126,7 +126,7 @@ describe("DSH resource schemes page", () => {
     await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({ schemeId: "default", resourceId: "skill:name:review", enabled: false }));
   });
 
-  it("reveals bundle components inline and saves a scheme-level override", async () => {
+  it("reveals offline bundle components and confirms a required override", async () => {
     const packageId = "plugin:package:@deepseek-ai/dsh-base";
     const componentSnapshot: DshResourceSchemesSnapshot = {
       ...snapshot,
@@ -146,19 +146,25 @@ describe("DSH resource schemes page", () => {
             name: "timer",
             moduleName: "@deepseek-ai/cordis-plugin-timer",
             baselineEnabled: true,
-            enabled: true,
+            enabled: false,
             manageable: true,
-            fiberPhase: "active"
+            fiberPhase: null,
+            runtimeObserved: false
           }]
-        }]
+        }],
+        runtimeConnected: false
       }
     };
     const mockApi = renderPage(api(componentSnapshot));
     await screen.findByText("@deepseek-ai/dsh-base");
-    fireEvent.click(screen.getByRole("button", { name: "查看 1 个运行组件" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 1 个组件" }));
     expect(await screen.findByText("timer")).not.toBeNull();
     expect(screen.getByText("@deepseek-ai/cordis-plugin-timer")).not.toBeNull();
+    expect(screen.getByText("未运行")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "默认 timer" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
+    const warning = screen.getByRole("alertdialog", { name: "调整必装组件？" });
+    fireEvent.click(within(warning).getByRole("button", { name: "继续调整" }));
     await waitFor(() => expect(mockApi.setDshPluginComponentState).toHaveBeenCalledWith({
       schemeId: "default",
       packageName: "@deepseek-ai/dsh-base",
@@ -167,8 +173,8 @@ describe("DSH resource schemes page", () => {
     }));
   });
 
-  it("shows one component override consistently under different runtime bundle owners", async () => {
-    const packageNames = ["@deepseek-ai/dsh-web-app", "@deepseek-ai/dsh-headless"];
+  it("shows a shared component override on its single logical row", async () => {
+    const packageName = "@deepseek-ai/dsh-web-app";
     const component = {
       key: "include:code-runtime",
       name: "code-runtime",
@@ -182,7 +188,7 @@ describe("DSH resource schemes page", () => {
       ...snapshot,
       schemes: snapshot.schemes.map(scheme => ({
         ...scheme,
-        plugins: packageNames.map(packageName => `plugin:package:${packageName}`),
+        plugins: [`plugin:package:${packageName}`],
         pluginComponentOverrides: scheme.id === "default" ? [{
           packageName: "@deepseek-ai/dsh-web-app",
           componentKey: component.key,
@@ -191,7 +197,7 @@ describe("DSH resource schemes page", () => {
       })),
       inventory: {
         ...snapshot.inventory,
-        plugins: packageNames.map(packageName => ({
+        plugins: [{
           id: `plugin:package:${packageName}`,
           kind: "plugin" as const,
           name: packageName,
@@ -200,17 +206,60 @@ describe("DSH resource schemes page", () => {
           manageable: false,
           required: true,
           components: [component]
-        }))
+        }]
       }
     };
 
     renderPage(api(componentSnapshot));
     await screen.findByText("@deepseek-ai/dsh-web-app");
-    for (const disclosure of screen.getAllByRole("button", { name: "查看 1 个运行组件" })) fireEvent.click(disclosure);
-    expect(screen.getAllByRole("button", { name: "禁用 code-runtime" })).toHaveLength(2);
-    for (const button of screen.getAllByRole("button", { name: "禁用 code-runtime" })) {
-      expect(button.getAttribute("aria-pressed")).toBe("true");
-    }
+    fireEvent.click(screen.getByRole("button", { name: "查看 1 个组件" }));
+    expect(screen.getByRole("button", { name: "禁用 code-runtime" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("edits component overrides in a scheme and keeps the Desk bridge locked", async () => {
+    const baseId = "plugin:package:@deepseek-ai/dsh-base";
+    const bridgeId = "plugin:package:dsh-desk-plugin";
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [baseId, bridgeId] })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [{
+          id: baseId,
+          kind: "plugin",
+          name: "@deepseek-ai/dsh-base",
+          packageName: "@deepseek-ai/dsh-base",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:timer", name: "timer", moduleName: "@deepseek-ai/cordis-plugin-timer", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+        }, {
+          id: bridgeId,
+          kind: "plugin",
+          name: "dsh-desk-plugin",
+          packageName: "dsh-desk-plugin",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:dsh-desk", name: "dsh-desk", moduleName: "dsh-desk-plugin", baselineEnabled: true, enabled: true, manageable: false, fiberPhase: "active" }]
+        }]
+      }
+    };
+    const mockApi = renderPage(api(componentSnapshot));
+    await screen.findByText("@deepseek-ai/dsh-base");
+    expect(screen.getByText("连接 DSH Desk 与 DeepSeek Harness 的本地组件")).not.toBeNull();
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(screen.getByRole("button", { name: "组件" }));
+    expect(await screen.findByText("dsh-desk")).not.toBeNull();
+    expect(screen.queryByRole("group", { name: "dsh-desk 控制方式" })).toBeNull();
+    expect(screen.getByText("必需组件")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
+    fireEvent.click(within(screen.getByRole("alertdialog", { name: "调整必装组件？" })).getByRole("button", { name: "继续调整" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
+      pluginComponentOverrides: [{ packageName: "@deepseek-ai/dsh-base", componentKey: "include:timer", state: "disabled" }]
+    }));
   });
 
   it("uses one market entry and separates plugin and Skill markets inside it", async () => {
