@@ -3,7 +3,7 @@ import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
 import { isDshResourceSchemeSelectable, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
-import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 const ROW_HEIGHT = 64;
@@ -12,6 +12,7 @@ const OVERSCAN = 5;
 export function DshSchemeEditor({
   initial,
   inventory,
+  knownPluginIds,
   protectedScheme,
   canDelete,
   busy,
@@ -22,6 +23,7 @@ export function DshSchemeEditor({
 }: {
   initial: DshResourceSchemeSaveInput;
   inventory: DshResourceInventory;
+  knownPluginIds: string[];
   protectedScheme: boolean;
   canDelete: boolean;
   busy: boolean;
@@ -31,10 +33,14 @@ export function DshSchemeEditor({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
+  const logicalInventory = useMemo(() => ({
+    skills: logicalDshResources(inventory.skills, "skills"),
+    plugins: logicalDshResources(inventory.plugins, "plugins")
+  }), [inventory.plugins, inventory.skills]);
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
-    skills: [...new Set([...inventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
-    plugins: [...new Set([...inventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
+    skills: [...new Set([...logicalInventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
+    plugins: [...new Set([...logicalInventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
@@ -44,13 +50,31 @@ export function DshSchemeEditor({
     { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
-  const availableResources = inventory[activeTab];
-  const availableIds = useMemo(() => new Set(availableResources.map(resource => resource.id)), [availableResources]);
+  const availableResources = logicalInventory[activeTab];
+  const visibleDraftIds = useMemo(
+    () => visibleDshSchemeResourceIds(draft[activeTab]),
+    [activeTab, draft]
+  );
+  const visibleKnownCandidateIds = useMemo(
+    () => activeTab === "plugins"
+      ? visibleDshSchemeResourceIds(
+        [...new Set([
+          ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
+          ...initial.plugins.filter(id => knownPluginIds.includes(id))
+        ])]
+      )
+      : [],
+    [activeTab, initial.plugins, knownPluginIds]
+  );
+  const candidateIds = useMemo(
+    () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],
+    [visibleDraftIds, visibleKnownCandidateIds]
+  );
   const resources = useMemo<DshResourceItem[]>(() => [
     ...availableResources,
-    ...unavailableDshResources(draft[activeTab], availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))
-  ], [activeTab, availableResources, draft, t]);
-  const selected = useMemo(() => new Set(draft[activeTab]), [activeTab, draft]);
+    ...unavailableDshResources(candidateIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+  ], [activeTab, availableResources, candidateIds, knownPluginIds, t]);
+  const selected = useMemo(() => new Set(visibleDraftIds), [visibleDraftIds]);
   const filtered = useMemo(() => filterDshResources(resources, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, resources]);
   const unselected = useMemo(() => filtered.filter(resource => !selected.has(resource.id)), [filtered, selected]);
   const selectedItems = useMemo(() => filtered.filter(resource => selected.has(resource.id)), [filtered, selected]);
@@ -60,7 +84,11 @@ export function DshSchemeEditor({
   function moveResource(resource: DshResourceItem) {
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
-    setDraft(current => ({ ...current, [activeTab]: resources.filter(item => next.has(item.id)).map(item => item.id) }));
+    setDraft(current => {
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab]));
+      const hidden = current[activeTab].filter(id => !visible.has(id));
+      return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
+    });
   }
 
   function toggleResource(resource: DshResourceItem) {
@@ -98,8 +126,8 @@ export function DshSchemeEditor({
 
       <section className="claude-profile-editor-toolbar"><div className="claude-resource-search dark"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(activeTab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", activeTab === "plugins" ? "Search plugins" : "Search skills")} /></div></section>
       <section className="claude-profile-transfer" aria-busy={busy}>
-        <TransferColumn title={t("dshResources.unselected", "Not included")} side="unselected" items={unselected} availableIds={availableIds} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:unselected`} onMove={toggleResource} />
-        <TransferColumn title={t("dshResources.selected", "Included")} side="selected" items={selectedItems} availableIds={availableIds} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />
+        <TransferColumn title={t("dshResources.unselected", "Not included")} side="unselected" items={unselected} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:unselected`} onMove={toggleResource} />
+        <TransferColumn title={t("dshResources.selected", "Included")} side="selected" items={selectedItems} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />
       </section>
       {missingRemoval ? (
         <ConfirmDialog
@@ -117,11 +145,10 @@ export function DshSchemeEditor({
   );
 }
 
-function TransferColumn({ title, side, items, availableIds, hideSensitiveContent, busy, resetKey, onMove }: {
+function TransferColumn({ title, side, items, hideSensitiveContent, busy, resetKey, onMove }: {
   title: string;
   side: "unselected" | "selected";
   items: DshResourceItem[];
-  availableIds: Set<string>;
   hideSensitiveContent: boolean;
   busy: boolean;
   resetKey: string;
@@ -137,13 +164,12 @@ function TransferColumn({ title, side, items, availableIds, hideSensitiveContent
           <div className="claude-profile-virtual-space" style={{ height: virtual.totalHeight }}>
             {virtual.visible.map((resource, offset) => {
               const index = virtual.start + offset;
-              const available = availableIds.has(resource.id);
               const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
               const description = presentation.description ?? presentation.detail;
               return (
                 <button type="button" key={resource.id} className={`claude-profile-transfer-option ${resource.required || !isDshResourceSchemeSelectable(resource) ? "required" : ""}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || resource.required || !isDshResourceSchemeSelectable(resource)} onClick={() => onMove(resource)}>
                   <span className="claude-profile-resource-copy"><strong>{resource.name}</strong>{description ? <small title={description}>{description}</small> : null}</span>
-                  <span className={`claude-profile-live-state ${!available ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(!available ? "dshResources.missing" : resource.required ? "dshResources.required" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", !available ? "Missing" : resource.required ? "Required" : resource.enabled ? "Enabled" : "Disabled")}</span>
+                  <span className={`claude-profile-live-state ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.required ? "dshResources.required" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.required ? "Required" : resource.enabled ? "Enabled" : "Disabled")}</span>
                 </button>
               );
             })}

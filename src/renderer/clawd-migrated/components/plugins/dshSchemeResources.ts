@@ -1,25 +1,66 @@
 import type { DshResourceItem } from "../../../../shared/dshResources";
 
 export type DshResourceTab = "skills" | "plugins";
+const PACKAGE_PLUGIN_PREFIX = "plugin:package:";
+
+export function logicalDshResources(resources: DshResourceItem[], tab: DshResourceTab): DshResourceItem[] {
+  if (tab === "skills") return resources;
+  const grouped = new Map<string, DshResourceItem[]>();
+  for (const resource of resources) {
+    const packageName = resource.id.startsWith(PACKAGE_PLUGIN_PREFIX)
+      ? resource.id.slice(PACKAGE_PLUGIN_PREFIX.length)
+      : resource.packageName ?? resource.name;
+    const entries = grouped.get(packageName) ?? [];
+    entries.push(resource);
+    grouped.set(packageName, entries);
+  }
+  return [...grouped.entries()].map(([packageName, entries]) => {
+    const representative = entries.find(item => item.id === `${PACKAGE_PLUGIN_PREFIX}${packageName}`)
+      ?? entries.find(item => item.description)
+      ?? entries[0];
+    const required = entries.some(item => item.required);
+    return {
+      ...representative,
+      id: `${PACKAGE_PLUGIN_PREFIX}${packageName}`,
+      packageName,
+      detail: packageName,
+      enabled: entries.every(item => item.enabled),
+      manageable: !required && entries.some(item => item.manageable),
+      schemeSelectable: entries.some(item => item.schemeSelectable ?? item.manageable),
+      required
+    };
+  });
+}
+
+export function visibleDshSchemeResourceIds(
+  resourceIds: string[]
+): string[] {
+  return [...new Set(resourceIds)];
+}
 
 export function unavailableDshResources(
   resourceIds: string[],
   availableResources: DshResourceItem[],
   tab: DshResourceTab,
-  missingDescription: string
+  missingDescription: string,
+  knownResourceIds: string[] = []
 ): DshResourceItem[] {
   const availableIds = new Set(availableResources.map(resource => resource.id));
+  const knownIds = new Set(knownResourceIds);
   return resourceIds
     .filter(resourceId => !availableIds.has(resourceId))
-    .map(resourceId => ({
-      id: resourceId,
-      kind: tab === "skills" ? "skill" : "plugin",
-      name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
-      description: missingDescription,
-      enabled: false,
-      manageable: false,
-      missing: true
-    }));
+    .map(resourceId => {
+      const knownPlugin = tab === "plugins" && knownIds.has(resourceId);
+      return {
+        id: resourceId,
+        kind: tab === "skills" ? "skill" as const : "plugin" as const,
+        name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
+        ...(knownPlugin ? {} : { description: missingDescription }),
+        enabled: knownPlugin,
+        manageable: false,
+        ...(knownPlugin ? { schemeSelectable: true } : { missing: true })
+      };
+    });
 }
 
 export function dshResourcePresentation(resource: DshResourceItem, hideSensitiveContent: boolean, hiddenDescription: string) {

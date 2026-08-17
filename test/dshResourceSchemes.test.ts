@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DshResourceSchemeManager } from "../src/main/dshResourceSchemes";
+import { DshResourceSchemeManager, inheritDshPluginPackageStates } from "../src/main/dshResourceSchemes";
 import { dshSkillResources, scanDshSkills } from "../src/main/dshSkillCatalog";
 import type { DshResourceInventory } from "../src/shared/dshResources";
 
@@ -16,7 +16,7 @@ function writeSkill(root: string, name: string) {
 }
 
 describe("DSH resource schemes", () => {
-  it("replaces package placeholders when the live Loader inventory arrives", () => {
+  it("retains package aliases when the live Loader inventory arrives", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-runtime-"));
     roots.push(root);
     let live = false;
@@ -36,7 +36,443 @@ describe("DSH resource schemes", () => {
     });
     expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:demo"]);
     live = true;
-    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:runtime-entry"]);
+    const projectedPlugins = manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins ?? [];
+    expect(projectedPlugins).toEqual(["plugin:package:demo"]);
+    let persisted = JSON.parse(readFileSync(join(root, "schemes.json"), "utf8"));
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+    expect(manager.save({ id: "default", name: "Default", skills: [], plugins: projectedPlugins }).ok).toBe(true);
+    persisted = JSON.parse(readFileSync(join(root, "schemes.json"), "utf8"));
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+  });
+
+  it("canonicalizes a legacy alias plus runtime pair when its mapping becomes available", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-legacy-pair-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:package:demo", "plugin:runtime-entry"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:package:demo", "plugin:runtime-entry"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [{ id: "plugin:runtime-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:demo"]);
+    const persisted = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+    expect(persisted.pluginRuntimePackages).toEqual({ "plugin:runtime-entry": "demo" });
+  });
+
+  it("migrates a legacy runtime-only selection back to package semantics", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-legacy-runtime-only-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:web-entry"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:web-entry"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      appliedSchemeId: "default"
+    }));
+    type Phase = "offline" | "headless" | "web" | "both";
+    let phase: Phase = "offline";
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: phase === "offline"
+          ? [{ id: "plugin:package:demo", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: false, schemeSelectable: true }]
+          : phase === "headless"
+            ? [{ id: "plugin:headless-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: false, manageable: true }]
+          : [
+            { id: "plugin:web-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true },
+            ...(phase === "both"
+              ? [{ id: "plugin:headless-entry", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: false, manageable: true }]
+              : [])
+          ],
+        scannedAt: 1,
+        runtimeConnected: phase !== "offline"
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:web-entry"]);
+    const pending = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(pending.legacyRuntimePluginIds).toEqual(["plugin:web-entry"]);
+
+    phase = "headless";
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({});
+
+    phase = "web";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:demo"]);
+    const migrated = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(migrated.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+    expect(migrated.legacyRuntimePluginIds).toEqual([]);
+
+    phase = "both";
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({ "web-entry": true, "headless-entry": true });
+  });
+
+  it("migrates a runtime-only baseline already stamped with package metadata", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-stamped-runtime-only-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:web-entry"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:web-entry"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      pluginRuntimePackages: { "plugin:web-entry": "demo" },
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [{ id: "plugin:web-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    manager.snapshot();
+    const migrated = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(migrated.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+    expect(migrated.legacyRuntimePluginIds).toEqual([]);
+  });
+
+  it("initializes a live Web runtime with package-level selection", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-live-initial-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    let headlessConnected = false;
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [
+          { id: "plugin:web-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true },
+          ...(headlessConnected
+            ? [{ id: "plugin:headless-entry", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: false, manageable: true }]
+            : [])
+        ],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    const projectedPlugins = manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins ?? [];
+    expect(projectedPlugins).toEqual(["plugin:package:demo"]);
+    expect(manager.save({ id: "default", name: "Default", skills: [], plugins: projectedPlugins }).ok).toBe(true);
+    const persisted = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+
+    headlessConnected = true;
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({ "web-entry": true, "headless-entry": true });
+  });
+
+  for (const departure of ["web-only", "offline"] as const) {
+    it(`keeps alias-derived runtime IDs out of persisted schemes after Headless becomes ${departure}`, () => {
+      const root = mkdtempSync(join(tmpdir(), `dsh-schemes-canonical-${departure}-`));
+      roots.push(root);
+      const storePath = join(root, "schemes.json");
+      type Phase = "offline" | "headless" | "web-only";
+      let phase: Phase = "offline";
+      const desired: Array<Record<string, boolean>> = [];
+      const manager = new DshResourceSchemeManager({
+        storePath,
+        inventory: () => ({
+          skills: [],
+          plugins: phase === "offline"
+            ? [{ id: "plugin:package:headless-plugin", kind: "plugin", name: "headless-plugin", packageName: "headless-plugin", enabled: true, manageable: false, schemeSelectable: true }]
+            : phase === "headless"
+              ? [{ id: "plugin:headless-entry", kind: "plugin", name: "headless-plugin", packageName: "headless-plugin", enabled: true, manageable: true }]
+              : [{ id: "plugin:web-entry", kind: "plugin", name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true }],
+          scannedAt: 1,
+          runtimeConnected: phase !== "offline"
+        }),
+        setDesiredSkills: () => undefined,
+        setDesiredPlugins: states => desired.push(states),
+        now: () => 10
+      });
+
+      expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:headless-plugin"]);
+      phase = "headless";
+      expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:headless-plugin"]);
+      const liveStore = JSON.parse(readFileSync(storePath, "utf8"));
+      expect(liveStore.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:headless-plugin"]);
+      expect(liveStore.pluginRuntimePackages).toMatchObject({ "plugin:headless-entry": "headless-plugin" });
+
+      phase = departure === "offline" ? "offline" : "web-only";
+      expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:headless-plugin"]);
+      const departedStore = JSON.parse(readFileSync(storePath, "utf8"));
+      expect(departedStore.pluginRuntimePackages).toMatchObject({ "plugin:headless-entry": "headless-plugin" });
+      expect(manager.save({ id: "default", name: "Default", skills: [], plugins: [] }).ok).toBe(true);
+      const removedStore = JSON.parse(readFileSync(storePath, "utf8"));
+      expect(removedStore.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual([]);
+      expect(removedStore.pluginRuntimePackages).toMatchObject({ "plugin:headless-entry": "headless-plugin" });
+
+      phase = "headless";
+      expect(manager.apply("default").ok).toBe(true);
+      expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([]);
+      expect(desired.at(-1)).toEqual({ "headless-entry": false });
+    });
+  }
+
+  it("canonicalizes every runtime selection to one package-level switch", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-explicit-runtime-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    let live = false;
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: live ? [
+          { id: "plugin:runtime-a", kind: "plugin", name: "demo-a", packageName: "demo", enabled: true, manageable: true },
+          { id: "plugin:runtime-b", kind: "plugin", name: "demo-b", packageName: "demo", enabled: true, manageable: true }
+        ] : [
+          { id: "plugin:package:demo", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: false, schemeSelectable: true }
+        ],
+        scannedAt: 1,
+        runtimeConnected: live
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    manager.snapshot();
+    live = true;
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:demo"]);
+    expect(manager.save({ id: "default", name: "Default", skills: [], plugins: ["plugin:runtime-b"] }).ok).toBe(true);
+    const store = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(store.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
+    expect(store.pluginRuntimePackages).toMatchObject({
+      "plugin:runtime-a": "demo",
+      "plugin:runtime-b": "demo"
+    });
+
+    live = false;
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:package:demo"]);
+    live = true;
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({ "runtime-a": true, "runtime-b": true });
+    expect(manager.setResourceState({ schemeId: "default", resourceId: "plugin:package:demo", enabled: false }).ok).toBe(true);
+    expect(desired.at(-1)).toEqual({ "runtime-a": false, "runtime-b": false });
+  });
+
+  it("keeps one package baseline across later profiles and runtime disconnects", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-runtime-baseline-"));
+    roots.push(root);
+    type Phase = "offline" | "web" | "web-headless";
+    let phase: Phase = "offline";
+    const desired: Array<Record<string, boolean>> = [];
+    const offlinePlugins: DshResourceInventory["plugins"] = [
+      { id: "plugin:package:@deepseek-ai/dsh-base", kind: "plugin", name: "DSH Base", packageName: "@deepseek-ai/dsh-base", enabled: true, manageable: false, schemeSelectable: true, required: true },
+      { id: "plugin:package:third-party", kind: "plugin", name: "third-party", packageName: "third-party", enabled: true, manageable: false, schemeSelectable: true },
+      { id: "plugin:package:other-plugin", kind: "plugin", name: "other-plugin", packageName: "other-plugin", enabled: false, manageable: false, schemeSelectable: true }
+    ];
+    const webPlugins: DshResourceInventory["plugins"] = [
+      { id: "plugin:web:third", kind: "plugin", name: "third-party", packageName: "third-party", enabled: true, manageable: true },
+      { id: "plugin:web:other", kind: "plugin", name: "other-plugin", packageName: "other-plugin", enabled: true, manageable: true }
+    ];
+    const inventory = (): DshResourceInventory => ({
+      skills: [],
+      plugins: phase === "offline"
+        ? offlinePlugins
+        : phase === "web"
+          ? webPlugins
+          : [...webPlugins, { id: "plugin:headless:third", kind: "plugin", name: "third-party", packageName: "third-party", enabled: false, manageable: true }],
+      scannedAt: 1,
+      runtimeConnected: phase !== "offline"
+    });
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:@deepseek-ai/dsh-base",
+      "plugin:package:third-party"
+    ]);
+
+    phase = "web";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:@deepseek-ai/dsh-base",
+      "plugin:package:third-party"
+    ]);
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({
+      "web:third": true,
+      "web:other": false
+    });
+
+    phase = "web-headless";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toContain("plugin:package:third-party");
+    expect(manager.apply("default").ok).toBe(true);
+    expect(desired.at(-1)).toEqual({
+      "web:third": true,
+      "web:other": false,
+      "headless:third": true
+    });
+
+    phase = "offline";
+    const disconnected = manager.snapshot();
+    expect(disconnected.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual([
+      "plugin:package:@deepseek-ai/dsh-base",
+      "plugin:package:third-party",
+      "plugin:package:other-plugin"
+    ]);
+    expect(disconnected.pluginRuntimePackages).toMatchObject({
+      "plugin:web:third": "third-party",
+      "plugin:headless:third": "third-party",
+      "plugin:web:other": "other-plugin"
+    });
+    expect(disconnected.schemes.find(scheme => scheme.id === "default")?.plugins).toContain("plugin:package:third-party");
+  });
+
+  it("keeps unresolved package placeholders instead of expanding a precise scheme", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-unresolved-runtime-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:package:unknown-bundle", "plugin:known-runtime"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:package:unknown-bundle", "plugin:known-runtime"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      appliedSchemeId: "default"
+    }));
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [
+          { id: "plugin:known-runtime", kind: "plugin", name: "known", enabled: true, manageable: true },
+          { id: "plugin:new-runtime", kind: "plugin", name: "new", enabled: true, manageable: true }
+        ],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.apply("default").ok).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:unknown-bundle",
+      "plugin:package:known"
+    ]);
+    expect(desired.at(-1)).toEqual({ "known-runtime": true, "new-runtime": false });
+  });
+
+  it("recovers a non-active scheme package selection when Headless connects after Web", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-late-headless-non-active-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    type Phase = "offline" | "web" | "both";
+    let phase: Phase = "offline";
+    const inventory = (): DshResourceInventory => ({
+      skills: [],
+      plugins: phase === "offline" ? [
+        { id: "plugin:package:web-plugin", kind: "plugin", name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: false, schemeSelectable: true },
+        { id: "plugin:package:headless-plugin", kind: "plugin", name: "headless-plugin", packageName: "headless-plugin", enabled: true, manageable: false, schemeSelectable: true }
+      ] : [
+        { id: "plugin:web", kind: "plugin", name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true },
+        ...(phase === "both" ? [{ id: "plugin:headless", kind: "plugin" as const, name: "headless-plugin", packageName: "headless-plugin", enabled: true, manageable: true }] : [])
+      ],
+      scannedAt: 1,
+      runtimeConnected: phase !== "offline"
+    });
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+    const created = manager.save({ name: "Headless only", skills: [], plugins: ["plugin:package:headless-plugin"] });
+    expect(created.ok).toBe(true);
+    const schemeId = created.ok ? created.schemeId : "";
+
+    phase = "web";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.plugins).toEqual([
+      "plugin:package:headless-plugin"
+    ]);
+    const persistedAfterWeb = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(persistedAfterWeb.schemes.find((scheme: { id: string }) => scheme.id === schemeId).plugins).toContain("plugin:package:headless-plugin");
+
+    phase = "both";
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.plugins).toEqual(["plugin:package:headless-plugin"]);
+  });
+
+  it("enables a selected Headless plugin even when it first appears disabled", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-late-headless-disabled-"));
+    roots.push(root);
+    type Phase = "offline" | "web" | "both";
+    let phase: Phase = "offline";
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: phase === "offline" ? [
+          { id: "plugin:package:web-plugin", kind: "plugin", name: "web-plugin", packageName: "web-plugin", enabled: false, manageable: false, schemeSelectable: true },
+          { id: "plugin:package:headless-plugin", kind: "plugin", name: "headless-plugin", packageName: "headless-plugin", enabled: true, manageable: false, schemeSelectable: true }
+        ] : [
+          { id: "plugin:web", kind: "plugin", name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true },
+          ...(phase === "both" ? [{ id: "plugin:headless", kind: "plugin" as const, name: "headless-plugin", packageName: "headless-plugin", enabled: false, manageable: true }] : [])
+        ],
+        scannedAt: 1,
+        runtimeConnected: phase !== "offline"
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    manager.snapshot();
+    phase = "web";
+    manager.snapshot();
+    phase = "both";
+    expect(manager.apply("default").ok).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toContain("plugin:package:headless-plugin");
+    expect(desired.at(-1)).toEqual({ web: false, headless: true });
   });
 
   it("applies Skill membership without deletion and publishes manageable plugin state", () => {
@@ -180,9 +616,10 @@ describe("DSH resource schemes", () => {
     expect(migrated.schemes.find(scheme => scheme.id === "all")?.skills).toEqual(["skill:name:shared-skill"]);
   });
 
-  it("migrates package placeholders in every custom scheme without rebuilding selections", () => {
+  it("maps package aliases in every custom scheme without rebuilding selections", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-custom-runtime-"));
     roots.push(root);
+    const storePath = join(root, "schemes.json");
     let live = false;
     const inventory = () => ({
       skills: [],
@@ -201,7 +638,7 @@ describe("DSH resource schemes", () => {
     });
     const desired: Array<Record<string, boolean>> = [];
     const manager = new DshResourceSchemeManager({
-      storePath: join(root, "schemes.json"),
+      storePath,
       inventory,
       setDesiredSkills: () => undefined,
       setDesiredPlugins: states => desired.push(states),
@@ -213,10 +650,40 @@ describe("DSH resource schemes", () => {
     live = true;
 
     const snapshot = manager.snapshot();
-    expect(snapshot.schemes.find(scheme => scheme.id === schemeId)?.plugins).toEqual(["plugin:runtime-a", "plugin:runtime-b"]);
-    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual(["plugin:runtime-a", "plugin:runtime-b", "plugin:runtime-other"]);
+    expect(snapshot.schemes.find(scheme => scheme.id === schemeId)?.plugins).toEqual(["plugin:package:demo"]);
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:demo",
+      "plugin:package:other"
+    ]);
+    const persisted = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === schemeId).plugins).toEqual(["plugin:package:demo"]);
+    expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual([
+      "plugin:package:demo",
+      "plugin:package:other"
+    ]);
     expect(manager.apply(schemeId).ok).toBe(true);
     expect(desired.at(-1)).toEqual({ "runtime-a": true, "runtime-b": true, "runtime-other": false });
+    const persistedAfterApply = JSON.parse(readFileSync(storePath, "utf8"));
+    expect(persistedAfterApply.schemes.find((scheme: { id: string }) => scheme.id === schemeId).plugins).toEqual(["plugin:package:demo"]);
+  });
+
+  it("inherits one package state when another runtime entry appears", () => {
+    const resources: DshResourceInventory["plugins"] = [
+      { id: "plugin:web-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: false, manageable: true },
+      { id: "plugin:headless-entry", kind: "plugin", name: "demo", packageName: "demo", enabled: true, manageable: true }
+    ];
+    expect(inheritDshPluginPackageStates(
+      resources,
+      { "web-entry": true, "headless-entry": true },
+      { "web-entry": false },
+      { "plugin:web-entry": "demo", "plugin:headless-entry": "demo" }
+    )).toEqual({ "web-entry": false, "headless-entry": false });
+    expect(inheritDshPluginPackageStates(
+      resources,
+      { "web-entry": false, "headless-entry": false },
+      { "web-entry": true },
+      { "plugin:web-entry": "demo", "plugin:headless-entry": "demo" }
+    )).toEqual({ "web-entry": true, "headless-entry": true });
   });
 
   it("keeps a missing resource record when an existing scheme is saved", () => {
