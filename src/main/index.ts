@@ -99,7 +99,7 @@ import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager, inheritDshPluginPackageStates } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3758,9 +3758,15 @@ function restoreDesiredDshResources() {
       || !sameBooleanStates(next.skills, current.skills)) {
       setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
     }
+    const nextPlugins = inheritDshPluginPackageStates(
+      snapshot.inventory.plugins,
+      next.plugins,
+      pluginsInitialized && allowPluginDisable ? current.plugins : {},
+      snapshot.pluginRuntimePackages
+    );
     if (snapshot.inventory.runtimeConnected
-      && (!pluginsInitialized || !sameBooleanStates(next.plugins, current.plugins))) {
-      setDesiredDshPlugins(next.plugins);
+      && (!pluginsInitialized || !sameBooleanStates(nextPlugins, current.plugins))) {
+      setDesiredDshPlugins(nextPlugins);
     }
   } catch {
     // A malformed scheme file is reported by the resource page; never block the event bridge.

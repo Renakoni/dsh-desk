@@ -1,28 +1,41 @@
 import type { DshResourceItem } from "../../../../shared/dshResources";
 
 export type DshResourceTab = "skills" | "plugins";
+const PACKAGE_PLUGIN_PREFIX = "plugin:package:";
+
+export function logicalDshResources(resources: DshResourceItem[], tab: DshResourceTab): DshResourceItem[] {
+  if (tab === "skills") return resources;
+  const grouped = new Map<string, DshResourceItem[]>();
+  for (const resource of resources) {
+    const packageName = resource.id.startsWith(PACKAGE_PLUGIN_PREFIX)
+      ? resource.id.slice(PACKAGE_PLUGIN_PREFIX.length)
+      : resource.packageName ?? resource.name;
+    const entries = grouped.get(packageName) ?? [];
+    entries.push(resource);
+    grouped.set(packageName, entries);
+  }
+  return [...grouped.entries()].map(([packageName, entries]) => {
+    const representative = entries.find(item => item.id === `${PACKAGE_PLUGIN_PREFIX}${packageName}`)
+      ?? entries.find(item => item.description)
+      ?? entries[0];
+    const required = entries.some(item => item.required);
+    return {
+      ...representative,
+      id: `${PACKAGE_PLUGIN_PREFIX}${packageName}`,
+      packageName,
+      detail: packageName,
+      enabled: entries.every(item => item.enabled),
+      manageable: !required && entries.some(item => item.manageable),
+      schemeSelectable: entries.some(item => item.schemeSelectable ?? item.manageable),
+      required
+    };
+  });
+}
 
 export function visibleDshSchemeResourceIds(
-  resourceIds: string[],
-  runtimeConnected: boolean,
-  knownPluginIds: string[],
-  tab: DshResourceTab,
-  availableResources: DshResourceItem[]
+  resourceIds: string[]
 ): string[] {
-  if (tab === "skills") return resourceIds;
-  const known = new Set(knownPluginIds);
-  const available = new Set(availableResources.map(resource => resource.id));
-  const runtimePackages = new Set(availableResources
-    .filter(resource => !resource.id.startsWith("plugin:package:"))
-    .map(resource => resource.packageName ?? resource.name));
-  return resourceIds.filter(id => {
-    const packageAlias = id.startsWith("plugin:package:");
-    if (!known.has(id) || available.has(id)) return true;
-    if (!runtimeConnected) return packageAlias;
-    return packageAlias
-      ? !runtimePackages.has(id.slice("plugin:package:".length))
-      : true;
-  });
+  return [...new Set(resourceIds)];
 }
 
 export function unavailableDshResources(

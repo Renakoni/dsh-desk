@@ -3,7 +3,7 @@ import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
 import { isDshResourceSchemeSelectable, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
-import { dshResourcePresentation, filterDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 const ROW_HEIGHT = 64;
@@ -33,10 +33,14 @@ export function DshSchemeEditor({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
+  const logicalInventory = useMemo(() => ({
+    skills: logicalDshResources(inventory.skills, "skills"),
+    plugins: logicalDshResources(inventory.plugins, "plugins")
+  }), [inventory.plugins, inventory.skills]);
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
-    skills: [...new Set([...inventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
-    plugins: [...new Set([...inventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
+    skills: [...new Set([...logicalInventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
+    plugins: [...new Set([...logicalInventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
@@ -46,10 +50,10 @@ export function DshSchemeEditor({
     { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
-  const availableResources = inventory[activeTab];
+  const availableResources = logicalInventory[activeTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, knownPluginIds, activeTab, availableResources),
-    [activeTab, availableResources, draft, inventory.runtimeConnected, knownPluginIds]
+    () => visibleDshSchemeResourceIds(draft[activeTab]),
+    [activeTab, draft]
   );
   const visibleKnownCandidateIds = useMemo(
     () => activeTab === "plugins"
@@ -57,14 +61,10 @@ export function DshSchemeEditor({
         [...new Set([
           ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
           ...initial.plugins.filter(id => knownPluginIds.includes(id))
-        ])],
-        inventory.runtimeConnected,
-        knownPluginIds,
-        activeTab,
-        availableResources
+        ])]
       )
       : [],
-    [activeTab, availableResources, initial.plugins, inventory.runtimeConnected, knownPluginIds]
+    [activeTab, initial.plugins, knownPluginIds]
   );
   const candidateIds = useMemo(
     () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],
@@ -82,28 +82,11 @@ export function DshSchemeEditor({
   useEffect(() => setQuery(""), [activeTab]);
 
   function moveResource(resource: DshResourceItem) {
-    const removing = selected.has(resource.id);
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => {
-      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, knownPluginIds, activeTab, availableResources));
-      let hidden = current[activeTab].filter(id => !visible.has(id));
-      if (activeTab === "plugins" && !resource.id.startsWith("plugin:package:")) {
-        const packageName = resource.packageName ?? resource.name;
-        const packageAlias = `plugin:package:${packageName}`;
-        if (removing) {
-          hidden = hidden.filter(id => id !== packageAlias);
-        } else if (initial.plugins.includes(packageAlias)) {
-          const originalRuntimeIds = availableResources
-            .filter(item => !item.id.startsWith("plugin:package:")
-              && (item.packageName ?? item.name) === packageName
-              && initial.plugins.includes(item.id))
-            .map(item => item.id);
-          if (originalRuntimeIds.length > 0 && originalRuntimeIds.every(id => next.has(id))) {
-            hidden = [packageAlias, ...hidden.filter(id => id !== packageAlias)];
-          }
-        }
-      }
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab]));
+      const hidden = current[activeTab].filter(id => !visible.has(id));
       return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
     });
   }

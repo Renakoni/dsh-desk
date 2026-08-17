@@ -178,22 +178,10 @@ function synchronizeRuntimePluginPackages(
 }
 
 function canonicalPluginIds(ids: string[], pluginRuntimePackages: Readonly<Record<string, string>>): string[] {
-  const selectedPackages = dshPluginPackageNames(ids);
-  return [...new Set(ids.filter(id => {
+  return [...new Set(ids.map(id => {
     const packageName = pluginRuntimePackages[id];
-    return !packageName || !selectedPackages.has(packageName);
-  }))];
-}
-
-function migrateLegacyRuntimePluginIds(
-  ids: string[],
-  legacyRuntimePluginIds: ReadonlySet<string>,
-  pluginRuntimePackages: Readonly<Record<string, string>>
-): string[] {
-  return ids.map(id => {
-    const packageName = legacyRuntimePluginIds.has(id) ? pluginRuntimePackages[id] : undefined;
     return packageName ? `${PACKAGE_PLUGIN_PREFIX}${packageName}` : id;
-  });
+  }))];
 }
 
 function retainedLegacyRuntimePluginIds(schemes: DshResourceScheme[], legacyRuntimePluginIds: string[]): string[] {
@@ -204,28 +192,6 @@ function retainedLegacyRuntimePluginIds(schemes: DshResourceScheme[], legacyRunt
 function recordsEqual(left: Readonly<Record<string, string>>, right: Readonly<Record<string, string>>): boolean {
   const entries = Object.entries(left);
   return entries.length === Object.keys(right).length && entries.every(([key, value]) => right[key] === value);
-}
-
-// Package IDs remain durable aliases because Web and Headless inventories can arrive separately.
-function projectRuntimePluginIds(
-  ids: string[],
-  inventory: DshResourceInventory
-): string[] {
-  const runtimeIdsByPackage = new Map<string, string[]>();
-  for (const resource of inventory.plugins) {
-    if (!resource.manageable && !resource.required) continue;
-    if (!resource.id.startsWith("plugin:") || resource.id.startsWith(PACKAGE_PLUGIN_PREFIX)) continue;
-    const packageName = resource.packageName ?? resource.name;
-    const entries = runtimeIdsByPackage.get(packageName) ?? [];
-    entries.push(resource.id);
-    runtimeIdsByPackage.set(packageName, entries);
-  }
-  const migrated = ids.flatMap(id => {
-    if (!id.startsWith(PACKAGE_PLUGIN_PREFIX)) return [id];
-    const runtimeIds = runtimeIdsByPackage.get(id.slice(PACKAGE_PLUGIN_PREFIX.length));
-    return runtimeIds ? [id, ...runtimeIds] : [id];
-  });
-  return [...new Set(migrated)];
 }
 
 function migrateSkillIds(ids: string[], inventory: DshResourceInventory): string[] {
@@ -289,11 +255,7 @@ export class DshResourceSchemeManager {
     const all = store.schemes.find(scheme => scheme.id === ALL_DSH_SCHEME_ID);
     if (!all) return store;
     const pluginRuntimePackages = synchronizeRuntimePluginPackages(store.pluginRuntimePackages, inventory);
-    const legacyRuntimePluginIds = new Set(store.legacyRuntimePluginIds);
-    const canonicalize = (ids: string[]) => canonicalPluginIds(
-      migrateLegacyRuntimePluginIds(ids, legacyRuntimePluginIds, pluginRuntimePackages),
-      pluginRuntimePackages
-    );
+    const canonicalize = (ids: string[]) => canonicalPluginIds(ids, pluginRuntimePackages);
     const skills = inventory.skills.map(item => item.id);
     const runtimePlugins = inventory.plugins.map(item => item.id);
     const offlinePackageIds = inventory.plugins.filter(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX)).map(item => item.id);
@@ -339,10 +301,6 @@ export class DshResourceSchemeManager {
   private projectSnapshot(store: DshResourceSchemeStore, inventory: DshResourceInventory): DshResourceSchemesSnapshot {
     return {
       ...store,
-      schemes: store.schemes.map(scheme => ({
-        ...scheme,
-        plugins: projectRuntimePluginIds(scheme.plugins, inventory)
-      })),
       inventory,
       drift: driftFor(store, inventory)
     };
@@ -458,21 +416,33 @@ export class DshResourceSchemeManager {
     const scheme = store.schemes.find(item => item.id === input.schemeId);
     if (!scheme || scheme.id === ALL_DSH_SCHEME_ID) return { ok: false, issues: [issue("protected-scheme", "This scheme cannot be changed.")] };
     if (store.appliedSchemeId !== scheme.id) return { ok: false, issues: [issue("inactive-scheme", "Apply this scheme before changing a live resource.")] };
-    const resource = [...inventory.skills, ...inventory.plugins].find(item => item.id === input.resourceId);
-    if (!resource) return { ok: false, issues: [issue("missing-resource", "Resource no longer exists.", input.resourceId)] };
-    if (!resource.manageable || resource.required) return { ok: false, issues: [issue("protected-resource", "This DSH resource is required.", input.resourceId)] };
+    const skill = inventory.skills.find(item => item.id === input.resourceId);
+    const requestedPackage = input.resourceId.startsWith(PACKAGE_PLUGIN_PREFIX)
+      ? input.resourceId.slice(PACKAGE_PLUGIN_PREFIX.length)
+      : store.pluginRuntimePackages[input.resourceId]
+        ?? inventory.plugins.find(item => item.id === input.resourceId)?.packageName;
+    const pluginResources = requestedPackage
+      ? inventory.plugins.filter(item => (item.packageName ?? item.name) === requestedPackage)
+      : [];
+    if (!skill && pluginResources.length === 0) return { ok: false, issues: [issue("missing-resource", "Resource no longer exists.", input.resourceId)] };
+    if (skill ? !skill.manageable || skill.required : pluginResources.some(item => item.required) || !pluginResources.some(item => item.manageable)) {
+      return { ok: false, issues: [issue("protected-resource", "This DSH resource is required.", input.resourceId)] };
+    }
     try {
-      if (resource.kind === "skill") {
+      if (skill) {
         const enabled = new Set(inventory.skills.filter(item => item.enabled).map(item => item.id));
-        if (input.enabled) enabled.add(resource.id); else enabled.delete(resource.id);
+        if (input.enabled) enabled.add(skill.id); else enabled.delete(skill.id);
         this.options.setDesiredSkills(dshDesiredSkillStates(inventory.skills, enabled), false);
       } else {
         this.options.setDesiredPlugins(Object.fromEntries(inventory.plugins
           .filter(item => item.manageable)
-          .map(item => [item.id.replace(/^plugin:/, ""), item.id === resource.id ? input.enabled : item.enabled])));
+          .map(item => [
+            item.id.replace(/^plugin:/, ""),
+            (item.packageName ?? item.name) === requestedPackage ? input.enabled : item.enabled
+          ])));
       }
     } catch (error) {
-      return { ok: false, issues: [issue("resource-state-failed", error instanceof Error ? error.message : String(error), resource.id)] };
+      return { ok: false, issues: [issue("resource-state-failed", error instanceof Error ? error.message : String(error), input.resourceId)] };
     }
     return { ok: true, schemeId: scheme.id, snapshot: this.snapshot() };
   }
@@ -508,4 +478,29 @@ export function dshDesiredPluginStates(
     states[resource.id.replace(/^plugin:/, "")] = explicitlySelected;
   }
   return states;
+}
+
+export function inheritDshPluginPackageStates(
+  resources: DshResourceInventory["plugins"],
+  baseline: Readonly<Record<string, boolean>>,
+  previous: Readonly<Record<string, boolean>>,
+  pluginRuntimePackages: Readonly<Record<string, string>>
+): Record<string, boolean> {
+  const currentPackages = new Map(resources.map(resource => [
+    resource.id,
+    resource.packageName ?? resource.name
+  ]));
+  const packageStates = new Map<string, boolean>();
+  for (const [entryId, enabled] of Object.entries(previous)) {
+    const resourceId = `plugin:${entryId}`;
+    const packageName = pluginRuntimePackages[resourceId] ?? currentPackages.get(resourceId);
+    if (!packageName) continue;
+    packageStates.set(packageName, (packageStates.get(packageName) ?? true) && enabled);
+  }
+  const next = { ...baseline };
+  for (const resource of resources.filter(item => item.manageable)) {
+    const packageState = packageStates.get(resource.packageName ?? resource.name);
+    if (packageState !== undefined) next[resource.id.replace(/^plugin:/, "")] = packageState;
+  }
+  return next;
 }
