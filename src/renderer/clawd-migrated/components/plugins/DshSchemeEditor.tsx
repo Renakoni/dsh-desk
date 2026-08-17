@@ -48,7 +48,7 @@ export function DshSchemeEditor({
   ];
   const availableResources = inventory[activeTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources.map(item => item.id)),
+    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources),
     [activeTab, allPluginIds, availableResources, draft, inventory.runtimeConnected]
   );
   const availableIds = useMemo(() => new Set(availableResources.map(resource => resource.id)), [availableResources]);
@@ -64,11 +64,16 @@ export function DshSchemeEditor({
   useEffect(() => setQuery(""), [activeTab]);
 
   function moveResource(resource: DshResourceItem) {
+    const removing = selected.has(resource.id);
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => {
-      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources.map(item => item.id)));
-      const hidden = current[activeTab].filter(id => !visible.has(id));
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources));
+      let hidden = current[activeTab].filter(id => !visible.has(id));
+      if (activeTab === "plugins" && removing && !resource.id.startsWith("plugin:package:")) {
+        const packageAlias = `plugin:package:${resource.packageName ?? resource.name}`;
+        hidden = hidden.filter(id => id !== packageAlias);
+      }
       return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
     });
   }

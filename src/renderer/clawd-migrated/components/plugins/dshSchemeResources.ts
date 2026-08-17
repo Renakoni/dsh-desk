@@ -7,15 +7,21 @@ export function visibleDshSchemeResourceIds(
   runtimeConnected: boolean,
   allPluginIds: string[],
   tab: DshResourceTab,
-  availableResourceIds: string[]
+  availableResources: DshResourceItem[]
 ): string[] {
   if (tab === "skills") return resourceIds;
   const known = new Set(allPluginIds);
-  const available = new Set(availableResourceIds);
+  const available = new Set(availableResources.map(resource => resource.id));
+  const runtimePackages = new Set(availableResources
+    .filter(resource => !resource.id.startsWith("plugin:package:"))
+    .map(resource => resource.packageName ?? resource.name));
   return resourceIds.filter(id => {
     const packageAlias = id.startsWith("plugin:package:");
     if (!known.has(id) || available.has(id)) return true;
-    return runtimeConnected ? !packageAlias : packageAlias;
+    if (!runtimeConnected) return packageAlias;
+    return packageAlias
+      ? !runtimePackages.has(id.slice("plugin:package:".length))
+      : true;
   });
 }
 

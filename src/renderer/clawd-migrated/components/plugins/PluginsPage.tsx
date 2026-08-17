@@ -92,7 +92,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
       snapshot.inventory.runtimeConnected,
       allPluginIds,
       activeTab,
-      available.map(item => item.id)
+      available
     );
     const members = new Set(memberIds);
     return [...available.filter(item => members.has(item.id)), ...unavailableDshResources(memberIds, available, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))];
@@ -190,7 +190,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
         </section>
 
         <nav className="claude-resource-subtabs compact claude-profile-resource-tabs dsh-resource-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
-          {tabs.map(tab => { const Icon = tab.icon; const count = visibleDshSchemeResourceIds(selectedScheme?.[tab.id] ?? [], snapshot.inventory.runtimeConnected, allPluginIds, tab.id, snapshot.inventory[tab.id].map(item => item.id)).length; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{count}</small></button>; })}
+          {tabs.map(tab => { const Icon = tab.icon; const count = visibleDshSchemeResourceIds(selectedScheme?.[tab.id] ?? [], snapshot.inventory.runtimeConnected, allPluginIds, tab.id, snapshot.inventory[tab.id]).length; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{count}</small></button>; })}
           <button type="button" className="claude-resource-subtab claude-resource-refresh-tab dsh-market-button" onClick={() => setMarketOpen(true)} aria-label={t("dshResources.marketplace", "Marketplace")} title={t("dshResources.marketplace", "Marketplace")}><Store size={17} /></button>
         </nav>
       </div>
