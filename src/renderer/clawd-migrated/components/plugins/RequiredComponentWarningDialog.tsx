@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 
@@ -38,13 +39,20 @@ export function RequiredComponentWarningDialog({ componentName, packageName, onC
       if (dontRemind) dismissRequiredComponentWarning();
       onConfirm();
     }}
+    footerLeading={<RequiredComponentWarningOption
+      label={t("dshResources.componentWarningDontRemind", "Don't remind me again")}
+      checked={dontRemind}
+      onChange={setDontRemind}
+    />}
   >
-    <div className="dsh-required-component-warning">
-      <p>{t("dshResources.componentWarningMessage", "{component} belongs to the required bundle {package}. Forcing its state may affect DSH startup or features.", { component: componentName, package: packageName })}</p>
-      <label className="dsh-required-component-warning-option">
-        <input type="checkbox" checked={dontRemind} onChange={event => setDontRemind(event.target.checked)} />
-        <span>{t("dshResources.componentWarningDontRemind", "Don't remind me again")}</span>
-      </label>
-    </div>
+    <p>{t("dshResources.componentWarningMessage", "{component} belongs to the required bundle {package}. Forcing its state may affect DSH startup or features.", { component: componentName, package: packageName })}</p>
   </ConfirmDialog>;
+}
+
+function RequiredComponentWarningOption({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="dsh-required-component-warning-option">
+    <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+    <span className="dsh-required-component-warning-check" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
+    <span>{label}</span>
+  </label>;
 }

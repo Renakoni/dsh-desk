@@ -673,19 +673,14 @@
   padding-left: 18px;
 }
 
-.dsh-required-component-warning {
-  display: grid;
-  gap: 12px;
-}
-
 .dsh-required-component-warning-option {
-  min-height: 30px;
+  position: relative;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   width: max-content;
-  padding-top: 9px;
-  border-top: 1px solid var(--ccs-editor-line, rgba(127, 127, 127, 0.3));
+  padding: 2px 0;
   color: var(--ccs-editor-muted, inherit);
   font-size: 12px;
   line-height: 1.35;
@@ -693,18 +688,61 @@
 }
 
 .dsh-required-component-warning-option input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  min-height: 0;
-  margin: 0;
-  accent-color: oklch(55% 0.15 25);
-  cursor: pointer;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.dsh-required-component-warning-check {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid var(--ccs-editor-line-strong, rgba(127, 127, 127, 0.4));
+  border-radius: 4px;
+  color: oklch(97% 0.005 25);
+  background: var(--ccs-editor-raised, rgba(127, 127, 127, 0.08));
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.dsh-required-component-warning-check svg {
+  opacity: 0;
+}
+
+.dsh-required-component-warning-option:hover .dsh-required-component-warning-check {
+  border-color: oklch(55% 0.15 25);
+}
+
+.dsh-required-component-warning-option input[type="checkbox"]:focus-visible + .dsh-required-component-warning-check {
+  outline: 2px solid color-mix(in oklch, oklch(55% 0.15 25) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.dsh-required-component-warning-option input[type="checkbox"]:checked + .dsh-required-component-warning-check {
+  border-color: oklch(55% 0.15 25);
+  background: oklch(55% 0.15 25);
+}
+
+.dsh-required-component-warning-option input[type="checkbox"]:checked + .dsh-required-component-warning-check svg {
+  opacity: 1;
 }
 
 .ccs-confirm-dialog footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.ccs-confirm-dialog footer.has-leading {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ccs-confirm-footer-leading {
+  min-width: 0;
 }
 
 .ccs-confirm-dialog .ccs-panel-cancel,
