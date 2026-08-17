@@ -1,9 +1,10 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
-import { isDshResourceSchemeSelectable, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Code2, Minus, Package, Search, Trash2, X } from "lucide-react";
+import { isDshResourceSchemeSelectable, type DshPluginComponentOverrideState, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
+import { RequiredComponentWarningDialog, shouldWarnRequiredComponent } from "./RequiredComponentWarningDialog";
 import { useVirtualRows } from "./useVirtualRows";
 
 const ROW_HEIGHT = 64;
@@ -39,24 +40,32 @@ export function DshSchemeEditor({
   }), [inventory.plugins, inventory.skills]);
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
+    pluginComponentOverrides: [...(initial.pluginComponentOverrides ?? [])],
     skills: [...new Set([...logicalInventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
     plugins: [...new Set([...logicalInventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
   const [query, setQuery] = useState("");
   const [missingRemoval, setMissingRemoval] = useState<DshResourceItem | null>(null);
+  const [componentWarning, setComponentWarning] = useState<{
+    resource: DshResourceItem;
+    componentKey: string;
+    componentName: string;
+    state: DshPluginComponentOverrideState;
+  } | null>(null);
   const deferredQuery = useDeferredValue(query);
   const tabs = [
     { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
-  const availableResources = logicalInventory[activeTab];
+  const resourceTab = activeTab;
+  const availableResources = logicalInventory[resourceTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[activeTab]),
-    [activeTab, draft]
+    () => visibleDshSchemeResourceIds(draft[resourceTab]),
+    [draft, resourceTab]
   );
   const visibleKnownCandidateIds = useMemo(
-    () => activeTab === "plugins"
+    () => resourceTab === "plugins"
       ? visibleDshSchemeResourceIds(
         [...new Set([
           ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
@@ -64,7 +73,7 @@ export function DshSchemeEditor({
         ])]
       )
       : [],
-    [activeTab, initial.plugins, knownPluginIds]
+    [initial.plugins, knownPluginIds, resourceTab]
   );
   const candidateIds = useMemo(
     () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],
@@ -72,23 +81,39 @@ export function DshSchemeEditor({
   );
   const resources = useMemo<DshResourceItem[]>(() => [
     ...availableResources,
-    ...unavailableDshResources(candidateIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
-  ], [activeTab, availableResources, candidateIds, knownPluginIds, t]);
+    ...unavailableDshResources(candidateIds, availableResources, resourceTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+  ], [availableResources, candidateIds, knownPluginIds, resourceTab, t]);
   const selected = useMemo(() => new Set(visibleDraftIds), [visibleDraftIds]);
   const filtered = useMemo(() => filterDshResources(resources, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, resources]);
   const unselected = useMemo(() => filtered.filter(resource => !selected.has(resource.id)), [filtered, selected]);
   const selectedItems = useMemo(() => filtered.filter(resource => selected.has(resource.id)), [filtered, selected]);
-
   useEffect(() => setQuery(""), [activeTab]);
 
   function moveResource(resource: DshResourceItem) {
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => {
-      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab]));
-      const hidden = current[activeTab].filter(id => !visible.has(id));
-      return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
+      const visible = new Set(visibleDshSchemeResourceIds(current[resourceTab]));
+      const hidden = current[resourceTab].filter(id => !visible.has(id));
+      return { ...current, [resourceTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
     });
+  }
+
+  function applyComponentState(resource: DshResourceItem, componentKey: string, state: DshPluginComponentOverrideState | "default") {
+    if (!resource.packageName) return;
+    setDraft(current => {
+      const overrides = (current.pluginComponentOverrides ?? []).filter(item => item.componentKey !== componentKey);
+      if (state !== "default") overrides.push({ packageName: resource.packageName as string, componentKey, state });
+      return { ...current, pluginComponentOverrides: overrides };
+    });
+  }
+
+  function requestComponentState(resource: DshResourceItem, componentKey: string, componentName: string, state: DshPluginComponentOverrideState | "default") {
+    if (resource.required && state !== "default" && shouldWarnRequiredComponent()) {
+      setComponentWarning({ resource, componentKey, componentName, state });
+      return;
+    }
+    applyComponentState(resource, componentKey, state);
   }
 
   function toggleResource(resource: DshResourceItem) {
@@ -127,7 +152,15 @@ export function DshSchemeEditor({
       <section className="claude-profile-editor-toolbar"><div className="claude-resource-search dark dsh-plugin-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(activeTab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", activeTab === "plugins" ? "Search plugins" : "Search skills")} /></div></section>
       <section className="claude-profile-transfer" aria-busy={busy}>
         <TransferColumn title={t("dshResources.unselected", "Not included")} side="unselected" items={unselected} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:unselected`} onMove={toggleResource} />
-        <TransferColumn title={t("dshResources.selected", "Included")} side="selected" items={selectedItems} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />
+        {activeTab === "plugins" ? <SelectedPluginTreeColumn
+          title={t("dshResources.selected", "Included")}
+          items={selectedItems}
+          draft={draft}
+          hideSensitiveContent={hideSensitiveContent}
+          busy={busy}
+          onMove={toggleResource}
+          onComponentState={requestComponentState}
+        /> : <TransferColumn title={t("dshResources.selected", "Included")} side="selected" items={selectedItems} hideSensitiveContent={hideSensitiveContent} busy={busy} resetKey={`${activeTab}:${deferredQuery}:selected`} onMove={toggleResource} />}
       </section>
       {missingRemoval ? (
         <ConfirmDialog
@@ -141,8 +174,83 @@ export function DshSchemeEditor({
           <p>{t("dshResources.removeMissingMessage", "\"{name}\" is no longer installed. Remove this entry from the current scheme?", { name: missingRemoval.name })}</p>
         </ConfirmDialog>
       ) : null}
+      {componentWarning ? <RequiredComponentWarningDialog
+        componentName={componentWarning.componentName}
+        packageName={componentWarning.resource.packageName ?? componentWarning.resource.name}
+        onCancel={() => setComponentWarning(null)}
+        onConfirm={() => {
+          const pending = componentWarning;
+          setComponentWarning(null);
+          applyComponentState(pending.resource, pending.componentKey, pending.state);
+        }}
+      /> : null}
     </div>
   );
+}
+
+function SelectedPluginTreeColumn({ title, items, draft, hideSensitiveContent, busy, onMove, onComponentState }: {
+  title: string;
+  items: DshResourceItem[];
+  draft: DshResourceSchemeSaveInput;
+  hideSensitiveContent: boolean;
+  busy: boolean;
+  onMove: (resource: DshResourceItem) => void;
+  onComponentState: (resource: DshResourceItem, componentKey: string, componentName: string, state: DshPluginComponentOverrideState | "default") => void;
+}) {
+  const { t } = useI18n();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  return <div className="claude-profile-transfer-column dsh-scheme-tree-column" data-transfer-side="selected">
+    <header>{title}</header>
+    <div className="dsh-scheme-tree-list">
+      {items.length === 0 ? <div className="claude-profile-transfer-empty">{t("dshResources.noMatches", "No matches")}</div> : items.map(resource => {
+        const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
+        const description = resource.packageName === "dsh-desk-plugin"
+          ? t("dshResources.bridgeDescription", "Local bridge between DSH Desk and DeepSeek Harness")
+          : presentation.description ?? presentation.detail;
+        const components = resource.packageName === "dsh-desk-plugin" ? [] : resource.components ?? [];
+        const expanded = components.length === 1 || expandedId === resource.id;
+        const fixed = resource.required || !isDshResourceSchemeSelectable(resource);
+        return <div className={`dsh-scheme-tree-package ${expanded ? "expanded" : ""}`} key={resource.id}>
+          <div className={`dsh-scheme-tree-package-summary ${components.length > 1 ? "has-disclosure" : ""}`}>
+            <button type="button" className={`claude-profile-transfer-option dsh-scheme-tree-package-action ${fixed ? "required" : ""}`} disabled={busy || fixed} onClick={() => onMove(resource)}>
+              <span className="claude-profile-resource-copy"><strong title={resource.name}>{resource.name}</strong>{description ? <small title={description}>{description}</small> : null}</span>
+              <span className={`claude-profile-live-state ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.required ? "dshResources.required" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.required ? "Required" : resource.enabled ? "Enabled" : "Disabled")}</span>
+            </button>
+            {components.length > 1 ? <button
+              type="button"
+              className="dsh-scheme-tree-disclosure"
+              aria-expanded={expanded}
+              aria-label={t("dshResources.showComponents", "View {count} components", { count: components.length })}
+              disabled={busy}
+              onClick={() => setExpandedId(current => current === resource.id ? null : resource.id)}
+            >{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
+          </div>
+          {expanded ? <div className="dsh-scheme-tree-components">{components.map(component => {
+            const override = [...(draft.pluginComponentOverrides ?? [])].reverse().find(item => item.componentKey === component.key)?.state ?? "default";
+            const fullName = hideSensitiveContent ? t("dshResources.detailsHidden", "Resource details hidden") : component.moduleName || component.name;
+            return <div className="dsh-scheme-tree-component" key={component.key}>
+              <span className="dsh-scheme-tree-branch" aria-hidden="true" />
+              <span className="dsh-scheme-tree-component-name" title={fullName}>{fullName}</span>
+              {component.manageable ? <div className="dsh-scheme-tree-modes" role="group" aria-label={t("dshResources.componentMode", "{name} mode", { name: component.name })}>{([
+                ["default", t("dshResources.componentDefault", "Default"), Minus],
+                ["enabled", t("dshResources.componentEnable", "Enable"), Check],
+                ["disabled", t("dshResources.componentDisable", "Disable"), X]
+              ] as const).map(([state, label, Icon]) => <button
+                type="button"
+                key={state}
+                className={`${state} ${override === state ? "selected" : ""}`}
+                title={label}
+                disabled={busy}
+                aria-pressed={override === state}
+                aria-label={`${label} ${component.name}`}
+                onClick={() => onComponentState(resource, component.key, component.name, state)}
+              ><Icon size={14} /></button>)}</div> : <span className="dsh-scheme-tree-component-locked">{t("dshResources.componentRequired", "Required")}</span>}
+            </div>;
+          })}</div> : null}
+        </div>;
+      })}
+    </div>
+  </div>;
 }
 
 function TransferColumn({ title, side, items, hideSensitiveContent, busy, resetKey, onMove }: {
@@ -165,7 +273,9 @@ function TransferColumn({ title, side, items, hideSensitiveContent, busy, resetK
             {virtual.visible.map((resource, offset) => {
               const index = virtual.start + offset;
               const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
-              const description = presentation.description ?? presentation.detail;
+              const description = resource.packageName === "dsh-desk-plugin"
+                ? t("dshResources.bridgeDescription", "Local bridge between DSH Desk and DeepSeek Harness")
+                : presentation.description ?? presentation.detail;
               return (
                 <button type="button" key={resource.id} className={`claude-profile-transfer-option ${resource.required || !isDshResourceSchemeSelectable(resource) ? "required" : ""}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }} disabled={busy || resource.required || !isDshResourceSchemeSelectable(resource)} onClick={() => onMove(resource)}>
                   <span className="claude-profile-resource-copy"><strong>{resource.name}</strong>{description ? <small title={description}>{description}</small> : null}</span>

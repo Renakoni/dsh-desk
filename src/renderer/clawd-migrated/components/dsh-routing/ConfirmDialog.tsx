@@ -20,6 +20,7 @@ export function ConfirmDialog({
   cancelLabel,
   confirmLabel,
   danger,
+  footerLeading,
   onCancel,
   onConfirm
 }: {
@@ -28,6 +29,7 @@ export function ConfirmDialog({
   cancelLabel: string;
   confirmLabel: string;
   danger?: boolean;
+  footerLeading?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -94,7 +96,8 @@ export function ConfirmDialog({
       <div ref={dialogRef} className="ccs-confirm-dialog" role="alertdialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
         <h3>{title}</h3>
         <div className="ccs-confirm-body">{children}</div>
-        <footer>
+        <footer className={footerLeading ? "has-leading" : undefined}>
+          {footerLeading ? <div className="ccs-confirm-footer-leading">{footerLeading}</div> : null}
           <button ref={cancelRef} type="button" className="ccs-panel-cancel" onClick={onCancel}>{cancelLabel}</button>
           <button type="button" className={danger ? "ccs-confirm-danger" : "ccs-save-button"} onClick={onConfirm}>{confirmLabel}</button>
         </footer>

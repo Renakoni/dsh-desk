@@ -108,7 +108,7 @@ export function createPetEvent(event, sessionId, hook, fields = {}) {
 
 export function sessionStartEvent(sessionId) {
   return createPetEvent('idle', sessionId, 'agent/session-start', {
-    title: 'DSH',
+    title: 'DSH is online',
     message: 'Ready',
   })
 }

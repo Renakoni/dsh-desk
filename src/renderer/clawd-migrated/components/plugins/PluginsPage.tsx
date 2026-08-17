@@ -16,6 +16,7 @@ import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { RoutingToaster } from "../dsh-routing/RoutingToaster";
 import { DshMarketPanel } from "./DshMarketPanel";
 import { DshSchemeEditor } from "./DshSchemeEditor";
+import { RequiredComponentWarningDialog, shouldWarnRequiredComponent } from "./RequiredComponentWarningDialog";
 import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
@@ -277,50 +278,117 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [componentWarning, setComponentWarning] = useState<{
+    resource: DshResourceItem;
+    componentKey: string;
+    componentName: string;
+    state: DshPluginComponentOverrideState;
+  } | null>(null);
+  const requestComponentState = (resource: DshResourceItem, componentKey: string, componentName: string, state: DshPluginComponentOverrideState | "default") => {
+    if (resource.required && state !== "default" && shouldWarnRequiredComponent()) {
+      setComponentWarning({ resource, componentKey, componentName, state });
+      return;
+    }
+    onComponentState(resource, componentKey, state);
+  };
   if (loading && items.length === 0) return <section className="claude-resource-table dsh-resource-list"><div className="claude-resource-empty">{t("dshResources.scanning", "Scanning...")}</div></section>;
   if (items.length === 0) return <section className="claude-resource-table dsh-resource-list"><div className="claude-resource-empty">{t("dshResources.noResources", "This scheme has no resources of this type.")}</div></section>;
-  return (
+  return <>
     <section className="claude-resource-table dsh-resource-list dsh-plugin-bundle-list">
       {items.map(resource => {
         const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
+        const description = resource.packageName === "dsh-desk-plugin"
+          ? t("dshResources.bridgeDescription", "Local bridge between DSH Desk and DeepSeek Harness")
+          : presentation.description;
         const components = resource.components ?? [];
-        const open = expanded.has(resource.id);
+        const soleComponent = components.length === 1 ? components[0] : undefined;
+        const directComponent = resource.required && soleComponent?.manageable ? soleComponent : undefined;
+        const open = components.length > 1 && expanded.has(resource.id);
         const busy = busyResourceId === resource.id;
+        const directComponentBusy = directComponent && busyResourceId === `${resource.id}:${directComponent.key}`;
+        const canChangeDirectComponent = Boolean(directComponent && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
+        const directComponentEnabled = directComponent ? componentEffectiveEnabled(directComponent, scheme) : false;
+        const rowEnabled = directComponent ? directComponentEnabled : resource.enabled;
         return (
           <div className={`dsh-plugin-bundle ${open ? "expanded" : ""}`} key={resource.id}>
-            <article className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : resource.enabled ? "enabled" : "disabled"}`}>
+            <article className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : rowEnabled ? "enabled" : "disabled"}`}>
               <div className="dsh-resource-mark"><Package size={17} aria-hidden="true" /></div>
               <div className="claude-resource-row-main dsh-resource-copy">
                 <div className="claude-resource-name-line dsh-resource-title"><strong>{resource.name}</strong></div>
-                {presentation.description ? <p title={presentation.description}>{presentation.description}</p> : null}
+                {description ? <p title={description}>{description}</p> : null}
                 {presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}
-                {components.length > 0 ? <button type="button" className="dsh-component-disclosure" aria-expanded={open} aria-label={t("dshResources.showComponents", "View {count} runtime components", { count: components.length })} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id); return next; })}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
+                {components.length > 1 ? <button type="button" className="dsh-component-disclosure" aria-expanded={open} aria-label={t("dshResources.showComponents", "View {count} components", { count: components.length })} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id); return next; })}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
               </div>
-              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.enabled ? "Enabled" : "Disabled")}</span>
-              {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action dsh-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
+              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : rowEnabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : rowEnabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : rowEnabled ? "Enabled" : "Disabled")}</span>
+              {directComponent ? <button
+                type="button"
+                className="claude-profile-resource-action dsh-resource-action"
+                aria-label={`${t(directComponentEnabled ? "dshResources.disable" : "dshResources.enable", directComponentEnabled ? "Disable" : "Enable")} ${directComponent.name}`}
+                onClick={() => requestComponentState(resource, directComponent.key, directComponent.name, componentStateForEnabled(directComponent, scheme, !directComponentEnabled))}
+                disabled={!canChangeDirectComponent || busyResourceId !== null}
+              >{directComponentEnabled ? <PowerOff size={13} /> : <Power size={13} />}{directComponentBusy ? "..." : t(directComponentEnabled ? "dshResources.disable" : "dshResources.enable", directComponentEnabled ? "Disable" : "Enable")}</button> : resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action dsh-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
             </article>
             {open ? <div className="dsh-component-list">{components.map(component => {
-              const override = scheme?.pluginComponentOverrides.find(item => item.componentKey === component.key)?.state ?? "default";
+              const selectedState = componentSelectedState(component, scheme);
               const canChange = Boolean(component.manageable && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
               const componentBusy = busyResourceId === `${resource.id}:${component.key}`;
-              const phase = component.fiberPhase === "failed" ? "failed" : component.enabled && component.fiberPhase !== "active" ? "starting" : component.enabled ? "active" : "idle";
-              const effectiveLabel = phase === "failed" ? t("dshResources.componentFailed", "Failed") : phase === "starting" ? t("dshResources.componentStarting", "Starting") : component.enabled ? t("dshResources.componentRunning", "Running") : t("dshResources.componentStopped", "Stopped");
+              const phase = component.runtimeObserved === false ? "offline" : component.fiberPhase === "failed" ? "failed" : component.enabled && component.fiberPhase !== "active" ? "starting" : component.enabled ? "active" : "idle";
+              const effectiveLabel = phase === "offline" ? t("dshResources.componentNotRunning", "Not running") : phase === "failed" ? t("dshResources.componentFailed", "Failed") : phase === "starting" ? t("dshResources.componentStarting", "Starting") : component.enabled ? t("dshResources.componentRunning", "Running") : t("dshResources.componentStopped", "Stopped");
               return <div className={`dsh-component-row ${phase} ${componentBusy ? "busy" : ""}`} aria-busy={componentBusy} key={component.key}>
                 <span className="dsh-component-line" aria-hidden="true" />
                 <span className="dsh-component-copy"><strong>{component.name}</strong><code title={component.moduleName}>{hideSensitiveContent ? t("dshResources.detailsHidden", "Resource details hidden") : component.moduleName}</code></span>
                 <span className={`dsh-component-effective ${phase}`}><i />{effectiveLabel}</span>
                 {component.manageable ? <div className="dsh-component-segments" role="group" aria-label={t("dshResources.componentMode", "{name} mode", { name: component.name })}>{([
-                  ["default", t("dshResources.componentDefault", "Follow DSH")],
+                  ["default", t("dshResources.componentDefault", "Default")],
                   ["enabled", t("dshResources.componentEnable", "Enable")],
                   ["disabled", t("dshResources.componentDisable", "Disable")]
-                ] as const).map(([state, label]) => <button type="button" key={state} className={override === state ? "selected" : ""} disabled={!canChange || busyResourceId !== null} aria-pressed={override === state} aria-label={`${label} ${component.name}`} onClick={() => onComponentState(resource, component.key, state)}>{label}</button>)}</div> : <span className="dsh-component-locked">{t("dshResources.componentRequired", "Required")}</span>}
+                ] as const).map(([state, label]) => <button type="button" key={state} className={selectedState === state ? "selected" : ""} disabled={!canChange || busyResourceId !== null} aria-pressed={selectedState === state} aria-label={`${label} ${component.name}`} onClick={() => requestComponentState(resource, component.key, component.name, state)}>{label}</button>)}</div> : <span className="dsh-component-locked">{t("dshResources.componentRequired", "Required")}</span>}
               </div>;
             })}</div> : null}
           </div>
         );
       })}
     </section>
-  );
+    {componentWarning ? <RequiredComponentWarningDialog
+      componentName={componentWarning.componentName}
+      packageName={componentWarning.resource.packageName ?? componentWarning.resource.name}
+      onCancel={() => setComponentWarning(null)}
+      onConfirm={() => {
+        const pending = componentWarning;
+        setComponentWarning(null);
+        onComponentState(pending.resource, pending.componentKey, pending.state);
+      }}
+    /> : null}
+  </>;
+}
+
+function schemeComponentState(scheme: DshResourceScheme | undefined, componentKey: string): DshPluginComponentOverrideState | "default" {
+  return scheme?.pluginComponentOverrides.find(item => item.componentKey === componentKey)?.state ?? "default";
+}
+
+function componentSelectedState(component: NonNullable<DshResourceItem["components"]>[number], scheme: DshResourceScheme | undefined): DshPluginComponentOverrideState | "default" {
+  const schemeState = schemeComponentState(scheme, component.key);
+  const schemeEnabled = schemeState === "default" ? undefined : schemeState === "enabled";
+  if (component.desiredEnabled === undefined || component.desiredEnabled === schemeEnabled) return "default";
+  return component.desiredEnabled ? "enabled" : "disabled";
+}
+
+function componentEffectiveEnabled(component: NonNullable<DshResourceItem["components"]>[number], scheme: DshResourceScheme | undefined): boolean {
+  if (component.desiredEnabled !== undefined) return component.desiredEnabled;
+  const schemeState = schemeComponentState(scheme, component.key);
+  if (schemeState !== "default") return schemeState === "enabled";
+  return component.baselineEnabled ?? component.enabled;
+}
+
+function componentStateForEnabled(
+  component: NonNullable<DshResourceItem["components"]>[number],
+  scheme: DshResourceScheme | undefined,
+  enabled: boolean
+): DshPluginComponentOverrideState | "default" {
+  const schemeState = schemeComponentState(scheme, component.key);
+  if (schemeState !== "default" && (schemeState === "enabled") === enabled) return "default";
+  if (schemeState === "default" && component.baselineEnabled === enabled) return "default";
+  return enabled ? "enabled" : "disabled";
 }
 
 function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins], pluginComponentOverrides: [...scheme.pluginComponentOverrides] }; }

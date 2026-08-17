@@ -25,7 +25,7 @@
   grid-template-columns: repeat(2, minmax(136px, 1fr)) 40px;
 }
 .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
-  grid-template-columns: repeat(2, minmax(136px, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) !important;
 }
 .dsh-market-button {
   grid-template-columns: 1fr !important;
@@ -816,7 +816,7 @@
 }
 .claude-profile-name-field input:disabled { color: oklch(66% 0.01 78); background: oklch(18% 0.006 75); }
 .claude-profile-editor-header .claude-profile-editor-actions { grid-column: 5; }
-.claude-profile-editor-tabs { grid-template-columns: repeat(3, minmax(136px, 1fr)) !important; }
+.claude-profile-editor-tabs { grid-template-columns: repeat(2, minmax(136px, 1fr)) !important; }
 .claude-resource-subtabs.compact.claude-profile-editor-tabs .claude-resource-subtab {
   grid-template-columns: 18px minmax(0, 1fr);
 }
@@ -902,7 +902,7 @@
   .claude-profile-name-field { grid-column: 1 / -1; grid-row: 2; }
   .claude-profile-editor-header .claude-profile-editor-actions { grid-column: 3; grid-row: 1; }
   .claude-profile-top-row > .claude-resource-subtabs.compact.claude-profile-resource-tabs .claude-resource-subtab:not(.active) { display: grid; }
-  .claude-profile-editor-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .claude-profile-editor-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .claude-profile-editor-tabs .claude-resource-subtab:not(.active) { display: grid !important; }
   .claude-profile-live-state { display: none; }
 }
@@ -1070,7 +1070,7 @@
 }
 
 .dsh-plugins-page .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
-  grid-template-columns: repeat(2, minmax(110px, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) !important;
 }
 
 .dsh-plugins-page .claude-resource-subtabs.compact .claude-resource-subtab {
@@ -1173,6 +1173,16 @@
   border-radius: 999px;
   background: color-mix(in oklch, var(--settings-muted) 48%, transparent);
   background-clip: padding-box;
+}
+
+.dsh-plugins-page .dsh-resource-list,
+.dsh-plugins-page .dsh-market-list {
+  scrollbar-width: none;
+}
+
+.dsh-plugins-page .dsh-resource-list::-webkit-scrollbar,
+.dsh-plugins-page .dsh-market-list::-webkit-scrollbar {
+  display: none;
 }
 
 .dsh-plugins-page .dsh-resource-row.claude-profile-readonly-row {
@@ -1336,6 +1346,7 @@
   min-width: 0;
   display: grid;
   gap: 3px;
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 }
 
 .dsh-component-copy strong {
@@ -1343,6 +1354,7 @@
   color: var(--settings-ink);
   font-size: 12px;
   font-weight: 680;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1350,7 +1362,9 @@
 .dsh-component-copy code {
   overflow: hidden;
   color: var(--settings-faint);
-  font-size: 10px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1360,7 +1374,7 @@
   align-items: center;
   gap: 5px;
   color: var(--settings-muted);
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1398,7 +1412,7 @@
 .dsh-component-segments {
   width: 248px;
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid var(--settings-line);
   border-radius: 7px;
   overflow: hidden;
@@ -1413,7 +1427,8 @@
   border-radius: 0;
   color: var(--settings-muted);
   background: transparent;
-  font-size: 10px;
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1440,7 +1455,179 @@
 .dsh-component-locked {
   justify-self: end;
   color: var(--settings-faint);
+  font-size: 11px;
+}
+
+.dsh-scheme-tree-list {
+  min-height: 210px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.dsh-scheme-tree-list::-webkit-scrollbar { display: none; }
+
+.dsh-scheme-tree-package:not(:last-child) {
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.dsh-scheme-tree-package-summary {
+  position: relative;
+}
+
+.dsh-plugins-page .dsh-scheme-tree-package-action {
+  position: static;
+  min-height: 64px;
+  height: auto;
+  border-bottom: 0;
+}
+
+.dsh-plugins-page .dsh-scheme-tree-package-summary.has-disclosure .dsh-scheme-tree-package-action {
+  padding-bottom: 27px;
+}
+
+.dsh-scheme-tree-disclosure {
+  position: absolute;
+  bottom: 5px;
+  left: 11px;
+  width: max-content;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--settings-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.dsh-scheme-tree-disclosure:hover:not(:disabled) {
+  color: var(--settings-ink);
+  background: var(--settings-surface-hover);
+}
+
+.dsh-scheme-tree-disclosure:focus-visible,
+.dsh-scheme-tree-modes button:focus-visible {
+  outline: 1px solid var(--settings-accent);
+  outline-offset: -1px;
+}
+
+.dsh-scheme-tree-disclosure:disabled { cursor: default; opacity: 0.48; }
+
+.dsh-scheme-tree-components {
+  position: relative;
+  margin: -3px 12px 8px 14px;
+  background: transparent;
+}
+
+.dsh-scheme-tree-components::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: 19px;
+  left: 8px;
+  border-left: 1px solid var(--settings-line-strong);
+  pointer-events: none;
+}
+
+.dsh-scheme-tree-component {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 94px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.dsh-scheme-tree-component:not(:last-child) {
+  border-bottom: 1px solid color-mix(in oklch, var(--settings-line) 62%, transparent);
+}
+
+.dsh-scheme-tree-component:hover {
+  background: color-mix(in oklch, var(--settings-surface-hover) 56%, transparent);
+}
+
+.dsh-scheme-tree-branch {
+  width: 10px;
+  height: 1px;
+  align-self: center;
+  border-bottom: 1px solid var(--settings-line-strong);
+}
+
+.dsh-scheme-tree-component-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--settings-ink);
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-scheme-tree-modes {
+  width: 94px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-self: end;
+  overflow: hidden;
+  border: 1px solid var(--settings-line);
+  border-radius: 6px;
+  background: var(--settings-surface);
+}
+
+.dsh-scheme-tree-modes button {
+  min-width: 0;
+  min-height: 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--settings-faint);
+  background: transparent;
+}
+
+.dsh-scheme-tree-modes button:not(:first-child) {
+  border-left: 1px solid var(--settings-line);
+}
+
+.dsh-scheme-tree-modes button:hover:not(:disabled):not(.selected) {
+  color: var(--settings-ink);
+  background: var(--settings-surface-hover);
+}
+
+.dsh-scheme-tree-modes button.default.selected {
+  color: var(--settings-accent);
+  background: color-mix(in oklch, var(--settings-accent) 13%, var(--settings-surface-raised));
+}
+
+.dsh-scheme-tree-modes button.enabled.selected {
+  color: var(--settings-success);
+  background: color-mix(in oklch, var(--settings-success) 12%, var(--settings-surface-raised));
+}
+
+.dsh-scheme-tree-modes button.disabled.selected {
+  color: var(--settings-danger);
+  background: color-mix(in oklch, var(--settings-danger) 11%, var(--settings-surface-raised));
+}
+
+.dsh-scheme-tree-modes button:disabled { cursor: default; opacity: 0.48; }
+
+.dsh-scheme-tree-component-locked {
+  width: 94px;
+  justify-self: end;
+  overflow: hidden;
+  color: var(--settings-faint);
   font-size: 10px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dsh-plugins-page .claude-resource-empty,

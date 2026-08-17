@@ -8,8 +8,10 @@ export type DshPluginComponent = {
   moduleName: string;
   baselineEnabled: boolean | null;
   enabled: boolean;
+  desiredEnabled?: boolean;
   manageable: boolean;
   fiberPhase: DshRuntimePluginPhase;
+  runtimeObserved?: boolean;
 };
 
 export type DshResourceItem = {

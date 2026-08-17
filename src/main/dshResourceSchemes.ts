@@ -29,6 +29,7 @@ export type DshResourceSchemeManagerOptions = {
   setDesiredSkills: (states: Record<string, boolean>, defaultEnabled: boolean) => void;
   setDesiredPlugins: (states: Record<string, boolean>) => void;
   setDesiredPluginComponents?: (states: Record<string, Record<string, boolean>>) => void;
+  getDesiredPluginComponents?: () => Readonly<Record<string, Readonly<Record<string, boolean>>>>;
   now?: () => number;
 };
 
@@ -284,7 +285,7 @@ function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory
     const packageName = item.packageName ?? item.name;
     const states = componentStates[packageName];
     if (!states || !selectedPlugins.has(`${PACKAGE_PLUGIN_PREFIX}${packageName}`)) return false;
-    return (item.components ?? []).some(component => component.manageable
+    return (item.components ?? []).some(component => component.manageable && component.runtimeObserved !== false
       && Object.prototype.hasOwnProperty.call(states, component.key)
       && states[component.key] !== component.enabled);
   });
@@ -554,15 +555,23 @@ export class DshResourceSchemeManager {
     if (!dshPluginPackageNames(scheme.plugins).has(input.packageName)) {
       return { ok: false, issues: [issue("component-package-disabled", "Enable the plugin bundle before changing its components.", input.componentKey)] };
     }
-    const overrides = scheme.pluginComponentOverrides.filter(override => override.componentKey !== input.componentKey);
-    if (input.state !== "default") {
-      overrides.push({ packageName: input.packageName, componentKey: input.componentKey, state: input.state });
+    const baseline = scheme.pluginComponentOverrides.find(override => override.componentKey === input.componentKey);
+    const desired = Object.fromEntries(Object.entries(
+      this.options.getDesiredPluginComponents?.() ?? dshDesiredPluginComponentStates(scheme.pluginComponentOverrides)
+    ).map(([packageName, states]) => [packageName, { ...states }]));
+    for (const packageName of Object.keys(desired)) {
+      delete desired[packageName][input.componentKey];
+      if (Object.keys(desired[packageName]).length === 0) delete desired[packageName];
     }
-    const updated = { ...scheme, pluginComponentOverrides: overrides, updatedAt: this.now() };
-    const nextStore = { ...store, schemes: store.schemes.map(item => item.id === scheme.id ? updated : item) };
+    if (input.state === "default" && baseline) {
+      desired[baseline.packageName] ??= {};
+      desired[baseline.packageName][input.componentKey] = baseline.state === "enabled";
+    } else if (input.state !== "default") {
+      desired[input.packageName] ??= {};
+      desired[input.packageName][input.componentKey] = input.state === "enabled";
+    }
     try {
-      this.options.setDesiredPluginComponents?.(dshDesiredPluginComponentStates(overrides));
-      saveStore(this.options.storePath, nextStore);
+      this.options.setDesiredPluginComponents?.(desired);
     } catch (error) {
       return { ok: false, issues: [issue("component-state-failed", error instanceof Error ? error.message : String(error), input.componentKey)] };
     }

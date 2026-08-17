@@ -97,6 +97,7 @@ import { ALL_DSH_SCHEME_ID } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
+import { deduplicateDshProfileComponents, mergeDshPluginComponents, scanDshStaticPluginComponents } from "./dshPluginComponents";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
 import { dshDesiredPluginComponentStates, dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
@@ -3670,8 +3671,15 @@ function dshResourceInventory(): DshResourceInventory {
   const skills = [...skillsById.values()].sort((left, right) => left.name.localeCompare(right.name));
   const runtimePlugins = new Map(dshRuntimePluginResources(runtimeSnapshot)
     .map(plugin => [plugin.packageName ?? plugin.name, plugin]));
+  const staticComponents = scanDshStaticPluginComponents(resolveDshHome());
   const plugins = dshPluginCatalog().snapshot().plugins.map(plugin => {
     const runtime = runtimePlugins.get(plugin.packageName);
+    const components = mergeDshPluginComponents(staticComponents[plugin.packageName], runtime?.components).map(component => {
+      const desiredEnabled = Object.values(desired.pluginComponents)
+        .map(states => states[component.key])
+        .find(state => typeof state === "boolean");
+      return typeof desiredEnabled === "boolean" ? { ...component, desiredEnabled } : component;
+    });
     const packageEnabled = Object.prototype.hasOwnProperty.call(desired.plugins, plugin.packageName)
       ? desired.plugins[plugin.packageName]
       : plugin.states.some(state => state.enabled);
@@ -3683,7 +3691,7 @@ function dshResourceInventory(): DshResourceInventory {
       ...(plugin.description ? { description: plugin.description } : {}),
       detail: runtime?.detail ?? plugin.packageName,
       ...(runtime?.sourceIds ? { sourceIds: runtime.sourceIds } : {}),
-      ...(runtime?.components ? { components: runtime.components } : {}),
+      ...(components.length ? { components } : {}),
       enabled: packageEnabled,
       manageable: !plugin.protected,
       schemeSelectable: true,
@@ -3692,7 +3700,7 @@ function dshResourceInventory(): DshResourceInventory {
   });
   return {
     skills,
-    plugins,
+    plugins: deduplicateDshProfileComponents(plugins),
     scannedAt: Date.now(),
     runtimeConnected: runtimeSnapshot !== null
   };
@@ -3736,7 +3744,8 @@ function dshResourceSchemeManager() {
     inventory: dshResourceInventory,
     setDesiredSkills: setDesiredDshSkills,
     setDesiredPlugins: setDesiredDshPlugins,
-    setDesiredPluginComponents: setDesiredDshPluginComponents
+    setDesiredPluginComponents: setDesiredDshPluginComponents,
+    getDesiredPluginComponents: () => desiredDshResources.current().pluginComponents
   });
 }
 
