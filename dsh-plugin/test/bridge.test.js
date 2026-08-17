@@ -477,6 +477,27 @@ describe('DSH Loader inventory bridge', () => {
     assert.deepEqual(entry.options.disabled, configuredDisabled)
   })
 
+  it('applies one component override across different Web and Headless bundle owners', async () => {
+    const { loader } = loaderFixture([
+      { id: 'include:code-runtime', options: { id: 'code-runtime', name: '@deepseek-ai/dsh-code-runtime-worker-thread' } },
+    ])
+    const entry = [...loader.entries()][1]
+    entry.update = async patch => {
+      if (patch.disabled === null) delete entry.options.disabled
+      else entry.options.disabled = patch.disabled
+      entry.disabled = Boolean(patch.disabled)
+    }
+    const controller = createPluginPackageController(loader, new Map([
+      ['code-runtime', '@deepseek-ai/dsh-headless'],
+    ]))
+
+    await controller.apply({}, {
+      '@deepseek-ai/dsh-web-app': { 'include:code-runtime': false },
+    })
+
+    assert.equal(entry.options.disabled, true)
+  })
+
   it('keeps component intent while a package-level disable takes precedence', async () => {
     const { loader } = loaderFixture([
       { id: 'include:entry', options: { id: 'entry', name: 'entry-plugin' } },

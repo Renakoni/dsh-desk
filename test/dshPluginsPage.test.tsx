@@ -167,6 +167,52 @@ describe("DSH resource schemes page", () => {
     }));
   });
 
+  it("shows one component override consistently under different runtime bundle owners", async () => {
+    const packageNames = ["@deepseek-ai/dsh-web-app", "@deepseek-ai/dsh-headless"];
+    const component = {
+      key: "include:code-runtime",
+      name: "code-runtime",
+      moduleName: "@deepseek-ai/dsh-code-runtime-worker-thread",
+      baselineEnabled: true,
+      enabled: false,
+      manageable: true,
+      fiberPhase: null
+    } as const;
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: packageNames.map(packageName => `plugin:package:${packageName}`),
+        pluginComponentOverrides: scheme.id === "default" ? [{
+          packageName: "@deepseek-ai/dsh-web-app",
+          componentKey: component.key,
+          state: "disabled"
+        }] : []
+      })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: packageNames.map(packageName => ({
+          id: `plugin:package:${packageName}`,
+          kind: "plugin" as const,
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [component]
+        }))
+      }
+    };
+
+    renderPage(api(componentSnapshot));
+    await screen.findByText("@deepseek-ai/dsh-web-app");
+    for (const disclosure of screen.getAllByRole("button", { name: "查看 1 个运行组件" })) fireEvent.click(disclosure);
+    expect(screen.getAllByRole("button", { name: "禁用 code-runtime" })).toHaveLength(2);
+    for (const button of screen.getAllByRole("button", { name: "禁用 code-runtime" })) {
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+    }
+  });
+
   it("uses one market entry and separates plugin and Skill markets inside it", async () => {
     const mockApi = renderPage();
     await screen.findByText("@deepseek-ai/plugin-0");

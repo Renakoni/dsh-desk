@@ -300,7 +300,7 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
               {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action dsh-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
             </article>
             {open ? <div className="dsh-component-list">{components.map(component => {
-              const override = scheme?.pluginComponentOverrides.find(item => item.packageName === resource.packageName && item.componentKey === component.key)?.state ?? "default";
+              const override = scheme?.pluginComponentOverrides.find(item => item.componentKey === component.key)?.state ?? "default";
               const canChange = Boolean(component.manageable && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
               const componentBusy = busyResourceId === `${resource.id}:${component.key}`;
               const phase = component.fiberPhase === "failed" ? "failed" : component.enabled && component.fiberPhase !== "active" ? "starting" : component.enabled ? "active" : "idle";

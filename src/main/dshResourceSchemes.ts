@@ -66,7 +66,7 @@ function parsePluginComponentOverrides(value: unknown): DshPluginComponentOverri
     identities.add(identity);
     overrides.push({ packageName: row.packageName, componentKey: row.componentKey, state: row.state });
   }
-  return overrides;
+  return [...new Map(overrides.map(override => [override.componentKey, override])).values()];
 }
 
 function issue(code: string, message: string, resourceId?: string): DshResourceIssue {
@@ -189,6 +189,7 @@ function arraysEqual(left: string[], right: string[]): boolean {
 function runtimePluginPackages(inventory: DshResourceInventory): Record<string, string> {
   const entries: Array<[string, string]> = [];
   for (const resource of inventory.plugins) {
+    if (resource.required) continue;
     const packageName = resource.packageName ?? resource.name;
     if (resource.id.startsWith("plugin:") && !resource.id.startsWith(PACKAGE_PLUGIN_PREFIX)) {
       entries.push([resource.id, packageName]);
@@ -553,7 +554,7 @@ export class DshResourceSchemeManager {
     if (!dshPluginPackageNames(scheme.plugins).has(input.packageName)) {
       return { ok: false, issues: [issue("component-package-disabled", "Enable the plugin bundle before changing its components.", input.componentKey)] };
     }
-    const overrides = scheme.pluginComponentOverrides.filter(override => override.packageName !== input.packageName || override.componentKey !== input.componentKey);
+    const overrides = scheme.pluginComponentOverrides.filter(override => override.componentKey !== input.componentKey);
     if (input.state !== "default") {
       overrides.push({ packageName: input.packageName, componentKey: input.componentKey, state: input.state });
     }
@@ -587,7 +588,8 @@ export function dshDesiredPluginComponentStates(
   overrides: ReadonlyArray<DshPluginComponentOverride>
 ): Record<string, Record<string, boolean>> {
   const states: Record<string, Record<string, boolean>> = {};
-  for (const override of overrides) {
+  const logicalOverrides = new Map(overrides.map(override => [override.componentKey, override]));
+  for (const override of logicalOverrides.values()) {
     states[override.packageName] ??= {};
     states[override.packageName][override.componentKey] = override.state === "enabled";
   }

@@ -144,6 +144,48 @@ describe("DSH runtime plugin inventory", () => {
     }]);
   });
 
+  it("keeps a shared Loader component controllable across different Web and Headless owners", () => {
+    const snapshots = new DshRuntimeSnapshotSet();
+    snapshots.update(normalizeDshRuntimePluginSnapshot({
+      instanceId: "web",
+      entries: [{
+        entryId: "include:code-runtime",
+        configId: "code-runtime",
+        moduleName: "@deepseek-ai/dsh-code-runtime-worker-thread",
+        ownerPackage: "@deepseek-ai/dsh-web-app",
+        componentKey: "include:code-runtime",
+        baselineEnabled: true,
+        enabled: true,
+        fiberPhase: "active"
+      }]
+    }, 1_000)!);
+    snapshots.update(normalizeDshRuntimePluginSnapshot({
+      instanceId: "headless",
+      entries: [{
+        entryId: "include:code-runtime",
+        configId: "code-runtime",
+        moduleName: "@deepseek-ai/dsh-code-runtime-worker-thread",
+        ownerPackage: "@deepseek-ai/dsh-headless",
+        componentKey: "include:code-runtime",
+        baselineEnabled: true,
+        enabled: true,
+        fiberPhase: "failed"
+      }]
+    }, 1_001)!);
+
+    const resources = dshRuntimePluginResources(snapshots.current(1_001));
+    expect(resources.map(resource => resource.packageName)).toEqual([
+      "@deepseek-ai/dsh-web-app",
+      "@deepseek-ai/dsh-headless"
+    ]);
+    for (const resource of resources) {
+      expect(resource.components).toEqual([expect.objectContaining({
+        key: "include:code-runtime",
+        fiberPhase: "failed"
+      })]);
+    }
+  });
+
   it("automatically includes a new internal entry after its bundle is updated", () => {
     const snapshot = normalizeDshRuntimePluginSnapshot({
       entries: ["first", "second", "added-later"].map(configId => ({

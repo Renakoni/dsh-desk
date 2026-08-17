@@ -232,6 +232,19 @@ function desiredComponentStates(value) {
   return normalized
 }
 
+function desiredComponentState(packages, componentKey) {
+  let resolved
+  for (const states of Object.values(packages)) {
+    const candidate = states[componentKey]
+    if (typeof candidate !== 'boolean') continue
+    if (resolved !== undefined && resolved !== candidate) {
+      throw new Error(`dsh-desk: conflicting state for plugin component ${componentKey}`)
+    }
+    resolved = candidate
+  }
+  return resolved
+}
+
 function ownershipRoots(loader, owners, packageName) {
   return ownedComponentRoots(loader, owners, packageName)
 }
@@ -267,7 +280,7 @@ export function createPluginPackageController(loader, configOwners = bundleConfi
         const packageDisabled = packageEnabled === false && !PROTECTED_BUNDLES.has(packageName)
         const componentEnabled = packageName === 'dsh-desk-plugin'
           ? undefined
-          : desiredComponents[packageName]?.[entry.id]
+          : desiredComponentState(desiredComponents, entry.id)
         const hasComponentOverride = typeof componentEnabled === 'boolean'
         const hasOverride = packageDisabled || hasComponentOverride
         const baseline = overridden.has(entry.id) ? overridden.get(entry.id) : entry.options.disabled

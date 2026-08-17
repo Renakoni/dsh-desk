@@ -92,20 +92,41 @@ function aggregateDshRuntimeSnapshots(snapshots: DshRuntimePluginSnapshot[]): Ds
     skills.push(...snapshot.skills);
     for (const entry of snapshot.entries) {
       const existing = entries.get(entry.entryId);
-      const sameOwner = existing?.ownerPackage === entry.ownerPackage;
-      const sameComponent = sameOwner && existing?.componentKey === entry.componentKey;
+      const ownerPackages = [...new Set([
+        ...(existing?.ownerPackages ?? (existing?.ownerPackage ? [existing.ownerPackage] : [])),
+        ...(entry.ownerPackages ?? (entry.ownerPackage ? [entry.ownerPackage] : []))
+      ])];
+      const sameComponent = existing?.componentKey !== undefined
+        && existing.componentKey === entry.componentKey
+        && existing.configId === entry.configId
+        && existing.moduleName === entry.moduleName;
       entries.set(entry.entryId, existing ? {
         ...existing,
-        ...(sameOwner ? {} : { ownerPackage: undefined }),
+        ownerPackage: ownerPackages.length === 1 ? ownerPackages[0] : undefined,
+        ...(ownerPackages.length > 0 ? { ownerPackages } : {}),
         ...(sameComponent && entry.componentKey ? {
           componentKey: entry.componentKey,
           baselineEnabled: existing.baselineEnabled === entry.baselineEnabled ? entry.baselineEnabled : null
         } : { componentKey: undefined, baselineEnabled: undefined }),
-        enabled: existing.enabled && entry.enabled
+        enabled: existing.enabled && entry.enabled,
+        fiberPhase: aggregateRuntimePhase(existing.fiberPhase, entry.fiberPhase)
       } : entry);
     }
   }
   return { instanceId: "aggregate", entries: [...entries.values()], skills, receivedAt };
+}
+
+const PHASE_PRIORITY = new Map<DshRuntimePluginPhase, number>([
+  ["failed", 5],
+  ["loading", 4],
+  ["pending", 3],
+  ["unloading", 2],
+  [null, 1],
+  ["active", 0]
+]);
+
+function aggregateRuntimePhase(left: DshRuntimePluginPhase, right: DshRuntimePluginPhase): DshRuntimePluginPhase {
+  return (PHASE_PRIORITY.get(right) ?? 0) > (PHASE_PRIORITY.get(left) ?? 0) ? right : left;
 }
 
 export class DshRuntimeSnapshotSet {
@@ -127,10 +148,12 @@ export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | n
   if (!snapshot) return [];
   const grouped = new Map<string, DshRuntimePluginEntry[]>();
   for (const entry of snapshot.entries) {
-    if (!entry.ownerPackage) continue;
-    const owned = grouped.get(entry.ownerPackage) ?? [];
-    owned.push(entry);
-    grouped.set(entry.ownerPackage, owned);
+    const ownerPackages = entry.ownerPackages ?? (entry.ownerPackage ? [entry.ownerPackage] : []);
+    for (const packageName of ownerPackages) {
+      const owned = grouped.get(packageName) ?? [];
+      owned.push(entry);
+      grouped.set(packageName, owned);
+    }
   }
   const protectedPackages = new Set([
     "@deepseek-ai/dsh-base",

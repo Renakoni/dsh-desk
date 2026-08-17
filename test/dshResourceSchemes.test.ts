@@ -76,6 +76,40 @@ describe("DSH resource schemes", () => {
     expect(persisted.pluginRuntimePackages).toEqual({ "plugin:runtime-entry": "demo" });
   });
 
+  it("does not assign one protected profile component to an arbitrary runtime package", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-shared-profile-component-"));
+    roots.push(root);
+    const packageNames = ["@deepseek-ai/dsh-web-app", "@deepseek-ai/dsh-headless"];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: packageNames.map(packageName => ({
+          id: `plugin:package:${packageName}`,
+          kind: "plugin" as const,
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          schemeSelectable: true,
+          required: true,
+          sourceIds: ["plugin:include:code-runtime"]
+        })),
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const current = manager.snapshot();
+    expect(current.pluginRuntimePackages).toEqual({});
+    expect(current.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual(
+      packageNames.map(packageName => `plugin:package:${packageName}`)
+    );
+  });
+
   it("migrates a legacy runtime-only selection back to package semantics", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-legacy-runtime-only-"));
     roots.push(root);
