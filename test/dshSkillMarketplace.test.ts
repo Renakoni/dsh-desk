@@ -71,6 +71,27 @@ describe("DSH Skill repository marketplace", () => {
     expect(installed.snapshot.skills.find(skill => skill.name === "other-tool")).toMatchObject({ enabled: true, manageable: true });
   });
 
+  it("loads repository Stars from the public page when the GitHub API is rate-limited", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skill-market-stars-"));
+    roots.push(root);
+    const storePath = join(root, "repos.json");
+    writeFileSync(storePath, JSON.stringify({ repos: [{ owner: "owner", name: "demo", branch: "main", enabled: true }] }));
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url);
+      if (value.startsWith("https://api.github.com/")) return new Response("rate limited", { status: 403 });
+      if (value === "https://github.com/owner/demo") {
+        return new Response('<script type="application/json">{"stargazerCount":72645}</script>', { status: 200 });
+      }
+      return new Response(archive(), { status: 200 });
+    });
+
+    const snapshot = await new DshSkillMarketplace({ dshHome: join(root, "dsh"), storePath, fetcher: fetcher as typeof fetch }).snapshot();
+
+    expect(snapshot.skills).toHaveLength(2);
+    expect(snapshot.skills.every(skill => skill.stars === 72645)).toBe(true);
+    expect(fetcher).toHaveBeenCalledWith("https://github.com/owner/demo", expect.objectContaining({ headers: expect.objectContaining({ accept: "text/html" }) }));
+  });
+
   it("rejects an archive before extracting beyond the configured unpacked limit", () => {
     const bytes = zipSync({ "demo-main/large.txt": strToU8("1234567890") });
     expect(() => unzipDshSkillArchive(bytes, 5)).toThrow("expands beyond the allowed size");
