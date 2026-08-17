@@ -737,12 +737,13 @@
 }
 
 .ccs-confirm-dialog footer.has-leading {
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
 }
 
 .ccs-confirm-footer-leading {
   min-width: 0;
+  margin-right: auto;
 }
 
 .ccs-confirm-dialog .ccs-panel-cancel,

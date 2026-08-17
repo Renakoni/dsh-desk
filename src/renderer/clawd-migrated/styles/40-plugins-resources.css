@@ -1175,6 +1175,16 @@
   background-clip: padding-box;
 }
 
+.dsh-plugins-page .dsh-resource-list,
+.dsh-plugins-page .dsh-market-list {
+  scrollbar-width: none;
+}
+
+.dsh-plugins-page .dsh-resource-list::-webkit-scrollbar,
+.dsh-plugins-page .dsh-market-list::-webkit-scrollbar {
+  display: none;
+}
+
 .dsh-plugins-page .dsh-resource-row.claude-profile-readonly-row {
   grid-template-columns: 34px minmax(0, 1fr) minmax(90px, 120px) 92px;
   align-items: center;
