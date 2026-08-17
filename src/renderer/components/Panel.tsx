@@ -22,6 +22,8 @@ export function Panel({ state, event, scale = 1, opacity = 1 }: PanelProps) {
   const tool = event?.tool;
   const detail = event?.detail?.trim();
   const isError = state === "error";
+  const detailIsProse = !isError
+    && tool?.toLowerCase().replace(/[^a-z0-9]+/g, "") === "askuserquestion";
   const notificationKind = event?.notificationKind;
   const eyebrow = notificationKind === "attention"
     ? "Attention"
@@ -55,7 +57,8 @@ export function Panel({ state, event, scale = 1, opacity = 1 }: PanelProps) {
         {tool ? <span className="bubble-tool-chip">{toolLabel(tool)}</span> : null}
       </div>
 
-      {!isError && tool && detail ? <div className="panel-path" title={detail}><bdi>{detail}</bdi></div> : null}
+      {!isError && tool && detail && !detailIsProse ? <div className="panel-path" title={detail}><bdi>{detail}</bdi></div> : null}
+      {detailIsProse && detail ? <p className="panel-note" title={detail}>{detail}</p> : null}
       {note ? <p className="panel-note" title={note}>{note}</p> : null}
     </section>
   );

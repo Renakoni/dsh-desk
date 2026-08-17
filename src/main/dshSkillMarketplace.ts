@@ -20,7 +20,7 @@ const MAX_UNPACKED_BYTES = 100 * 1024 * 1024;
 const ARCHIVE_TIMEOUT_MS = 10_000;
 const STARS_TIMEOUT_MS = 5_000;
 const CACHE_REFRESH_MS = 12 * 60 * 60 * 1000;
-const MARKETPLACE_CACHE_VERSION = 2;
+const MARKETPLACE_CACHE_VERSION = 3;
 const DEFAULT_REPOS: DshSkillRepo[] = [
   { owner: "anthropics", name: "skills", branch: "main", enabled: true },
   { owner: "ComposioHQ", name: "awesome-claude-skills", branch: "master", enabled: true },
@@ -251,21 +251,40 @@ export class DshSkillMarketplace {
   }
 
   private async repositoryStars(repo: DshSkillRepo): Promise<number | null> {
-    const controller = new AbortController();
+    const apiController = new AbortController();
     try {
       const response = await withTimeout(this.fetcher(`https://api.github.com/repos/${repo.owner}/${repo.name}`, {
-        signal: controller.signal,
-        headers: { accept: "application/vnd.github+json" }
-      }), controller, STARS_TIMEOUT_MS);
+        signal: apiController.signal,
+        headers: { accept: "application/vnd.github+json", "user-agent": "DSH-Desk" }
+      }), apiController, STARS_TIMEOUT_MS);
+      if (response.ok) {
+        const data = await withTimeout(response.json() as Promise<{ stargazers_count?: unknown }>, apiController, STARS_TIMEOUT_MS);
+        if (typeof data.stargazers_count === "number" && Number.isFinite(data.stargazers_count) && data.stargazers_count >= 0) {
+          return data.stargazers_count;
+        }
+      }
+    } catch {
+      // GitHub's unauthenticated API is commonly rate-limited; fall back to the public repository page.
+    } finally {
+      apiController.abort();
+    }
+
+    const pageController = new AbortController();
+    try {
+      const response = await withTimeout(this.fetcher(`https://github.com/${repo.owner}/${repo.name}`, {
+        signal: pageController.signal,
+        headers: { accept: "text/html", "user-agent": "DSH-Desk" }
+      }), pageController, STARS_TIMEOUT_MS);
       if (!response.ok) return null;
-      const data = await withTimeout(response.json() as Promise<{ stargazers_count?: unknown }>, controller, STARS_TIMEOUT_MS);
-      return typeof data.stargazers_count === "number" && Number.isFinite(data.stargazers_count) && data.stargazers_count >= 0
-        ? data.stargazers_count
-        : null;
+      const html = await withTimeout(response.text(), pageController, STARS_TIMEOUT_MS);
+      const match = /"stargazerCount"\s*:\s*(\d+)/.exec(html);
+      if (!match) return null;
+      const stars = Number(match[1]);
+      return Number.isSafeInteger(stars) && stars >= 0 ? stars : null;
     } catch {
       return null;
     } finally {
-      controller.abort();
+      pageController.abort();
     }
   }
 

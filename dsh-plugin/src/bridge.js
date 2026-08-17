@@ -19,6 +19,12 @@ function salientToolDetail(rawArguments) {
   try {
     const value = asObject(JSON.parse(rawArguments))
     if (value !== null) {
+      if (Array.isArray(value.questions)) {
+        const question = value.questions
+          .map(asObject)
+          .find(item => typeof item?.question === 'string' && item.question.trim())
+        if (question !== undefined) return shorten(question.question.trim(), 2000)
+      }
       for (const key of [
         'command', 'file_path', 'filePath', 'path', 'pattern', 'url', 'query',
         'prompt', 'description', 'notebook_path', 'notebookPath',
@@ -102,7 +108,7 @@ export function createPetEvent(event, sessionId, hook, fields = {}) {
 
 export function sessionStartEvent(sessionId) {
   return createPetEvent('idle', sessionId, 'agent/session-start', {
-    title: 'DeepSeek Harness session started',
+    title: 'DSH',
     message: 'Ready',
   })
 }

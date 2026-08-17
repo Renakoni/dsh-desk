@@ -148,6 +148,8 @@ button {
 
 .bubble-tool-chip {
   flex: 0 0 auto;
+  max-width: 48%;
+  overflow: hidden;
   padding: 2px 7px;
   border-radius: 5px;
   color: rgba(232, 232, 236, 0.72);
@@ -155,6 +157,8 @@ button {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 10px;
   font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bubble-detail {
