@@ -804,7 +804,24 @@ export function installClawdCompat() {
       return { ok: true, schemeId, snapshot: mockDshResourceSchemes };
     },
     applyDshResourceScheme: async schemeId => {
-      mockDshResourceSchemes = { ...mockDshResourceSchemes, appliedSchemeId: schemeId };
+      const scheme = mockDshResourceSchemes.schemes.find(item => item.id === schemeId);
+      const componentStates = new Map((scheme?.pluginComponentOverrides ?? []).map(override => [override.componentKey, override.state === "enabled"]));
+      mockDshResourceSchemes = {
+        ...mockDshResourceSchemes,
+        appliedSchemeId: schemeId,
+        inventory: {
+          ...mockDshResourceSchemes.inventory,
+          plugins: mockDshResourceSchemes.inventory.plugins.map(plugin => ({
+            ...plugin,
+            components: plugin.components?.map(component => {
+              const desiredEnabled = componentStates.get(component.key);
+              return typeof desiredEnabled === "boolean"
+                ? { ...component, desiredEnabled, enabled: desiredEnabled }
+                : { ...component, desiredEnabled: undefined, enabled: component.baselineEnabled ?? component.enabled };
+            })
+          }))
+        }
+      };
       return { ok: true, schemeId, snapshot: mockDshResourceSchemes };
     },
     setDshResourceState: async input => {
@@ -820,25 +837,21 @@ export function installClawdCompat() {
       return { ok: true, schemeId: input.schemeId, snapshot: mockDshResourceSchemes };
     },
     setDshPluginComponentState: async input => {
+      const scheme = mockDshResourceSchemes.schemes.find(item => item.id === input.schemeId);
+      const schemeOverride = scheme?.pluginComponentOverrides.find(override => override.componentKey === input.componentKey);
+      const desiredEnabled = input.state === "default"
+        ? schemeOverride?.state === "enabled" ? true : schemeOverride?.state === "disabled" ? false : undefined
+        : input.state === "enabled";
       mockDshResourceSchemes = {
         ...mockDshResourceSchemes,
-        schemes: mockDshResourceSchemes.schemes.map(scheme => {
-          if (scheme.id !== input.schemeId) return scheme;
-          const remaining = scheme.pluginComponentOverrides.filter(override => override.packageName !== input.packageName || override.componentKey !== input.componentKey);
-          return {
-            ...scheme,
-            pluginComponentOverrides: input.state === "default"
-              ? remaining
-              : [...remaining, { packageName: input.packageName, componentKey: input.componentKey, state: input.state }]
-          };
-        }),
         inventory: {
           ...mockDshResourceSchemes.inventory,
           plugins: mockDshResourceSchemes.inventory.plugins.map(plugin => (plugin.packageName ?? plugin.name) !== input.packageName ? plugin : {
             ...plugin,
             components: plugin.components?.map(component => component.key !== input.componentKey ? component : {
               ...component,
-              enabled: input.state === "default" ? component.baselineEnabled ?? component.enabled : input.state === "enabled"
+              desiredEnabled,
+              enabled: desiredEnabled ?? component.baselineEnabled ?? component.enabled
             })
           })
         }

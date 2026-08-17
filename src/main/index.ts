@@ -3674,7 +3674,12 @@ function dshResourceInventory(): DshResourceInventory {
   const staticComponents = scanDshStaticPluginComponents(resolveDshHome());
   const plugins = dshPluginCatalog().snapshot().plugins.map(plugin => {
     const runtime = runtimePlugins.get(plugin.packageName);
-    const components = mergeDshPluginComponents(staticComponents[plugin.packageName], runtime?.components);
+    const components = mergeDshPluginComponents(staticComponents[plugin.packageName], runtime?.components).map(component => {
+      const desiredEnabled = Object.values(desired.pluginComponents)
+        .map(states => states[component.key])
+        .find(state => typeof state === "boolean");
+      return typeof desiredEnabled === "boolean" ? { ...component, desiredEnabled } : component;
+    });
     const packageEnabled = Object.prototype.hasOwnProperty.call(desired.plugins, plugin.packageName)
       ? desired.plugins[plugin.packageName]
       : plugin.states.some(state => state.enabled);
@@ -3739,7 +3744,8 @@ function dshResourceSchemeManager() {
     inventory: dshResourceInventory,
     setDesiredSkills: setDesiredDshSkills,
     setDesiredPlugins: setDesiredDshPlugins,
-    setDesiredPluginComponents: setDesiredDshPluginComponents
+    setDesiredPluginComponents: setDesiredDshPluginComponents,
+    getDesiredPluginComponents: () => desiredDshResources.current().pluginComponents
   });
 }
 

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshResourceSchemeSaveInput, DshResourceSchemesSnapshot } from "../src/shared/dshResources";
 import { PluginsPage } from "../src/renderer/clawd-migrated/components/plugins/PluginsPage";
+import { REQUIRED_COMPONENT_WARNING_DISMISSED_KEY } from "../src/renderer/clawd-migrated/components/plugins/RequiredComponentWarningDialog";
 import { dshResourcePresentation, logicalDshResources, visibleDshSchemeResourceIds } from "../src/renderer/clawd-migrated/components/plugins/dshSchemeResources";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
@@ -81,6 +82,7 @@ function renderPage(mockApi = api(), initialLocale: "zh" | "en" = "zh") {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -126,7 +128,7 @@ describe("DSH resource schemes page", () => {
     await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({ schemeId: "default", resourceId: "skill:name:review", enabled: false }));
   });
 
-  it("reveals offline bundle components and confirms a required override", async () => {
+  it("controls one required component directly without a disclosure row", async () => {
     const packageId = "plugin:package:@deepseek-ai/dsh-base";
     const componentSnapshot: DshResourceSchemesSnapshot = {
       ...snapshot,
@@ -157,13 +159,12 @@ describe("DSH resource schemes page", () => {
     };
     const mockApi = renderPage(api(componentSnapshot));
     await screen.findByText("@deepseek-ai/dsh-base");
-    fireEvent.click(screen.getByRole("button", { name: "查看 1 个组件" }));
-    expect(await screen.findByText("timer")).not.toBeNull();
-    expect(screen.getByText("@deepseek-ai/cordis-plugin-timer")).not.toBeNull();
-    expect(screen.getByText("未运行")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "默认 timer" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "查看 1 个组件" })).toBeNull();
+    expect(screen.queryByText("@deepseek-ai/cordis-plugin-timer")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
     const warning = screen.getByRole("alertdialog", { name: "调整必装组件？" });
+    expect(within(warning).getByRole("button", { name: "继续调整" }).className).toContain("ccs-confirm-danger");
+    fireEvent.click(within(warning).getByRole("checkbox", { name: "不再提醒" }));
     fireEvent.click(within(warning).getByRole("button", { name: "继续调整" }));
     await waitFor(() => expect(mockApi.setDshPluginComponentState).toHaveBeenCalledWith({
       schemeId: "default",
@@ -171,6 +172,44 @@ describe("DSH resource schemes page", () => {
       componentKey: "include:timer",
       state: "disabled"
     }));
+    expect(localStorage.getItem(REQUIRED_COMPONENT_WARNING_DISMISSED_KEY)).toBe("1");
+    cleanup();
+    const secondApi = renderPage(api(componentSnapshot));
+    await screen.findByText("@deepseek-ai/dsh-base");
+    fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
+    expect(screen.queryByRole("alertdialog", { name: "调整必装组件？" })).toBeNull();
+    await waitFor(() => expect(secondApi.setDshPluginComponentState).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the normal package action for one component in a manageable bundle", async () => {
+    const packageName = "demo-plugin";
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [`plugin:package:${packageName}`] })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [{
+          id: `plugin:package:${packageName}`,
+          kind: "plugin",
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: true,
+          components: [{ key: "include:demo", name: "demo", moduleName: "demo", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+        }]
+      }
+    };
+
+    const mockApi = renderPage(api(componentSnapshot));
+    await screen.findByText(packageName);
+    expect(screen.queryByRole("button", { name: "查看 1 个组件" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "禁用" }));
+    await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({
+      schemeId: "default",
+      resourceId: `plugin:package:${packageName}`,
+      enabled: false
+    }));
+    expect(mockApi.setDshPluginComponentState).not.toHaveBeenCalled();
   });
 
   it("shows a shared component override on its single logical row", async () => {
@@ -210,15 +249,24 @@ describe("DSH resource schemes page", () => {
       }
     };
 
-    renderPage(api(componentSnapshot));
+    const mockApi = renderPage(api(componentSnapshot));
     await screen.findByText("@deepseek-ai/dsh-web-app");
-    fireEvent.click(screen.getByRole("button", { name: "查看 1 个组件" }));
-    expect(screen.getByRole("button", { name: "禁用 code-runtime" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "查看 1 个组件" })).toBeNull();
+    expect(screen.getByText("已禁用")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "启用 code-runtime" }));
+    fireEvent.click(within(screen.getByRole("alertdialog", { name: "调整必装组件？" })).getByRole("button", { name: "继续调整" }));
+    await waitFor(() => expect(mockApi.setDshPluginComponentState).toHaveBeenCalledWith({
+      schemeId: "default",
+      packageName,
+      componentKey: component.key,
+      state: "enabled"
+    }));
   });
 
   it("edits component overrides in a scheme and keeps the Desk bridge locked", async () => {
     const baseId = "plugin:package:@deepseek-ai/dsh-base";
     const bridgeId = "plugin:package:dsh-desk-plugin";
+    const longModuleName = "@deepseek-ai/dsh-agentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
     const componentSnapshot: DshResourceSchemesSnapshot = {
       ...snapshot,
       schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [baseId, bridgeId] })),
@@ -232,7 +280,7 @@ describe("DSH resource schemes page", () => {
           enabled: true,
           manageable: false,
           required: true,
-          components: [{ key: "include:timer", name: "timer", moduleName: "@deepseek-ai/cordis-plugin-timer", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+          components: [{ key: "include:timer", name: "timer", moduleName: longModuleName, baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
         }, {
           id: bridgeId,
           kind: "plugin",
@@ -248,11 +296,13 @@ describe("DSH resource schemes page", () => {
     const mockApi = renderPage(api(componentSnapshot));
     await screen.findByText("@deepseek-ai/dsh-base");
     expect(screen.getByText("连接 DSH Desk 与 DeepSeek Harness 的本地组件")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "查看 1 个组件" })).toBeNull();
+    expect(screen.getByText("必装")).not.toBeNull();
     fireEvent.click(screen.getByTitle("编辑"));
-    fireEvent.click(screen.getByRole("button", { name: "组件" }));
-    expect(await screen.findByText("dsh-desk")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "组件" })).toBeNull();
+    expect(await screen.findByTitle(longModuleName)).not.toBeNull();
+    expect(screen.getByTitle(longModuleName).textContent).toBe(longModuleName);
     expect(screen.queryByRole("group", { name: "dsh-desk 控制方式" })).toBeNull();
-    expect(screen.getByText("必需组件")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
     fireEvent.click(within(screen.getByRole("alertdialog", { name: "调整必装组件？" })).getByRole("button", { name: "继续调整" }));
@@ -260,6 +310,76 @@ describe("DSH resource schemes page", () => {
     expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
       pluginComponentOverrides: [{ packageName: "@deepseek-ai/dsh-base", componentKey: "include:timer", state: "disabled" }]
     }));
+  });
+
+  it("expands one selected plugin component tree at a time", async () => {
+    const baseName = "@deepseek-ai/dsh-base";
+    const webName = "@deepseek-ai/dsh-web-app";
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [`plugin:package:${baseName}`, `plugin:package:${webName}`] })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [baseName, webName].map((packageName, packageIndex) => ({
+          id: `plugin:package:${packageName}`,
+          kind: "plugin" as const,
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [0, 1].map(componentIndex => ({
+            key: `include:${packageIndex}-${componentIndex}`,
+            name: `component-${packageIndex}-${componentIndex}`,
+            moduleName: `@deepseek-ai/component-${packageIndex}-${componentIndex}`,
+            baselineEnabled: true,
+            enabled: true,
+            manageable: true,
+            fiberPhase: "active" as const
+          }))
+        }))
+      }
+    };
+
+    renderPage(api(componentSnapshot));
+    await screen.findByText(baseName);
+    fireEvent.click(screen.getByTitle("编辑"));
+    const disclosures = screen.getAllByRole("button", { name: "查看 2 个组件" });
+    fireEvent.click(disclosures[0]);
+    expect(await screen.findByTitle("@deepseek-ai/component-0-0")).not.toBeNull();
+    fireEvent.click(disclosures[1]);
+    expect(screen.queryByTitle("@deepseek-ai/component-0-0")).toBeNull();
+    expect(await screen.findByTitle("@deepseek-ai/component-1-0")).not.toBeNull();
+  });
+
+  it("keeps the disclosure and tri-state controls for a multi-component bundle", async () => {
+    const packageName = "@deepseek-ai/dsh-base";
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [`plugin:package:${packageName}`] })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [{
+          id: `plugin:package:${packageName}`,
+          kind: "plugin",
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:timer", name: "timer", moduleName: "timer", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }, {
+            key: "include:hmr", name: "hmr", moduleName: "hmr", baselineEnabled: true, enabled: true, desiredEnabled: false, manageable: true, fiberPhase: "active"
+          }]
+        }]
+      }
+    };
+
+    renderPage(api(componentSnapshot));
+    await screen.findByText(packageName);
+    fireEvent.click(screen.getByRole("button", { name: "查看 2 个组件" }));
+    expect(screen.getByRole("group", { name: "timer 控制方式" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "默认 timer" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "禁用 hmr" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("uses one market entry and separates plugin and Skill markets inside it", async () => {

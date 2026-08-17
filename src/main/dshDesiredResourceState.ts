@@ -22,6 +22,23 @@ function withMissingStates(
   return next;
 }
 
+function withMissingComponentStates(
+  current: Readonly<Record<string, Readonly<Record<string, boolean>>>>,
+  baseline: Readonly<Record<string, Readonly<Record<string, boolean>>>>
+): Record<string, Record<string, boolean>> {
+  const next = cloneComponentStates(current);
+  const knownKeys = new Set(Object.values(next).flatMap(components => Object.keys(components)));
+  for (const [packageName, components] of Object.entries(baseline)) {
+    for (const [componentKey, enabled] of Object.entries(components)) {
+      if (knownKeys.has(componentKey)) continue;
+      next[packageName] ??= {};
+      next[packageName][componentKey] = enabled;
+      knownKeys.add(componentKey);
+    }
+  }
+  return next;
+}
+
 export class DshDesiredResourceState {
   private skills: Record<string, boolean> = {};
   private skillDefaultEnabled = true;
@@ -29,6 +46,7 @@ export class DshDesiredResourceState {
   private pluginComponents: Record<string, Record<string, boolean>> = {};
   private skillsInitialized = false;
   private pluginsInitialized = false;
+  private pluginComponentsInitialized = false;
 
   isSkillsInitialized(): boolean {
     return this.skillsInitialized;
@@ -60,6 +78,7 @@ export class DshDesiredResourceState {
 
   setPluginComponents(states: Readonly<Record<string, Readonly<Record<string, boolean>>>>): void {
     this.pluginComponents = cloneComponentStates(states);
+    this.pluginComponentsInitialized = true;
   }
 
   reconcileScheme(
@@ -73,7 +92,9 @@ export class DshDesiredResourceState {
       skills: this.skillsInitialized ? withMissingStates(this.skills, skillBaseline) : { ...skillBaseline },
       skillDefaultEnabled,
       plugins: preservePluginOverrides && this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline },
-      pluginComponents: cloneComponentStates(pluginComponentBaseline)
+      pluginComponents: this.pluginComponentsInitialized
+        ? withMissingComponentStates(this.pluginComponents, pluginComponentBaseline)
+        : cloneComponentStates(pluginComponentBaseline)
     };
   }
 }

@@ -603,6 +603,7 @@
     "componentWarningTitle": "调整必装组件？",
     "componentWarningMessage": "「{component}」属于必装包 {package}。强制调整可能影响 DSH 启动或相关功能。",
     "componentWarningConfirm": "继续调整",
+    "componentWarningDontRemind": "不再提醒",
     "bridgeDescription": "连接 DSH Desk 与 DeepSeek Harness 的本地组件",
     "missing": "缺失",
     "enabled": "已启用",

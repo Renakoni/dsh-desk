@@ -795,12 +795,14 @@ describe("DSH resource schemes", () => {
     )).toEqual({ "web-entry": true, "headless-entry": true });
   });
 
-  it("persists tri-state component overrides per scheme and publishes only non-default choices", () => {
+  it("keeps live component changes temporary and restores the active scheme baseline", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-components-"));
     roots.push(root);
+    const storePath = join(root, "schemes.json");
     const published: Array<Record<string, Record<string, boolean>>> = [];
+    let desiredComponents: Record<string, Record<string, boolean>> = {};
     const manager = new DshResourceSchemeManager({
-      storePath: join(root, "schemes.json"),
+      storePath,
       inventory: () => ({
         skills: [],
         plugins: [{
@@ -826,7 +828,11 @@ describe("DSH resource schemes", () => {
       }),
       setDesiredSkills: () => undefined,
       setDesiredPlugins: () => undefined,
-      setDesiredPluginComponents: states => published.push(states),
+      setDesiredPluginComponents: states => {
+        desiredComponents = states;
+        published.push(states);
+      },
+      getDesiredPluginComponents: () => desiredComponents,
       now: () => 10
     });
 
@@ -837,11 +843,9 @@ describe("DSH resource schemes", () => {
       state: "disabled"
     }).ok).toBe(true);
     expect(published.at(-1)).toEqual({ "@deepseek-ai/dsh-base": { "include:timer": false } });
-    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([{
-      packageName: "@deepseek-ai/dsh-base",
-      componentKey: "include:timer",
-      state: "disabled"
-    }]);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([]);
+    expect(JSON.parse(readFileSync(storePath, "utf8")).schemes
+      .find((scheme: { id: string }) => scheme.id === "default").pluginComponentOverrides).toEqual([]);
 
     expect(manager.setPluginComponentState({
       schemeId: "default",
@@ -851,6 +855,70 @@ describe("DSH resource schemes", () => {
     }).ok).toBe(true);
     expect(published.at(-1)).toEqual({});
     expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([]);
+  });
+
+  it("persists component policy in a scheme and publishes it when the scheme is applied", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-component-policy-"));
+    roots.push(root);
+    const published: Array<Record<string, Record<string, boolean>>> = [];
+    let desiredComponents: Record<string, Record<string, boolean>> = {};
+    const packageName = "@deepseek-ai/dsh-base";
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: `plugin:package:${packageName}`,
+          kind: "plugin",
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:timer", name: "timer", moduleName: "timer", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      setDesiredPluginComponents: states => {
+        desiredComponents = states;
+        published.push(states);
+      },
+      getDesiredPluginComponents: () => desiredComponents,
+      now: () => 10
+    });
+
+    expect(manager.save({
+      id: "default",
+      name: "Default",
+      skills: [],
+      plugins: [`plugin:package:${packageName}`],
+      pluginComponentOverrides: [{ packageName, componentKey: "include:timer", state: "disabled" }]
+    }).ok).toBe(true);
+    expect(manager.apply("default").ok).toBe(true);
+    expect(published.at(-1)).toEqual({ [packageName]: { "include:timer": false } });
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([{
+      packageName,
+      componentKey: "include:timer",
+      state: "disabled"
+    }]);
+
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName,
+      componentKey: "include:timer",
+      state: "enabled"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({ [packageName]: { "include:timer": true } });
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName,
+      componentKey: "include:timer",
+      state: "default"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({ [packageName]: { "include:timer": false } });
   });
 
   it("rejects component changes for the Desk bridge and drops overrides for packages removed from a scheme", () => {

@@ -59,10 +59,20 @@ describe("DSH desired resource state", () => {
     });
   });
 
-  it("replaces scheme component overrides without inheriting stale entries", () => {
+  it("preserves temporary component overrides while filling newly discovered scheme entries", () => {
     const state = new DshDesiredResourceState();
     state.setPluginComponents({ demo: { "include:first": false } });
     expect(state.reconcileScheme({}, true, {}, true, { demo: { "include:second": true } }).pluginComponents).toEqual({
+      demo: { "include:first": false, "include:second": true }
+    });
+  });
+
+  it("replaces temporary component overrides when a scheme is explicitly applied", () => {
+    const state = new DshDesiredResourceState();
+    state.setPluginComponents({ demo: { "include:first": false } });
+    state.setPluginComponents({ demo: { "include:second": true } });
+
+    expect(state.current().pluginComponents).toEqual({
       demo: { "include:second": true }
     });
   });

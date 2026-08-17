@@ -673,6 +673,34 @@
   padding-left: 18px;
 }
 
+.dsh-required-component-warning {
+  display: grid;
+  gap: 12px;
+}
+
+.dsh-required-component-warning-option {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding-top: 9px;
+  border-top: 1px solid var(--ccs-editor-line, rgba(127, 127, 127, 0.3));
+  color: var(--ccs-editor-muted, inherit);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.dsh-required-component-warning-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  margin: 0;
+  accent-color: oklch(55% 0.15 25);
+  cursor: pointer;
+}
+
 .ccs-confirm-dialog footer {
   display: flex;
   justify-content: flex-end;
