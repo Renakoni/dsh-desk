@@ -160,17 +160,49 @@ export function runtimeEntryOwners(loader, configOwners = bundleConfigOwners(loa
   return owners
 }
 
-export function loaderInventory(loader, configOwners = bundleConfigOwners(loader)) {
+function ownedComponentRoots(loader, owners, packageName) {
+  const entries = [...loader.entries()].filter(entry => !entry.options.group && owners.get(entry.id) === packageName)
+  const ownedIds = new Set(entries.map(entry => entry.id))
+  return entries.filter(entry => {
+    let separator = entry.id.lastIndexOf(':')
+    while (separator > 0) {
+      if (ownedIds.has(entry.id.slice(0, separator))) return false
+      separator = entry.id.lastIndexOf(':', separator - 1)
+    }
+    return true
+  })
+}
+
+function configuredEnabled(entry, disabled) {
+  if (disabled && typeof disabled === 'object' && typeof disabled.__jsExpr === 'string'
+    && typeof entry.evaluate === 'function') {
+    try {
+      return !Boolean(entry.evaluate(disabled.__jsExpr))
+    } catch {
+      return null
+    }
+  }
+  return !Boolean(disabled)
+}
+
+export function loaderInventory(loader, configOwners = bundleConfigOwners(loader), baselines = new Map()) {
   const owners = runtimeEntryOwners(loader, configOwners)
+  const componentIds = new Set()
+  for (const packageName of new Set(owners.values())) {
+    for (const entry of ownedComponentRoots(loader, owners, packageName)) componentIds.add(entry.id)
+  }
   const entries = []
   for (const entry of loader.entries()) {
     if (entry.options.group) continue
     const ownerPackage = owners.get(entry.id)
+    const componentKey = ownerPackage && componentIds.has(entry.id) ? entry.id : undefined
+    const baseline = baselines.has(entry.id) ? baselines.get(entry.id) : entry.options.disabled
     entries.push({
       entryId: entry.id,
       configId: entry.options.id,
       moduleName: entry.options.name,
       ...(ownerPackage ? { ownerPackage } : {}),
+      ...(componentKey ? { componentKey, baselineEnabled: configuredEnabled(entry, baseline) } : {}),
       enabled: !entry.disabled,
       fiberPhase: entry.fiber === undefined ? null : FIBER_PHASES[entry.fiber.state] ?? null,
     })
@@ -184,17 +216,24 @@ function desiredStates(value, key) {
   return value[key]
 }
 
-function ownershipRoots(loader, owners, packageName) {
-  const entries = [...loader.entries()].filter(entry => !entry.options.group && owners.get(entry.id) === packageName)
-  const ownedIds = new Set(entries.map(entry => entry.id))
-  return entries.filter(entry => {
-    let separator = entry.id.lastIndexOf(':')
-    while (separator > 0) {
-      if (ownedIds.has(entry.id.slice(0, separator))) return false
-      separator = entry.id.lastIndexOf(':', separator - 1)
+function desiredComponentStates(value) {
+  const packages = desiredStates(value, 'desiredPluginComponents')
+  if (!packages) return null
+  const normalized = {}
+  for (const [packageName, candidate] of Object.entries(packages)) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null
+    const states = {}
+    for (const [componentKey, enabled] of Object.entries(candidate)) {
+      if (!componentKey || typeof enabled !== 'boolean') return null
+      states[componentKey] = enabled
     }
-    return true
-  })
+    normalized[packageName] = states
+  }
+  return normalized
+}
+
+function ownershipRoots(loader, owners, packageName) {
+  return ownedComponentRoots(loader, owners, packageName)
 }
 
 function sameDisabled(left, right) {
@@ -213,50 +252,49 @@ export function createPluginPackageController(loader, configOwners = bundleConfi
   let applying = false
   return {
     inventory() {
-      return loaderInventory(loader, configOwners)
+      return loaderInventory(loader, configOwners, overridden)
     },
-    async apply(desired) {
+    async apply(desired, desiredComponents = {}) {
       const owners = runtimeEntryOwners(loader, configOwners)
-      for (const [packageName, enabled] of Object.entries(desired)) {
-        if (typeof enabled !== 'boolean' || PROTECTED_BUNDLES.has(packageName)) continue
-        const entries = ownershipRoots(loader, owners, packageName)
-        const changes = []
-        const baselines = new Map()
-        for (const entry of entries) {
-          if (!enabled) {
-            const baseline = overridden.has(entry.id) && entry.options.disabled === true
-              ? overridden.get(entry.id)
-              : entry.options.disabled
-            baselines.set(entry.id, baseline)
-            if (entry.options.disabled !== true) changes.push({ entry, previous: entry.options.disabled, next: true })
-          } else if (overridden.has(entry.id)) {
-            const baseline = overridden.get(entry.id)
-            if (!sameDisabled(entry.options.disabled, baseline)) {
-              changes.push({ entry, previous: entry.options.disabled, next: baseline })
-            }
-          }
-        }
-        const applied = []
-        applying = true
-        try {
-          for (const change of changes) {
-            await change.entry.update({ disabled: change.next === undefined ? null : change.next })
-            applied.push(change)
-          }
-        } catch (error) {
-          for (const change of applied.reverse()) {
-            await change.entry.update({ disabled: change.previous === undefined ? null : change.previous })
-          }
-          throw error
-        } finally {
-          applying = false
-        }
-        if (enabled) {
-          for (const entry of entries) overridden.delete(entry.id)
-        } else {
-          for (const [entryId, baseline] of baselines) overridden.set(entryId, baseline)
+      const roots = []
+      for (const packageName of new Set(owners.values())) {
+        roots.push(...ownershipRoots(loader, owners, packageName).map(entry => ({ entry, packageName })))
+      }
+      const changes = []
+      const nextBaselines = new Map(overridden)
+      for (const { entry, packageName } of roots) {
+        const packageEnabled = desired[packageName]
+        const packageDisabled = packageEnabled === false && !PROTECTED_BUNDLES.has(packageName)
+        const componentEnabled = packageName === 'dsh-desk-plugin'
+          ? undefined
+          : desiredComponents[packageName]?.[entry.id]
+        const hasComponentOverride = typeof componentEnabled === 'boolean'
+        const hasOverride = packageDisabled || hasComponentOverride
+        const baseline = overridden.has(entry.id) ? overridden.get(entry.id) : entry.options.disabled
+        const next = packageDisabled ? true : hasComponentOverride ? !componentEnabled : baseline
+        if (hasOverride) nextBaselines.set(entry.id, baseline)
+        else nextBaselines.delete(entry.id)
+        if (!sameDisabled(entry.options.disabled, next)) {
+          changes.push({ entry, previous: entry.options.disabled, next })
         }
       }
+      const applied = []
+      applying = true
+      try {
+        for (const change of changes) {
+          await change.entry.update({ disabled: change.next === undefined ? null : change.next })
+          applied.push(change)
+        }
+      } catch (error) {
+        for (const change of applied.reverse()) {
+          await change.entry.update({ disabled: change.previous === undefined ? null : change.previous })
+        }
+        throw error
+      } finally {
+        applying = false
+      }
+      overridden.clear()
+      for (const [entryId, baseline] of nextBaselines) overridden.set(entryId, baseline)
     },
     observe(entry, previousOptions) {
       if (!applying && overridden.has(entry.id)
@@ -444,13 +482,16 @@ export async function apply(ctx, config) {
       })
       const desiredSkills = desiredStates(response, 'desiredSkills')
       const desiredPluginPackages = desiredStates(response, 'desiredPluginPackages')
+      const desiredPluginComponents = desiredComponentStates(response)
       const receivedPolicy = normalizeSkillPolicy(response?.skillPolicy)
         ?? (desiredSkills ? normalizeSkillPolicy({ defaultEnabled: true, states: desiredSkills }) : null)
       if (receivedPolicy) {
         skillPolicy = receivedPolicy
         for (const policy of agentPolicies.values()) policy.update(skillPolicy)
       }
-      if (desiredPluginPackages) await pluginPackages.apply(desiredPluginPackages)
+      if (desiredPluginPackages || desiredPluginComponents) {
+        await pluginPackages.apply(desiredPluginPackages ?? {}, desiredPluginComponents ?? {})
+      }
     } catch (error) {
       console.warn('dsh-desk: failed to apply desktop plugin state', error)
     } finally {

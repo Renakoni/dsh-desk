@@ -8,6 +8,8 @@ describe("DSH runtime plugin inventory", () => {
       configId: `entry-${index}`,
       moduleName: index === 159 ? "third-party-plugin" : `@deepseek-ai/plugin-${index}`,
       ownerPackage: index === 159 ? "third-party-bundle" : "@deepseek-ai/dsh-base",
+      componentKey: `root:entry-${index}`,
+      baselineEnabled: index % 2 === 0,
       enabled: index % 3 !== 0,
       fiberPhase: "active"
     }));
@@ -22,7 +24,16 @@ describe("DSH runtime plugin inventory", () => {
         id: "plugin:package:third-party-bundle",
         manageable: true,
         required: false,
-        sourceIds: ["plugin:root:entry-159"]
+        sourceIds: ["plugin:root:entry-159"],
+        components: [{
+          key: "root:entry-159",
+          name: "entry-159",
+          moduleName: "third-party-plugin",
+          baselineEnabled: false,
+          enabled: false,
+          manageable: true,
+          fiberPhase: "active"
+        }]
       })
     ]);
   });
@@ -31,6 +42,7 @@ describe("DSH runtime plugin inventory", () => {
     const row = { entryId: "same", configId: "one", moduleName: "demo", enabled: true, fiberPhase: null };
     expect(normalizeDshRuntimePluginSnapshot({ entries: [row, row] })).toBeNull();
     expect(normalizeDshRuntimePluginSnapshot({ entries: [{ ...row, enabled: "yes" }] })).toBeNull();
+    expect(normalizeDshRuntimePluginSnapshot({ entries: [{ ...row, componentKey: "same" }] })).toBeNull();
   });
 
   it("keeps entries without reliable bundle ownership outside resource scheme control", () => {
@@ -106,8 +118,30 @@ describe("DSH runtime plugin inventory", () => {
       }, 1_000)!);
     }
     expect(dshRuntimePluginResources(snapshots.current(1_000))).toEqual([
-      expect.objectContaining({ id: "plugin:package:shared-bundle", enabled: true, detail: "2 Loader entries" })
+      expect.objectContaining({ id: "plugin:package:shared-bundle", enabled: true })
     ]);
+  });
+
+  it("unifies one logical component across Web and Headless while preserving mixed defaults", () => {
+    const snapshots = new DshRuntimeSnapshotSet();
+    snapshots.update(normalizeDshRuntimePluginSnapshot({
+      instanceId: "web",
+      entries: [{ entryId: "include:shared", configId: "shared", moduleName: "shared-module", ownerPackage: "shared-bundle", componentKey: "include:shared", baselineEnabled: false, enabled: false, fiberPhase: null }]
+    }, 1_000)!);
+    snapshots.update(normalizeDshRuntimePluginSnapshot({
+      instanceId: "headless",
+      entries: [{ entryId: "include:shared", configId: "shared", moduleName: "shared-module", ownerPackage: "shared-bundle", componentKey: "include:shared", baselineEnabled: true, enabled: true, fiberPhase: "active" }]
+    }, 1_000)!);
+
+    expect(dshRuntimePluginResources(snapshots.current(1_000))[0].components).toEqual([{
+      key: "include:shared",
+      name: "shared",
+      moduleName: "shared-module",
+      baselineEnabled: null,
+      enabled: false,
+      manageable: true,
+      fiberPhase: null
+    }]);
   });
 
   it("automatically includes a new internal entry after its bundle is updated", () => {
@@ -117,12 +151,16 @@ describe("DSH runtime plugin inventory", () => {
         configId,
         moduleName: `${configId}-module`,
         ownerPackage: "aggregate-bundle",
+        componentKey: `include:${configId}`,
+        baselineEnabled: true,
         enabled: true,
         fiberPhase: "active"
       }))
     });
     expect(dshRuntimePluginResources(snapshot)).toEqual([
-      expect.objectContaining({ id: "plugin:package:aggregate-bundle", detail: "3 Loader entries" })
+      expect.objectContaining({ id: "plugin:package:aggregate-bundle", components: expect.arrayContaining([
+        expect.objectContaining({ key: "include:added-later", name: "added-later" })
+      ]) })
     ]);
   });
 });

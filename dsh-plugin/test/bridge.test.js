@@ -310,6 +310,8 @@ describe('DSH Loader inventory bridge', () => {
       configId: 'entry-159',
       moduleName: '@deepseek-ai/plugin-159',
       ownerPackage: 'aggregate-bundle',
+      componentKey: 'include:entry-159',
+      baselineEnabled: true,
       enabled: true,
       fiberPhase: 'active',
     })
@@ -439,6 +441,85 @@ describe('DSH Loader inventory bridge', () => {
     const controller = createPluginPackageController(loader, new Map([['aggregate', 'aggregate-bundle']]))
     await controller.apply({ 'aggregate-bundle': false })
     assert.deepEqual(updates, ['aggregate'])
+    const inventory = controller.inventory().entries
+    assert.equal(inventory.find(entry => entry.entryId === 'include:aggregate')?.componentKey, 'include:aggregate')
+    assert.equal(inventory.find(entry => entry.entryId === 'include:aggregate:child')?.componentKey, undefined)
+  })
+
+  it('applies a component override and restores its configured expression on default', async () => {
+    const configuredDisabled = { __jsExpr: 'process.platform === "win32"' }
+    const { loader } = loaderFixture([
+      { id: 'include:entry', disabled: true, options: { id: 'entry', name: 'entry-plugin', disabled: configuredDisabled } },
+    ])
+    const entry = [...loader.entries()][1]
+    entry.evaluate = () => true
+    entry.update = async patch => {
+      if (patch.disabled === null) delete entry.options.disabled
+      else entry.options.disabled = patch.disabled
+      entry.disabled = Boolean(patch.disabled)
+    }
+    const controller = createPluginPackageController(loader, new Map([['entry', 'aggregate-bundle']]))
+
+    await controller.apply({ 'aggregate-bundle': true }, { 'aggregate-bundle': { 'include:entry': true } })
+    assert.equal(entry.options.disabled, false)
+    assert.deepEqual(controller.inventory().entries[1], {
+      entryId: 'include:entry',
+      configId: 'entry',
+      moduleName: 'entry-plugin',
+      ownerPackage: 'aggregate-bundle',
+      componentKey: 'include:entry',
+      baselineEnabled: false,
+      enabled: true,
+      fiberPhase: 'active',
+    })
+
+    await controller.apply({ 'aggregate-bundle': true }, {})
+    assert.deepEqual(entry.options.disabled, configuredDisabled)
+  })
+
+  it('keeps component intent while a package-level disable takes precedence', async () => {
+    const { loader } = loaderFixture([
+      { id: 'include:entry', options: { id: 'entry', name: 'entry-plugin' } },
+    ])
+    const entry = [...loader.entries()][1]
+    entry.update = async patch => {
+      if (patch.disabled === null) delete entry.options.disabled
+      else entry.options.disabled = patch.disabled
+      entry.disabled = Boolean(patch.disabled)
+    }
+    const controller = createPluginPackageController(loader, new Map([['entry', 'aggregate-bundle']]))
+    const components = { 'aggregate-bundle': { 'include:entry': true } }
+
+    await controller.apply({ 'aggregate-bundle': false }, components)
+    assert.equal(entry.options.disabled, true)
+    await controller.apply({ 'aggregate-bundle': true }, components)
+    assert.equal(entry.options.disabled, false)
+    await controller.apply({ 'aggregate-bundle': true }, {})
+    assert.equal(entry.options.disabled, undefined)
+  })
+
+  it('keeps the Desk bridge locked while allowing components inside a required DSH bundle', async () => {
+    const updates = []
+    const { loader } = loaderFixture([
+      { id: 'include:timer', options: { id: 'timer', name: 'timer-plugin' } },
+      { id: 'include:dsh-desk', options: { id: 'dsh-desk', name: 'dsh-desk-plugin' } },
+    ])
+    for (const entry of loader.entries()) {
+      entry.update = async patch => {
+        updates.push(entry.options.id)
+        entry.options.disabled = patch.disabled
+      }
+    }
+    const controller = createPluginPackageController(loader, new Map([
+      ['timer', '@deepseek-ai/dsh-base'],
+      ['dsh-desk', 'dsh-desk-plugin'],
+    ]))
+
+    await controller.apply({}, {
+      '@deepseek-ai/dsh-base': { 'include:timer': false },
+      'dsh-desk-plugin': { 'include:dsh-desk': false },
+    })
+    assert.deepEqual(updates, ['timer'])
   })
 
   it('rolls back a bundle switch when one owned entry cannot update', async () => {

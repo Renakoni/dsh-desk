@@ -761,6 +761,112 @@ describe("DSH resource schemes", () => {
     )).toEqual({ "web-entry": true, "headless-entry": true });
   });
 
+  it("persists tri-state component overrides per scheme and publishes only non-default choices", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-components-"));
+    roots.push(root);
+    const published: Array<Record<string, Record<string, boolean>>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:@deepseek-ai/dsh-base",
+          kind: "plugin",
+          name: "@deepseek-ai/dsh-base",
+          packageName: "@deepseek-ai/dsh-base",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{
+            key: "include:timer",
+            name: "timer",
+            moduleName: "@deepseek-ai/cordis-plugin-timer",
+            baselineEnabled: true,
+            enabled: true,
+            manageable: true,
+            fiberPhase: "active"
+          }]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      setDesiredPluginComponents: states => published.push(states),
+      now: () => 10
+    });
+
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "disabled"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({ "@deepseek-ai/dsh-base": { "include:timer": false } });
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([{
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "disabled"
+    }]);
+
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "default"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({});
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([]);
+  });
+
+  it("rejects component changes for the Desk bridge and drops overrides for packages removed from a scheme", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-component-guard-"));
+    roots.push(root);
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:dsh-desk-plugin",
+          kind: "plugin",
+          name: "dsh-desk-plugin",
+          packageName: "dsh-desk-plugin",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:dsh-desk", name: "dsh-desk", moduleName: "dsh-desk-plugin", baselineEnabled: true, enabled: true, manageable: false, fiberPhase: "active" }]
+        }, {
+          id: "plugin:package:demo",
+          kind: "plugin",
+          name: "demo",
+          packageName: "demo",
+          enabled: true,
+          manageable: true,
+          components: [{ key: "include:demo", name: "demo", moduleName: "demo", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      setDesiredPluginComponents: () => undefined,
+      now: () => 10
+    });
+
+    expect(manager.setPluginComponentState({ schemeId: "default", packageName: "dsh-desk-plugin", componentKey: "include:dsh-desk", state: "disabled" }).ok).toBe(false);
+    const created = manager.save({
+      name: "Fine",
+      skills: [],
+      plugins: ["plugin:package:demo"],
+      pluginComponentOverrides: [{ packageName: "demo", componentKey: "include:demo", state: "disabled" }]
+    });
+    expect(created.ok).toBe(true);
+    const schemeId = created.ok ? created.schemeId : "";
+    const removed = manager.save({ id: schemeId, name: "Fine", skills: [], plugins: [] });
+    expect(removed.ok).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.pluginComponentOverrides).toEqual([]);
+  });
+
   it("keeps a missing resource record when an existing scheme is saved", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-missing-"));
     roots.push(root);

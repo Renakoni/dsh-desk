@@ -2,7 +2,14 @@ export type DshDesiredResourceSnapshot = {
   skills: Record<string, boolean>;
   skillDefaultEnabled: boolean;
   plugins: Record<string, boolean>;
+  pluginComponents: Record<string, Record<string, boolean>>;
 };
+
+function cloneComponentStates(
+  states: Readonly<Record<string, Readonly<Record<string, boolean>>>>
+): Record<string, Record<string, boolean>> {
+  return Object.fromEntries(Object.entries(states).map(([packageName, components]) => [packageName, { ...components }]));
+}
 
 function withMissingStates(
   current: Readonly<Record<string, boolean>>,
@@ -19,6 +26,7 @@ export class DshDesiredResourceState {
   private skills: Record<string, boolean> = {};
   private skillDefaultEnabled = true;
   private plugins: Record<string, boolean> = {};
+  private pluginComponents: Record<string, Record<string, boolean>> = {};
   private skillsInitialized = false;
   private pluginsInitialized = false;
 
@@ -34,7 +42,8 @@ export class DshDesiredResourceState {
     return {
       skills: { ...this.skills },
       skillDefaultEnabled: this.skillDefaultEnabled,
-      plugins: { ...this.plugins }
+      plugins: { ...this.plugins },
+      pluginComponents: cloneComponentStates(this.pluginComponents)
     };
   }
 
@@ -49,16 +58,22 @@ export class DshDesiredResourceState {
     this.pluginsInitialized = true;
   }
 
+  setPluginComponents(states: Readonly<Record<string, Readonly<Record<string, boolean>>>>): void {
+    this.pluginComponents = cloneComponentStates(states);
+  }
+
   reconcileScheme(
     skillBaseline: Readonly<Record<string, boolean>>,
     skillDefaultEnabled: boolean,
     pluginBaseline: Readonly<Record<string, boolean>>,
-    preservePluginOverrides = true
+    preservePluginOverrides = true,
+    pluginComponentBaseline: Readonly<Record<string, Readonly<Record<string, boolean>>>> = {}
   ): DshDesiredResourceSnapshot {
     return {
       skills: this.skillsInitialized ? withMissingStates(this.skills, skillBaseline) : { ...skillBaseline },
       skillDefaultEnabled,
-      plugins: preservePluginOverrides && this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline }
+      plugins: preservePluginOverrides && this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline },
+      pluginComponents: cloneComponentStates(pluginComponentBaseline)
     };
   }
 }

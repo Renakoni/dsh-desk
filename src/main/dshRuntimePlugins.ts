@@ -30,11 +30,24 @@ export function normalizeDshRuntimePluginSnapshot(value: unknown, receivedAt = D
     const configId = boundedString(entry.configId, 256);
     const moduleName = boundedString(entry.moduleName, 512);
     const ownerPackage = entry.ownerPackage === undefined ? undefined : boundedString(entry.ownerPackage, 512);
+    const componentKey = entry.componentKey === undefined ? undefined : boundedString(entry.componentKey, 512);
+    const baselineEnabled = entry.baselineEnabled;
     const fiberPhase = entry.fiberPhase as DshRuntimePluginPhase;
     if (!entryId || !configId || !moduleName || entry.ownerPackage !== undefined && !ownerPackage
+      || entry.componentKey !== undefined && !componentKey
+      || (componentKey === undefined) !== (baselineEnabled === undefined)
+      || baselineEnabled !== undefined && baselineEnabled !== null && typeof baselineEnabled !== "boolean"
       || typeof entry.enabled !== "boolean" || !PHASES.has(fiberPhase) || ids.has(entryId)) return null;
     ids.add(entryId);
-    entries.push({ entryId, configId, moduleName, ...(ownerPackage ? { ownerPackage } : {}), enabled: entry.enabled, fiberPhase });
+    entries.push({
+      entryId,
+      configId,
+      moduleName,
+      ...(ownerPackage ? { ownerPackage } : {}),
+      ...(componentKey ? { componentKey, baselineEnabled: baselineEnabled as boolean | null } : {}),
+      enabled: entry.enabled,
+      fiberPhase
+    });
   }
   const skills: DshRuntimeSkillEntry[] = [];
   for (const candidate of payload.skills ?? []) {
@@ -79,9 +92,15 @@ function aggregateDshRuntimeSnapshots(snapshots: DshRuntimePluginSnapshot[]): Ds
     skills.push(...snapshot.skills);
     for (const entry of snapshot.entries) {
       const existing = entries.get(entry.entryId);
+      const sameOwner = existing?.ownerPackage === entry.ownerPackage;
+      const sameComponent = sameOwner && existing?.componentKey === entry.componentKey;
       entries.set(entry.entryId, existing ? {
         ...existing,
-        ...(existing.ownerPackage === entry.ownerPackage ? {} : { ownerPackage: undefined }),
+        ...(sameOwner ? {} : { ownerPackage: undefined }),
+        ...(sameComponent && entry.componentKey ? {
+          componentKey: entry.componentKey,
+          baselineEnabled: existing.baselineEnabled === entry.baselineEnabled ? entry.baselineEnabled : null
+        } : { componentKey: undefined, baselineEnabled: undefined }),
         enabled: existing.enabled && entry.enabled
       } : entry);
     }
@@ -121,17 +140,29 @@ export function dshRuntimePluginResources(snapshot: DshRuntimePluginSnapshot | n
   ]);
   return [...grouped.entries()].map(([packageName, entries]) => {
     const protectedPackage = protectedPackages.has(packageName);
+    const components = entries
+      .filter(entry => entry.componentKey)
+      .map(entry => ({
+        key: entry.componentKey as string,
+        name: entry.configId,
+        moduleName: entry.moduleName,
+        baselineEnabled: entry.baselineEnabled ?? null,
+        enabled: entry.enabled,
+        manageable: packageName !== "dsh-desk-plugin",
+        fiberPhase: entry.fiberPhase
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name) || left.key.localeCompare(right.key));
     return {
       id: `plugin:package:${packageName}`,
       kind: "plugin" as const,
       name: packageName,
       packageName,
-      detail: `${entries.length} Loader ${entries.length === 1 ? "entry" : "entries"}`,
       description: "DSH plugin bundle",
       enabled: entries.some(entry => entry.enabled),
       manageable: !protectedPackage,
       schemeSelectable: true,
       sourceIds: entries.map(entry => `plugin:${entry.entryId}`),
+      components,
       required: protectedPackage
     };
   });

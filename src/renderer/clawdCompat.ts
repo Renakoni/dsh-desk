@@ -31,6 +31,7 @@ import type {
   DshSkillSnapshot
 } from "../shared/dshPlugins";
 import type {
+  DshPluginComponentStateInput,
   DshResourceMutationResult,
   DshResourceSchemeSaveInput,
   DshResourceSchemesSnapshot,
@@ -131,6 +132,7 @@ type CompanionApi = {
   deleteDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
   applyDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
   setDshResourceState: (input: DshResourceStateInput) => Promise<DshResourceMutationResult>;
+  setDshPluginComponentState: (input: DshPluginComponentStateInput) => Promise<DshResourceMutationResult>;
   onDshResourcesUpdated: (callback: Listener<void>) => Unsubscribe;
   getDshSkillMarketplace: (force?: boolean) => Promise<DshSkillMarketplaceSnapshot>;
   addDshSkillRepo: (repo: DshSkillRepo) => Promise<DshSkillRepoMutationResult>;
@@ -789,8 +791,8 @@ export function installClawdCompat() {
       const existing = input.id ? mockDshResourceSchemes.schemes.find(scheme => scheme.id === input.id) : undefined;
       const now = Date.now();
       const scheme = existing
-        ? { ...existing, ...input, id: existing.id, isProtected: existing.isProtected, updatedAt: now }
-        : { ...input, id: `scheme-${now}`, isProtected: false, createdAt: now, updatedAt: now };
+        ? { ...existing, ...input, pluginComponentOverrides: input.pluginComponentOverrides ?? existing.pluginComponentOverrides, id: existing.id, isProtected: existing.isProtected, updatedAt: now }
+        : { ...input, pluginComponentOverrides: input.pluginComponentOverrides ?? [], id: `scheme-${now}`, isProtected: false, createdAt: now, updatedAt: now };
       mockDshResourceSchemes = {
         ...mockDshResourceSchemes,
         schemes: existing ? mockDshResourceSchemes.schemes.map(item => item.id === scheme.id ? scheme : item) : [...mockDshResourceSchemes.schemes, scheme]
@@ -813,6 +815,32 @@ export function installClawdCompat() {
         inventory: {
           ...mockDshResourceSchemes.inventory,
           [field]: mockDshResourceSchemes.inventory[field].map(item => item.id === input.resourceId ? { ...item, enabled: input.enabled } : item)
+        }
+      };
+      return { ok: true, schemeId: input.schemeId, snapshot: mockDshResourceSchemes };
+    },
+    setDshPluginComponentState: async input => {
+      mockDshResourceSchemes = {
+        ...mockDshResourceSchemes,
+        schemes: mockDshResourceSchemes.schemes.map(scheme => {
+          if (scheme.id !== input.schemeId) return scheme;
+          const remaining = scheme.pluginComponentOverrides.filter(override => override.packageName !== input.packageName || override.componentKey !== input.componentKey);
+          return {
+            ...scheme,
+            pluginComponentOverrides: input.state === "default"
+              ? remaining
+              : [...remaining, { packageName: input.packageName, componentKey: input.componentKey, state: input.state }]
+          };
+        }),
+        inventory: {
+          ...mockDshResourceSchemes.inventory,
+          plugins: mockDshResourceSchemes.inventory.plugins.map(plugin => (plugin.packageName ?? plugin.name) !== input.packageName ? plugin : {
+            ...plugin,
+            components: plugin.components?.map(component => component.key !== input.componentKey ? component : {
+              ...component,
+              enabled: input.state === "default" ? component.baselineEnabled ?? component.enabled : input.state === "enabled"
+            })
+          })
         }
       };
       return { ok: true, schemeId: input.schemeId, snapshot: mockDshResourceSchemes };

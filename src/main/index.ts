@@ -92,14 +92,14 @@ import {
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
 import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
-import type { DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
+import type { DshPluginComponentStateInput, DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 import { ALL_DSH_SCHEME_ID } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { dshDesiredPluginComponentStates, dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3672,6 +3672,9 @@ function dshResourceInventory(): DshResourceInventory {
     .map(plugin => [plugin.packageName ?? plugin.name, plugin]));
   const plugins = dshPluginCatalog().snapshot().plugins.map(plugin => {
     const runtime = runtimePlugins.get(plugin.packageName);
+    const packageEnabled = Object.prototype.hasOwnProperty.call(desired.plugins, plugin.packageName)
+      ? desired.plugins[plugin.packageName]
+      : plugin.states.some(state => state.enabled);
     return {
       id: `plugin:package:${plugin.packageName}`,
       kind: "plugin" as const,
@@ -3680,9 +3683,8 @@ function dshResourceInventory(): DshResourceInventory {
       ...(plugin.description ? { description: plugin.description } : {}),
       detail: runtime?.detail ?? plugin.packageName,
       ...(runtime?.sourceIds ? { sourceIds: runtime.sourceIds } : {}),
-      enabled: Object.prototype.hasOwnProperty.call(desired.plugins, plugin.packageName)
-        ? desired.plugins[plugin.packageName]
-        : plugin.states.some(state => state.enabled),
+      ...(runtime?.components ? { components: runtime.components } : {}),
+      enabled: packageEnabled,
       manageable: !plugin.protected,
       schemeSelectable: true,
       required: plugin.protected
@@ -3709,10 +3711,23 @@ function setDesiredDshPlugins(states: Record<string, boolean>) {
   desiredDshResources.setPlugins(states);
 }
 
+function setDesiredDshPluginComponents(states: Record<string, Record<string, boolean>>) {
+  desiredDshResources.setPluginComponents(states);
+}
+
 function sameBooleanStates(left: Readonly<Record<string, boolean>>, right: Readonly<Record<string, boolean>>): boolean {
   const leftEntries = Object.entries(left);
   return leftEntries.length === Object.keys(right).length
     && leftEntries.every(([key, value]) => right[key] === value);
+}
+
+function sameComponentStates(
+  left: Readonly<Record<string, Readonly<Record<string, boolean>>>>,
+  right: Readonly<Record<string, Readonly<Record<string, boolean>>>>
+): boolean {
+  const packages = Object.keys(left);
+  return packages.length === Object.keys(right).length
+    && packages.every(packageName => right[packageName] && sameBooleanStates(left[packageName], right[packageName]));
 }
 
 function dshResourceSchemeManager() {
@@ -3720,7 +3735,8 @@ function dshResourceSchemeManager() {
     storePath: dshResourceSchemesPath(),
     inventory: dshResourceInventory,
     setDesiredSkills: setDesiredDshSkills,
-    setDesiredPlugins: setDesiredDshPlugins
+    setDesiredPlugins: setDesiredDshPlugins,
+    setDesiredPluginComponents: setDesiredDshPluginComponents
   });
 }
 
@@ -3744,12 +3760,14 @@ function restoreDesiredDshResources() {
     const allPlugins = snapshot.schemes.find(item => item.id === ALL_DSH_SCHEME_ID)?.plugins ?? [];
     const allowPluginDisable = !scheme.plugins.some(id => snapshot.legacyRuntimePluginIds.includes(id));
     const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected, dshPluginPackageNames(allPlugins), allowPluginDisable);
+    const schemePluginComponents = dshDesiredPluginComponentStates(scheme.pluginComponentOverrides);
     const current = desiredDshResources.current();
     const next = desiredDshResources.reconcileScheme(
       schemeSkillStates,
       scheme.id === ALL_DSH_SCHEME_ID,
       schemePluginStates,
-      allowPluginDisable
+      allowPluginDisable,
+      schemePluginComponents
     );
     const skillsInitialized = desiredDshResources.isSkillsInitialized();
     const pluginsInitialized = desiredDshResources.isPluginsInitialized();
@@ -3762,6 +3780,9 @@ function restoreDesiredDshResources() {
     if (snapshot.inventory.runtimeConnected
       && (!pluginsInitialized || !sameBooleanStates(nextPlugins, current.plugins))) {
       setDesiredDshPlugins(nextPlugins);
+    }
+    if (!sameComponentStates(next.pluginComponents, current.pluginComponents)) {
+      setDesiredDshPluginComponents(next.pluginComponents);
     }
   } catch {
     // A malformed scheme file is reported by the resource page; never block the event bridge.
@@ -3892,6 +3913,7 @@ function startEventServer() {
           ok: true,
           desiredSkills: desired.skills,
           desiredPluginPackages: desired.plugins,
+          desiredPluginComponents: desired.pluginComponents,
           skillPolicy: {
             defaultEnabled: desired.skillDefaultEnabled,
             states: desired.skills
@@ -4215,6 +4237,7 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-resource-scheme-delete", (_, schemeId: unknown) => dshResourceSchemeManager().delete(typeof schemeId === "string" ? schemeId : ""));
   ipcMain.handle("companion:dsh-resource-scheme-apply", (_, schemeId: unknown) => dshResourceSchemeManager().apply(typeof schemeId === "string" ? schemeId : ""));
   ipcMain.handle("companion:dsh-resource-state", (_, input: DshResourceStateInput) => dshResourceSchemeManager().setResourceState(input));
+  ipcMain.handle("companion:dsh-plugin-component-state", (_, input: DshPluginComponentStateInput) => dshResourceSchemeManager().setPluginComponentState(input));
   ipcMain.handle("companion:dsh-skill-marketplace", (_, force?: boolean) => dshSkillMarketplace().snapshot(Boolean(force)));
   ipcMain.handle("companion:dsh-skill-repo-add", (_, repo: DshSkillRepo) => dshSkillMarketplace().addRepo(repo));
   ipcMain.handle("companion:dsh-skill-repo-remove", (_, owner: unknown, name: unknown) => dshSkillMarketplace().removeRepo(String(owner ?? ""), String(name ?? "")));
