@@ -88,9 +88,21 @@ export function DshSchemeEditor({
     setDraft(current => {
       const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, knownPluginIds, activeTab, availableResources));
       let hidden = current[activeTab].filter(id => !visible.has(id));
-      if (activeTab === "plugins" && removing && !resource.id.startsWith("plugin:package:")) {
-        const packageAlias = `plugin:package:${resource.packageName ?? resource.name}`;
-        hidden = hidden.filter(id => id !== packageAlias);
+      if (activeTab === "plugins" && !resource.id.startsWith("plugin:package:")) {
+        const packageName = resource.packageName ?? resource.name;
+        const packageAlias = `plugin:package:${packageName}`;
+        if (removing) {
+          hidden = hidden.filter(id => id !== packageAlias);
+        } else if (initial.plugins.includes(packageAlias)) {
+          const originalRuntimeIds = availableResources
+            .filter(item => !item.id.startsWith("plugin:package:")
+              && (item.packageName ?? item.name) === packageName
+              && initial.plugins.includes(item.id))
+            .map(item => item.id);
+          if (originalRuntimeIds.length > 0 && originalRuntimeIds.every(id => next.has(id))) {
+            hidden = [packageAlias, ...hidden.filter(id => id !== packageAlias)];
+          }
+        }
       }
       return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
     });

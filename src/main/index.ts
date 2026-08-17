@@ -3742,12 +3742,14 @@ function restoreDesiredDshResources() {
     const selectedSkills = new Set(scheme.skills);
     const schemeSkillStates = dshDesiredSkillStates(snapshot.inventory.skills, selectedSkills);
     const allPlugins = snapshot.schemes.find(item => item.id === ALL_DSH_SCHEME_ID)?.plugins ?? [];
-    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected, dshPluginPackageNames(allPlugins));
+    const allowPluginDisable = !scheme.plugins.some(id => snapshot.legacyRuntimePluginIds.includes(id));
+    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected, dshPluginPackageNames(allPlugins), allowPluginDisable);
     const current = desiredDshResources.current();
     const next = desiredDshResources.reconcileScheme(
       schemeSkillStates,
       scheme.id === ALL_DSH_SCHEME_ID,
-      schemePluginStates
+      schemePluginStates,
+      allowPluginDisable
     );
     const skillsInitialized = desiredDshResources.isSkillsInitialized();
     const pluginsInitialized = desiredDshResources.isPluginsInitialized();

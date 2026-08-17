@@ -35,6 +35,13 @@ describe("DSH desired resource state", () => {
     });
   });
 
+  it("clears stale plugin overrides while a legacy scheme is unresolved", () => {
+    const state = new DshDesiredResourceState();
+    state.setPlugins({ headless: false, selected: false });
+
+    expect(state.reconcileScheme({}, false, { selected: true }, false).plugins).toEqual({ selected: true });
+  });
+
   it("replacing state for a scheme switch clears prior live overrides", () => {
     const state = new DshDesiredResourceState();
     state.setSkills({ local: true }, false);

@@ -21,6 +21,7 @@ const plugins = Array.from({ length: 160 }, (_, index) => ({
 const snapshot: DshResourceSchemesSnapshot = {
   schemaVersion: 1,
   pluginRuntimePackages: {},
+  legacyRuntimePluginIds: [],
   schemes: [{
     id: "default",
     name: "Default",
@@ -253,6 +254,53 @@ describe("DSH resource schemes page", () => {
     const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
     expect(saved.plugins).not.toContain(aliasId);
     expect(saved.plugins).not.toContain(runtimeId);
+  });
+
+  it("restores package selection when a mapped runtime removal is undone", async () => {
+    const runtimeId = "plugin:entry-159";
+    const aliasId = "plugin:package:@deepseek-ai/plugin-159";
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...scheme.plugins] }))
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
+    fireEvent.click(await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ }));
+    const removed = await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ });
+    expect(removed.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(removed);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).toContain(aliasId);
+    expect(saved.plugins).toContain(runtimeId);
+  });
+
+  it("keeps an intentionally split package explicit after a partial undo", async () => {
+    const aliasId = "plugin:package:demo-package";
+    const mappedPlugins = [
+      { id: "plugin:runtime-a", kind: "plugin" as const, name: "demo-a", packageName: "demo-package", enabled: true, manageable: true },
+      { id: "plugin:runtime-b", kind: "plugin" as const, name: "demo-b", packageName: "demo-package", enabled: true, manageable: true }
+    ];
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...mappedPlugins.map(plugin => plugin.id)] })),
+      inventory: { ...snapshot.inventory, plugins: mappedPlugins }
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("demo-a");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(await screen.findByRole("button", { name: /demo-a/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /demo-b/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /demo-a/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(aliasId);
+    expect(saved.plugins).toContain("plugin:runtime-a");
+    expect(saved.plugins).not.toContain("plugin:runtime-b");
   });
 
   it("removes a shared package alias while retaining other selected runtime entries", async () => {

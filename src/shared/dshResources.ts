@@ -46,6 +46,7 @@ export type DshResourceSchemeStore = {
   schemaVersion: typeof DSH_RESOURCE_SCHEME_VERSION;
   schemes: DshResourceScheme[];
   pluginRuntimePackages: Record<string, string>;
+  legacyRuntimePluginIds: string[];
   appliedSchemeId: string | null;
 };
 
@@ -107,6 +108,7 @@ export function createEmptyDshResourceSchemesSnapshot(scannedAt = 0): DshResourc
       updatedAt: now
     }],
     pluginRuntimePackages: {},
+    legacyRuntimePluginIds: [],
     appliedSchemeId: DEFAULT_DSH_SCHEME_ID,
     inventory: { skills: [], plugins: [], scannedAt, runtimeConnected: false },
     drift: { schemeId: DEFAULT_DSH_SCHEME_ID, isDrifted: false, skills: false, plugins: false }

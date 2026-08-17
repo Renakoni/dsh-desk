@@ -52,12 +52,13 @@ export class DshDesiredResourceState {
   reconcileScheme(
     skillBaseline: Readonly<Record<string, boolean>>,
     skillDefaultEnabled: boolean,
-    pluginBaseline: Readonly<Record<string, boolean>>
+    pluginBaseline: Readonly<Record<string, boolean>>,
+    preservePluginOverrides = true
   ): DshDesiredResourceSnapshot {
     return {
       skills: this.skillsInitialized ? withMissingStates(this.skills, skillBaseline) : { ...skillBaseline },
       skillDefaultEnabled,
-      plugins: this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline }
+      plugins: preservePluginOverrides && this.pluginsInitialized ? withMissingStates(this.plugins, pluginBaseline) : { ...pluginBaseline }
     };
   }
 }
