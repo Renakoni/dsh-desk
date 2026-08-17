@@ -1,10 +1,11 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Code2, Copy, Package, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Store } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Code2, Copy, Package, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 import {
   ALL_DSH_SCHEME_ID,
   DEFAULT_DSH_SCHEME_ID,
   createEmptyDshResourceSchemesSnapshot,
+  type DshPluginComponentOverrideState,
   type DshResourceItem,
   type DshResourceScheme,
   type DshResourceSchemeSaveInput,
@@ -116,7 +117,8 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
         name: source ? nextCopyName(schemeDisplayName(source, t), snapshot.schemes, t) : "",
         ...(source?.description ? { description: source.description } : {}),
         skills: source ? [...source.skills] : [],
-        plugins: source ? [...source.plugins] : []
+        plugins: source ? [...source.plugins] : [],
+        pluginComponentOverrides: source ? [...source.pluginComponentOverrides] : []
       },
       protectedScheme: false
     });
@@ -164,6 +166,16 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     setSnapshot(result.snapshot);
   }
 
+  async function changePluginComponentState(resource: DshResourceItem, componentKey: string, state: DshPluginComponentOverrideState | "default") {
+    if (!selectedScheme || !resource.packageName) return;
+    const busyId = `${resource.id}:${componentKey}`;
+    setBusyAction("resource"); setBusyResourceId(busyId);
+    const result = await window.companion.setDshPluginComponentState({ schemeId: selectedScheme.id, packageName: resource.packageName, componentKey, state }).catch(() => null);
+    setBusyAction(null); setBusyResourceId(null);
+    if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.updateComponentFailed", "Couldn't update the plugin component."); setActionError(message); toast.error(message); return; }
+    setSnapshot(result.snapshot);
+  }
+
   if (marketOpen) return <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page"><DshMarketPanel onBack={() => setMarketOpen(false)} onChanged={() => void refresh()} /></div>;
 
   if (editor) return (
@@ -200,15 +212,36 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
       {loadError || actionError ? <section className="connection-error">{loadError ?? actionError}</section> : null}
       <section className="claude-resource-list-toolbar dsh-plugin-toolbar"><div className="claude-resource-search dark dsh-plugin-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(activeTab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", activeTab === "plugins" ? "Search plugins" : "Search skills")} /></div><button type="button" className="claude-resource-search-refresh dsh-plugin-icon-button" onClick={() => void refresh()} disabled={busyAction !== null} aria-label={t("dshResources.refresh", "Refresh")}><RefreshCw size={17} className={busyAction === "refresh" ? "spinning" : undefined} /></button></section>
-      <ResourceTable resourceType={activeTab} items={filteredItems} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} onState={changeResourceState} />
+      <ResourceTable resourceType={activeTab} items={filteredItems} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} scheme={selectedScheme} appliedSchemeId={snapshot.appliedSchemeId} onState={changeResourceState} onComponentState={changePluginComponentState} />
     </div>
   );
 }
 
-function ResourceTable({ resourceType, items, loading, busyResourceId, hideSensitiveContent, onState }: { resourceType: DshResourceTab; items: DshResourceItem[]; loading: boolean; busyResourceId: string | null; hideSensitiveContent: boolean; onState: (resource: DshResourceItem, enabled: boolean) => void }) {
+function ResourceTable({ resourceType, items, loading, busyResourceId, hideSensitiveContent, scheme, appliedSchemeId, onState, onComponentState }: {
+  resourceType: DshResourceTab;
+  items: DshResourceItem[];
+  loading: boolean;
+  busyResourceId: string | null;
+  hideSensitiveContent: boolean;
+  scheme?: DshResourceScheme;
+  appliedSchemeId: string | null;
+  onState: (resource: DshResourceItem, enabled: boolean) => void;
+  onComponentState: (resource: DshResourceItem, componentKey: string, state: DshPluginComponentOverrideState | "default") => void;
+}) {
+  return resourceType === "plugins"
+    ? <PluginResourceList items={items} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} scheme={scheme} appliedSchemeId={appliedSchemeId} onState={onState} onComponentState={onComponentState} />
+    : <SkillResourceList items={items} loading={loading} busyResourceId={busyResourceId} hideSensitiveContent={hideSensitiveContent} onState={onState} />;
+}
+
+function SkillResourceList({ items, loading, busyResourceId, hideSensitiveContent, onState }: {
+  items: DshResourceItem[];
+  loading: boolean;
+  busyResourceId: string | null;
+  hideSensitiveContent: boolean;
+  onState: (resource: DshResourceItem, enabled: boolean) => void;
+}) {
   const { t } = useI18n();
   const virtual = useVirtualRows(items, ROW_HEIGHT, `${items.map(item => item.id).join("|")}:${loading}`, 5);
-  const ResourceIcon = resourceType === "plugins" ? Package : Code2;
   return (
     <section ref={virtual.viewportRef} className="claude-resource-table dsh-resource-list" onScroll={event => virtual.onScroll(event.currentTarget.scrollTop)}>
       {loading && items.length === 0 ? <div className="claude-resource-empty">{t("dshResources.scanning", "Scanning...")}</div> : items.length === 0 ? <div className="claude-resource-empty">{t("dshResources.noResources", "This scheme has no resources of this type.")}</div> : (
@@ -219,7 +252,7 @@ function ResourceTable({ resourceType, items, loading, busyResourceId, hideSensi
             const busy = busyResourceId === resource.id;
             return (
               <article key={resource.id} className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : resource.enabled ? "enabled" : "disabled"}`} style={{ height: ROW_HEIGHT, transform: `translateY(${index * ROW_HEIGHT}px)` }}>
-                <div className="dsh-resource-mark"><ResourceIcon size={17} aria-hidden="true" /></div>
+                <div className="dsh-resource-mark"><Code2 size={17} aria-hidden="true" /></div>
                 <div className="claude-resource-row-main dsh-resource-copy"><div className="claude-resource-name-line dsh-resource-title"><strong>{resource.name}</strong></div>{presentation.description ? <p title={presentation.description}>{presentation.description}</p> : null}{presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}</div>
                 <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.enabled ? "Enabled" : "Disabled")}</span>
                 {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action dsh-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
@@ -232,7 +265,65 @@ function ResourceTable({ resourceType, items, loading, busyResourceId, hideSensi
   );
 }
 
-function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins] }; }
+function PluginResourceList({ items, loading, busyResourceId, hideSensitiveContent, scheme, appliedSchemeId, onState, onComponentState }: {
+  items: DshResourceItem[];
+  loading: boolean;
+  busyResourceId: string | null;
+  hideSensitiveContent: boolean;
+  scheme?: DshResourceScheme;
+  appliedSchemeId: string | null;
+  onState: (resource: DshResourceItem, enabled: boolean) => void;
+  onComponentState: (resource: DshResourceItem, componentKey: string, state: DshPluginComponentOverrideState | "default") => void;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  if (loading && items.length === 0) return <section className="claude-resource-table dsh-resource-list"><div className="claude-resource-empty">{t("dshResources.scanning", "Scanning...")}</div></section>;
+  if (items.length === 0) return <section className="claude-resource-table dsh-resource-list"><div className="claude-resource-empty">{t("dshResources.noResources", "This scheme has no resources of this type.")}</div></section>;
+  return (
+    <section className="claude-resource-table dsh-resource-list dsh-plugin-bundle-list">
+      {items.map(resource => {
+        const presentation = dshResourcePresentation(resource, hideSensitiveContent, t("dshResources.detailsHidden", "Resource details hidden"));
+        const components = resource.components ?? [];
+        const open = expanded.has(resource.id);
+        const busy = busyResourceId === resource.id;
+        return (
+          <div className={`dsh-plugin-bundle ${open ? "expanded" : ""}`} key={resource.id}>
+            <article className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : resource.enabled ? "enabled" : "disabled"}`}>
+              <div className="dsh-resource-mark"><Package size={17} aria-hidden="true" /></div>
+              <div className="claude-resource-row-main dsh-resource-copy">
+                <div className="claude-resource-name-line dsh-resource-title"><strong>{resource.name}</strong></div>
+                {presentation.description ? <p title={presentation.description}>{presentation.description}</p> : null}
+                {presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}
+                {components.length > 0 ? <button type="button" className="dsh-component-disclosure" aria-expanded={open} aria-label={t("dshResources.showComponents", "View {count} runtime components", { count: components.length })} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id); return next; })}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
+              </div>
+              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : resource.enabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : resource.enabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : resource.enabled ? "Enabled" : "Disabled")}</span>
+              {resource.manageable && !resource.required ? <button type="button" className="claude-profile-resource-action dsh-resource-action" onClick={() => onState(resource, !resource.enabled)} disabled={busyResourceId !== null}>{resource.enabled ? <PowerOff size={13} /> : <Power size={13} />}{busy ? "..." : t(resource.enabled ? "dshResources.disable" : "dshResources.enable", resource.enabled ? "Disable" : "Enable")}</button> : <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t(resource.missing ? "dshResources.needsAttention" : resource.required ? "dshResources.required" : "dshResources.unavailable", resource.missing ? "Needs attention" : resource.required ? "Required" : "Unavailable")}</span>}
+            </article>
+            {open ? <div className="dsh-component-list">{components.map(component => {
+              const override = scheme?.pluginComponentOverrides.find(item => item.componentKey === component.key)?.state ?? "default";
+              const canChange = Boolean(component.manageable && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
+              const componentBusy = busyResourceId === `${resource.id}:${component.key}`;
+              const phase = component.fiberPhase === "failed" ? "failed" : component.enabled && component.fiberPhase !== "active" ? "starting" : component.enabled ? "active" : "idle";
+              const effectiveLabel = phase === "failed" ? t("dshResources.componentFailed", "Failed") : phase === "starting" ? t("dshResources.componentStarting", "Starting") : component.enabled ? t("dshResources.componentRunning", "Running") : t("dshResources.componentStopped", "Stopped");
+              return <div className={`dsh-component-row ${phase} ${componentBusy ? "busy" : ""}`} aria-busy={componentBusy} key={component.key}>
+                <span className="dsh-component-line" aria-hidden="true" />
+                <span className="dsh-component-copy"><strong>{component.name}</strong><code title={component.moduleName}>{hideSensitiveContent ? t("dshResources.detailsHidden", "Resource details hidden") : component.moduleName}</code></span>
+                <span className={`dsh-component-effective ${phase}`}><i />{effectiveLabel}</span>
+                {component.manageable ? <div className="dsh-component-segments" role="group" aria-label={t("dshResources.componentMode", "{name} mode", { name: component.name })}>{([
+                  ["default", t("dshResources.componentDefault", "Follow DSH")],
+                  ["enabled", t("dshResources.componentEnable", "Enable")],
+                  ["disabled", t("dshResources.componentDisable", "Disable")]
+                ] as const).map(([state, label]) => <button type="button" key={state} className={override === state ? "selected" : ""} disabled={!canChange || busyResourceId !== null} aria-pressed={override === state} aria-label={`${label} ${component.name}`} onClick={() => onComponentState(resource, component.key, state)}>{label}</button>)}</div> : <span className="dsh-component-locked">{t("dshResources.componentRequired", "Required")}</span>}
+              </div>;
+            })}</div> : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins], pluginComponentOverrides: [...scheme.pluginComponentOverrides] }; }
 function nextCopyName(name: string, schemes: DshResourceScheme[], t: I18nTranslate) { let index = 1; let value = t("dshResources.copyName", "{name} Copy", { name }); while (schemes.some(scheme => scheme.name.toLocaleLowerCase() === value.toLocaleLowerCase())) value = t("dshResources.copyNameNumbered", "{name} Copy {index}", { name, index: ++index }); return value; }
 function schemeDisplayName(scheme: DshResourceScheme, t: I18nTranslate) { return scheme.id === DEFAULT_DSH_SCHEME_ID ? t("dshResources.defaultScheme", "Default") : scheme.id === ALL_DSH_SCHEME_ID ? t("dshResources.allScheme", "All") : scheme.name; }
 function schemeSortGroup(id: string) { return id === DEFAULT_DSH_SCHEME_ID ? 0 : id === ALL_DSH_SCHEME_ID ? 1 : 2; }
@@ -245,6 +336,9 @@ function issueMessage(issues: Array<{ code: string; message: string }>, t: I18nT
     "inactive-scheme": "inactiveScheme",
     "missing-resource": "missingResource",
     "protected-resource": "requiredResource",
+    "invalid-component-state": "updateComponentFailed",
+    "component-package-disabled": "updateComponentFailed",
+    "component-state-failed": "updateComponentFailed",
     "scheme-apply-failed": "applySchemeFailed",
     "resource-state-failed": "updateStateFailed"
   };

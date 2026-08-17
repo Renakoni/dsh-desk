@@ -19,6 +19,7 @@ export function logicalDshResources(resources: DshResourceItem[], tab: DshResour
       ?? entries.find(item => item.description)
       ?? entries[0];
     const required = entries.some(item => item.required);
+    const components = [...new Map(entries.flatMap(item => item.components ?? []).map(component => [component.key, component])).values()];
     return {
       ...representative,
       id: `${PACKAGE_PLUGIN_PREFIX}${packageName}`,
@@ -27,6 +28,7 @@ export function logicalDshResources(resources: DshResourceItem[], tab: DshResour
       enabled: entries.every(item => item.enabled),
       manageable: !required && entries.some(item => item.manageable),
       schemeSelectable: entries.some(item => item.schemeSelectable ?? item.manageable),
+      ...(components.length > 0 ? { components } : {}),
       required
     };
   });
@@ -85,6 +87,10 @@ export function filterDshResources(resources: DshResourceItem[], query: string, 
   if (!needle) return resources;
   return resources.filter(resource => [
     resource.name,
-    ...(hideSensitiveContent ? [] : [resource.description, resource.detail])
+    ...(hideSensitiveContent ? [] : [
+      resource.description,
+      resource.detail,
+      ...(resource.components ?? []).flatMap(component => [component.name, component.moduleName])
+    ])
   ].filter(Boolean).join(" ").toLocaleLowerCase().includes(needle));
 }

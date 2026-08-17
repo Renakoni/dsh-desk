@@ -10,7 +10,7 @@ import type {
   ClaudeResourcesSnapshot
 } from "../shared/claudeProfiles";
 import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
-import type { DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
+import type { DshPluginComponentStateInput, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 
 export interface PetSnapshot {
   state: PetState;
@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld("companion", {
   deleteDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-delete", schemeId),
   applyDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-apply", schemeId),
   setDshResourceState: (input: DshResourceStateInput) => ipcRenderer.invoke("companion:dsh-resource-state", input),
+  setDshPluginComponentState: (input: DshPluginComponentStateInput) => ipcRenderer.invoke("companion:dsh-plugin-component-state", input),
   onDshResourcesUpdated: (callback: () => void) => onChannel("companion:dsh-resources-updated", callback),
   getDshSkillMarketplace: (force?: boolean) => ipcRenderer.invoke("companion:dsh-skill-marketplace", force),
   addDshSkillRepo: (repo: DshSkillRepo) => ipcRenderer.invoke("companion:dsh-skill-repo-add", repo),

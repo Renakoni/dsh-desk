@@ -29,6 +29,7 @@ const snapshot: DshResourceSchemesSnapshot = {
     name: "Default",
     skills: ["skill:name:review"],
     plugins: pluginAliases,
+    pluginComponentOverrides: [],
     isProtected: true,
     createdAt: 1,
     updatedAt: 1
@@ -37,6 +38,7 @@ const snapshot: DshResourceSchemesSnapshot = {
     name: "All",
     skills: ["skill:name:review"],
     plugins: pluginAliases,
+    pluginComponentOverrides: [],
     isProtected: true,
     createdAt: 1,
     updatedAt: 1
@@ -58,6 +60,7 @@ function api(resourceSnapshot = snapshot) {
     deleteDshResourceScheme: vi.fn(),
     applyDshResourceScheme: vi.fn(async (schemeId: string) => ({ ok: true, schemeId, snapshot: { ...snapshot, appliedSchemeId: schemeId } })),
     setDshResourceState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
+    setDshPluginComponentState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
     onDshResourcesUpdated: vi.fn(() => () => undefined),
     getDshPluginMarketplace: vi.fn(async () => ({ source: "remote", sourceName: "market", sourceUrl: "https://example.com", categories: [], plugins: [{ id: "demo", name: "DSH Demo", owner: "AcidGr", packageName: "dsh-demo", repositoryUrl: "https://github.com/demo/dsh-demo", category: "tools", description: { en: "Demo plugin", zh: "示例插件" }, installSpec: "github:demo/dsh-demo", stars: 1234, added: "2026-08-01" }, { id: "zulu", name: "Zulu Plugin", owner: "Example", packageName: "zulu-plugin", repositoryUrl: "https://github.com/example/zulu-plugin", category: "tools", description: { en: "Zulu plugin", zh: "Zulu 插件" }, installSpec: "github:example/zulu-plugin", stars: 50, added: "2026-08-02" }] })),
     listDshPlugins: vi.fn(async () => ({ profiles: [], plugins: [], dshHome: "C:\\.dsh", npxAvailable: true, scannedAt: 1 })),
@@ -121,6 +124,93 @@ describe("DSH resource schemes page", () => {
     await screen.findByText("review");
     fireEvent.click(screen.getByRole("button", { name: "禁用" }));
     await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({ schemeId: "default", resourceId: "skill:name:review", enabled: false }));
+  });
+
+  it("reveals bundle components inline and saves a scheme-level override", async () => {
+    const packageId = "plugin:package:@deepseek-ai/dsh-base";
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [packageId] })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [{
+          id: packageId,
+          kind: "plugin",
+          name: "@deepseek-ai/dsh-base",
+          packageName: "@deepseek-ai/dsh-base",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{
+            key: "include:timer",
+            name: "timer",
+            moduleName: "@deepseek-ai/cordis-plugin-timer",
+            baselineEnabled: true,
+            enabled: true,
+            manageable: true,
+            fiberPhase: "active"
+          }]
+        }]
+      }
+    };
+    const mockApi = renderPage(api(componentSnapshot));
+    await screen.findByText("@deepseek-ai/dsh-base");
+    fireEvent.click(screen.getByRole("button", { name: "查看 1 个运行组件" }));
+    expect(await screen.findByText("timer")).not.toBeNull();
+    expect(screen.getByText("@deepseek-ai/cordis-plugin-timer")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "禁用 timer" }));
+    await waitFor(() => expect(mockApi.setDshPluginComponentState).toHaveBeenCalledWith({
+      schemeId: "default",
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "disabled"
+    }));
+  });
+
+  it("shows one component override consistently under different runtime bundle owners", async () => {
+    const packageNames = ["@deepseek-ai/dsh-web-app", "@deepseek-ai/dsh-headless"];
+    const component = {
+      key: "include:code-runtime",
+      name: "code-runtime",
+      moduleName: "@deepseek-ai/dsh-code-runtime-worker-thread",
+      baselineEnabled: true,
+      enabled: false,
+      manageable: true,
+      fiberPhase: null
+    } as const;
+    const componentSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: packageNames.map(packageName => `plugin:package:${packageName}`),
+        pluginComponentOverrides: scheme.id === "default" ? [{
+          packageName: "@deepseek-ai/dsh-web-app",
+          componentKey: component.key,
+          state: "disabled"
+        }] : []
+      })),
+      inventory: {
+        ...snapshot.inventory,
+        plugins: packageNames.map(packageName => ({
+          id: `plugin:package:${packageName}`,
+          kind: "plugin" as const,
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [component]
+        }))
+      }
+    };
+
+    renderPage(api(componentSnapshot));
+    await screen.findByText("@deepseek-ai/dsh-web-app");
+    for (const disclosure of screen.getAllByRole("button", { name: "查看 1 个运行组件" })) fireEvent.click(disclosure);
+    expect(screen.getAllByRole("button", { name: "禁用 code-runtime" })).toHaveLength(2);
+    for (const button of screen.getAllByRole("button", { name: "禁用 code-runtime" })) {
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+    }
   });
 
   it("uses one market entry and separates plugin and Skill markets inside it", async () => {

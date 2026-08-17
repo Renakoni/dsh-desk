@@ -1264,6 +1264,185 @@
   color: var(--settings-faint);
 }
 
+.dsh-plugins-page .dsh-plugin-bundle:not(:last-child) {
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.dsh-plugins-page .dsh-plugin-bundle .dsh-resource-row.claude-profile-readonly-row {
+  position: static;
+  inset: auto;
+  min-height: 76px;
+  height: auto;
+  border-bottom: 0;
+  transform: none;
+}
+
+.dsh-plugins-page .dsh-plugin-bundle.expanded > .dsh-resource-row {
+  background: color-mix(in oklch, var(--settings-surface-hover) 54%, transparent);
+}
+
+.dsh-component-disclosure {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--settings-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.dsh-component-disclosure:hover {
+  color: var(--settings-accent);
+}
+
+.dsh-component-disclosure:focus-visible,
+.dsh-component-segments button:focus-visible {
+  outline: 1px solid var(--settings-accent);
+  outline-offset: -1px;
+}
+
+.dsh-component-list {
+  padding: 2px 12px 6px 57px;
+  border-top: 1px solid var(--settings-line);
+  background: color-mix(in oklch, var(--settings-surface-raised) 58%, transparent);
+}
+
+.dsh-component-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 12px minmax(180px, 1fr) 78px minmax(248px, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.dsh-component-row:not(:last-child) {
+  border-bottom: 1px solid color-mix(in oklch, var(--settings-line) 72%, transparent);
+}
+
+.dsh-component-line {
+  width: 9px;
+  height: 20px;
+  align-self: start;
+  border-bottom: 1px solid var(--settings-line-strong);
+  border-left: 1px solid var(--settings-line-strong);
+}
+
+.dsh-component-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.dsh-component-copy strong {
+  overflow: hidden;
+  color: var(--settings-ink);
+  font-size: 12px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-component-copy code {
+  overflow: hidden;
+  color: var(--settings-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-component-effective {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--settings-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.dsh-component-effective i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--settings-faint);
+}
+
+.dsh-component-effective.active {
+  color: var(--settings-success);
+}
+
+.dsh-component-effective.active i {
+  background: var(--settings-success);
+}
+
+.dsh-component-effective.starting {
+  color: var(--settings-accent);
+}
+
+.dsh-component-effective.starting i {
+  background: var(--settings-accent);
+}
+
+.dsh-component-effective.failed {
+  color: var(--settings-danger);
+}
+
+.dsh-component-effective.failed i {
+  background: var(--settings-danger);
+}
+
+.dsh-component-segments {
+  width: 248px;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  border: 1px solid var(--settings-line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--settings-surface);
+}
+
+.dsh-component-segments button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  color: var(--settings-muted);
+  background: transparent;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.dsh-component-segments button:not(:first-child) {
+  border-left: 1px solid var(--settings-line);
+}
+
+.dsh-component-segments button:hover:not(:disabled):not(.selected) {
+  color: var(--settings-ink);
+  background: var(--settings-surface-hover);
+}
+
+.dsh-component-segments button.selected {
+  color: var(--settings-accent);
+  background: color-mix(in oklch, var(--settings-accent) 12%, var(--settings-surface-raised));
+  font-weight: 700;
+}
+
+.dsh-component-segments button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.dsh-component-locked {
+  justify-self: end;
+  color: var(--settings-faint);
+  font-size: 10px;
+}
+
 .dsh-plugins-page .claude-resource-empty,
 .dsh-plugins-page .claude-profile-transfer-empty {
   color: var(--settings-muted);
@@ -1487,6 +1666,10 @@
     grid-template-columns: 34px minmax(0, 1fr) auto;
   }
   .dsh-plugins-page .dsh-resource-status { display: none; }
+  .dsh-component-list { padding-left: 46px; }
+  .dsh-component-row { grid-template-columns: 12px minmax(0, 1fr) auto; }
+  .dsh-component-segments { width: 100%; grid-column: 2 / -1; }
+  .dsh-component-locked { grid-column: 3; }
   .dsh-plugins-page .dsh-market-list-head,
   .dsh-plugins-page .dsh-market-row {
     grid-template-columns: 34px minmax(0, 1fr) 94px;

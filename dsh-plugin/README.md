@@ -33,7 +33,11 @@ model request bodies. DSH Desk stores usage locally in `dsh-usage.ndjson`
 under Electron's DSH Desk user-data directory.
 
 The bridge also publishes the Loader's non-group plugin inventory to the same
-loopback server. DSH Desk uses this live projection for resource schemes; core
-DeepSeek Harness entries and the bridge itself remain read-only. The inventory
-is republished after Loader changes and periodically so starting DSH Desk after
+loopback server. Each entry carries the top-level profile bundle that first
+inserted it; entries created by an aggregate plugin inherit that bundle from
+their nearest runtime ancestor. DSH Desk schemes therefore switch one installed
+bundle and project that state to all of its entries instead of treating internal
+Loader modules as separate plugins. Core DeepSeek Harness bundles and the bridge
+itself remain read-only. The inventory is republished after Loader changes and
+periodically so starting DSH Desk after
 Harness does not require a Harness restart.

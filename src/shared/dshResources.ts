@@ -1,4 +1,16 @@
+import type { DshRuntimePluginPhase } from "./dshPlugins";
+
 export type DshResourceKind = "skill" | "plugin";
+
+export type DshPluginComponent = {
+  key: string;
+  name: string;
+  moduleName: string;
+  baselineEnabled: boolean | null;
+  enabled: boolean;
+  manageable: boolean;
+  fiberPhase: DshRuntimePluginPhase;
+};
 
 export type DshResourceItem = {
   id: string;
@@ -11,6 +23,7 @@ export type DshResourceItem = {
   manageable: boolean;
   schemeSelectable?: boolean;
   sourceIds?: string[];
+  components?: DshPluginComponent[];
   required?: boolean;
   missing?: boolean;
 };
@@ -33,9 +46,18 @@ export type DshResourceScheme = {
   description?: string;
   skills: string[];
   plugins: string[];
+  pluginComponentOverrides: DshPluginComponentOverride[];
   isProtected: boolean;
   createdAt: number;
   updatedAt: number;
+};
+
+export type DshPluginComponentOverrideState = "enabled" | "disabled";
+
+export type DshPluginComponentOverride = {
+  packageName: string;
+  componentKey: string;
+  state: DshPluginComponentOverrideState;
 };
 
 export const DSH_RESOURCE_SCHEME_VERSION = 1 as const;
@@ -68,6 +90,14 @@ export type DshResourceSchemeSaveInput = {
   description?: string;
   skills: string[];
   plugins: string[];
+  pluginComponentOverrides?: DshPluginComponentOverride[];
+};
+
+export type DshPluginComponentStateInput = {
+  schemeId: string;
+  packageName: string;
+  componentKey: string;
+  state: DshPluginComponentOverrideState | "default";
 };
 
 export type DshResourceIssue = {
@@ -95,6 +125,7 @@ export function createEmptyDshResourceSchemesSnapshot(scannedAt = 0): DshResourc
       name: "Default",
       skills: [],
       plugins: [],
+      pluginComponentOverrides: [],
       isProtected: true,
       createdAt: now,
       updatedAt: now
@@ -103,6 +134,7 @@ export function createEmptyDshResourceSchemesSnapshot(scannedAt = 0): DshResourc
       name: "All",
       skills: [],
       plugins: [],
+      pluginComponentOverrides: [],
       isProtected: true,
       createdAt: now,
       updatedAt: now

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DshResourceSchemeManager, inheritDshPluginPackageStates } from "../src/main/dshResourceSchemes";
+import { DshResourceSchemeManager, dshDesiredPluginStates, inheritDshPluginPackageStates } from "../src/main/dshResourceSchemes";
 import { dshSkillResources, scanDshSkills } from "../src/main/dshSkillCatalog";
 import type { DshResourceInventory } from "../src/shared/dshResources";
 
@@ -74,6 +74,40 @@ describe("DSH resource schemes", () => {
     const persisted = JSON.parse(readFileSync(storePath, "utf8"));
     expect(persisted.schemes.find((scheme: { id: string }) => scheme.id === "default").plugins).toEqual(["plugin:package:demo"]);
     expect(persisted.pluginRuntimePackages).toEqual({ "plugin:runtime-entry": "demo" });
+  });
+
+  it("does not assign one protected profile component to an arbitrary runtime package", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-shared-profile-component-"));
+    roots.push(root);
+    const packageNames = ["@deepseek-ai/dsh-web-app", "@deepseek-ai/dsh-headless"];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: packageNames.map(packageName => ({
+          id: `plugin:package:${packageName}`,
+          kind: "plugin" as const,
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          schemeSelectable: true,
+          required: true,
+          sourceIds: ["plugin:include:code-runtime"]
+        })),
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const current = manager.snapshot();
+    expect(current.pluginRuntimePackages).toEqual({});
+    expect(current.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual(
+      packageNames.map(packageName => `plugin:package:${packageName}`)
+    );
   });
 
   it("migrates a legacy runtime-only selection back to package semantics", () => {
@@ -401,6 +435,81 @@ describe("DSH resource schemes", () => {
     expect(desired.at(-1)).toEqual({ "known-runtime": true, "new-runtime": false });
   });
 
+  it("removes legacy internal-module aliases when package inventory becomes authoritative", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-package-migration-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        {
+          id: "default",
+          name: "Default",
+          skills: [],
+          plugins: ["plugin:package:aggregate-bundle", "plugin:package:internal-helper", "plugin:package:removed-bundle"],
+          isProtected: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "all",
+          name: "All",
+          skills: [],
+          plugins: ["plugin:package:aggregate-bundle", "plugin:package:internal-helper"],
+          isProtected: true,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      pluginRuntimePackages: { "plugin:include:helper": "internal-helper" },
+      legacyRuntimePluginIds: [],
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:aggregate-bundle",
+          kind: "plugin",
+          name: "aggregate-bundle",
+          packageName: "aggregate-bundle",
+          enabled: true,
+          manageable: true,
+          schemeSelectable: true,
+          sourceIds: ["plugin:include:helper"]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const snapshot = manager.snapshot();
+    expect(snapshot.schemes.find(scheme => scheme.id === "all")?.plugins).toEqual([
+      "plugin:package:aggregate-bundle"
+    ]);
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:aggregate-bundle",
+      "plugin:package:removed-bundle"
+    ]);
+    expect(snapshot.pluginRuntimePackages).toEqual({ "plugin:include:helper": "aggregate-bundle" });
+  });
+
+  it("publishes one desired state per top-level package alias", () => {
+    const resources: DshResourceInventory["plugins"] = [
+      { id: "plugin:package:aggregate-bundle", kind: "plugin", name: "Aggregate", packageName: "aggregate-bundle", enabled: true, manageable: true },
+      { id: "plugin:package:other-bundle", kind: "plugin", name: "Other", packageName: "other-bundle", enabled: true, manageable: true }
+    ];
+    expect(dshDesiredPluginStates(
+      resources,
+      new Set(["plugin:package:aggregate-bundle"]),
+      new Set(["aggregate-bundle", "other-bundle"])
+    )).toEqual({ "aggregate-bundle": true, "other-bundle": false });
+  });
+
   it("recovers a non-active scheme package selection when Headless connects after Web", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-late-headless-non-active-"));
     roots.push(root);
@@ -684,6 +793,112 @@ describe("DSH resource schemes", () => {
       { "web-entry": true },
       { "plugin:web-entry": "demo", "plugin:headless-entry": "demo" }
     )).toEqual({ "web-entry": true, "headless-entry": true });
+  });
+
+  it("persists tri-state component overrides per scheme and publishes only non-default choices", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-components-"));
+    roots.push(root);
+    const published: Array<Record<string, Record<string, boolean>>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:@deepseek-ai/dsh-base",
+          kind: "plugin",
+          name: "@deepseek-ai/dsh-base",
+          packageName: "@deepseek-ai/dsh-base",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{
+            key: "include:timer",
+            name: "timer",
+            moduleName: "@deepseek-ai/cordis-plugin-timer",
+            baselineEnabled: true,
+            enabled: true,
+            manageable: true,
+            fiberPhase: "active"
+          }]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      setDesiredPluginComponents: states => published.push(states),
+      now: () => 10
+    });
+
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "disabled"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({ "@deepseek-ai/dsh-base": { "include:timer": false } });
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([{
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "disabled"
+    }]);
+
+    expect(manager.setPluginComponentState({
+      schemeId: "default",
+      packageName: "@deepseek-ai/dsh-base",
+      componentKey: "include:timer",
+      state: "default"
+    }).ok).toBe(true);
+    expect(published.at(-1)).toEqual({});
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.pluginComponentOverrides).toEqual([]);
+  });
+
+  it("rejects component changes for the Desk bridge and drops overrides for packages removed from a scheme", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-component-guard-"));
+    roots.push(root);
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [],
+        plugins: [{
+          id: "plugin:package:dsh-desk-plugin",
+          kind: "plugin",
+          name: "dsh-desk-plugin",
+          packageName: "dsh-desk-plugin",
+          enabled: true,
+          manageable: false,
+          required: true,
+          components: [{ key: "include:dsh-desk", name: "dsh-desk", moduleName: "dsh-desk-plugin", baselineEnabled: true, enabled: true, manageable: false, fiberPhase: "active" }]
+        }, {
+          id: "plugin:package:demo",
+          kind: "plugin",
+          name: "demo",
+          packageName: "demo",
+          enabled: true,
+          manageable: true,
+          components: [{ key: "include:demo", name: "demo", moduleName: "demo", baselineEnabled: true, enabled: true, manageable: true, fiberPhase: "active" }]
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      setDesiredPluginComponents: () => undefined,
+      now: () => 10
+    });
+
+    expect(manager.setPluginComponentState({ schemeId: "default", packageName: "dsh-desk-plugin", componentKey: "include:dsh-desk", state: "disabled" }).ok).toBe(false);
+    const created = manager.save({
+      name: "Fine",
+      skills: [],
+      plugins: ["plugin:package:demo"],
+      pluginComponentOverrides: [{ packageName: "demo", componentKey: "include:demo", state: "disabled" }]
+    });
+    expect(created.ok).toBe(true);
+    const schemeId = created.ok ? created.schemeId : "";
+    const removed = manager.save({ id: schemeId, name: "Fine", skills: [], plugins: [] });
+    expect(removed.ok).toBe(true);
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === schemeId)?.pluginComponentOverrides).toEqual([]);
   });
 
   it("keeps a missing resource record when an existing scheme is saved", () => {

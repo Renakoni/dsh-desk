@@ -7,7 +7,8 @@ describe("DSH desired resource state", () => {
     expect(state.reconcileScheme({ local: false }, false, { plugin: true })).toEqual({
       skills: { local: false },
       skillDefaultEnabled: false,
-      plugins: { plugin: true }
+      plugins: { plugin: true },
+      pluginComponents: {}
     });
   });
 
@@ -31,7 +32,8 @@ describe("DSH desired resource state", () => {
     expect(state.reconcileScheme({ local: false, runtime: false }, false, { plugin: true, runtimePlugin: true })).toEqual({
       skills: { local: true, runtime: false },
       skillDefaultEnabled: false,
-      plugins: { plugin: false, runtimePlugin: true }
+      plugins: { plugin: false, runtimePlugin: true },
+      pluginComponents: {}
     });
   });
 
@@ -52,7 +54,16 @@ describe("DSH desired resource state", () => {
     expect(state.current()).toEqual({
       skills: { local: false },
       skillDefaultEnabled: false,
-      plugins: { plugin: true }
+      plugins: { plugin: true },
+      pluginComponents: {}
+    });
+  });
+
+  it("replaces scheme component overrides without inheriting stale entries", () => {
+    const state = new DshDesiredResourceState();
+    state.setPluginComponents({ demo: { "include:first": false } });
+    expect(state.reconcileScheme({}, true, {}, true, { demo: { "include:second": true } }).pluginComponents).toEqual({
+      demo: { "include:second": true }
     });
   });
 });
