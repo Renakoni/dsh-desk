@@ -11,6 +11,18 @@ describe("DSH desired resource state", () => {
     });
   });
 
+  it("does not initialize plugin directives when only Skill state was restored offline", () => {
+    const state = new DshDesiredResourceState();
+    state.setSkills({ local: true }, false);
+
+    expect(state.isSkillsInitialized()).toBe(true);
+    expect(state.isPluginsInitialized()).toBe(false);
+    expect(state.current().plugins).toEqual({});
+    expect(state.reconcileScheme({ local: false }, false, { runtimePlugin: true }).plugins).toEqual({
+      runtimePlugin: true
+    });
+  });
+
   it("preserves offline live overrides and only fills newly discovered resources", () => {
     const state = new DshDesiredResourceState();
     state.setSkills({ local: true }, false);
@@ -21,6 +33,13 @@ describe("DSH desired resource state", () => {
       skillDefaultEnabled: false,
       plugins: { plugin: false, runtimePlugin: true }
     });
+  });
+
+  it("clears stale plugin overrides while a legacy scheme is unresolved", () => {
+    const state = new DshDesiredResourceState();
+    state.setPlugins({ headless: false, selected: false });
+
+    expect(state.reconcileScheme({}, false, { selected: true }, false).plugins).toEqual({ selected: true });
   });
 
   it("replacing state for a scheme switch clears prior live overrides", () => {

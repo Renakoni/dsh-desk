@@ -15,7 +15,7 @@ import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { RoutingToaster } from "../dsh-routing/RoutingToaster";
 import { DshMarketPanel } from "./DshMarketPanel";
 import { DshSchemeEditor } from "./DshSchemeEditor";
-import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 type BusyAction = "refresh" | "save" | "delete" | "apply" | "resource" | null;
@@ -71,6 +71,10 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
   useEffect(() => setQuery(""), [activeTab]);
 
   const selectedScheme = snapshot.schemes.find(scheme => scheme.id === selectedSchemeId) ?? snapshot.schemes[0];
+  const knownPluginIds = useMemo(() => [...new Set([
+    ...(snapshot.schemes.find(scheme => scheme.id === ALL_DSH_SCHEME_ID)?.plugins ?? []),
+    ...Object.values(snapshot.pluginRuntimePackages).map(packageName => `plugin:package:${packageName}`)
+  ])], [snapshot.pluginRuntimePackages, snapshot.schemes]);
   const editorScheme = editor?.initial.id ? snapshot.schemes.find(scheme => scheme.id === editor.initial.id) : undefined;
   const schemeOptions = useMemo(() => {
     const needle = schemeQuery.trim().toLocaleLowerCase();
@@ -84,12 +88,18 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
+  const availableResources = useMemo(
+    () => logicalDshResources(snapshot.inventory[activeTab], activeTab),
+    [activeTab, snapshot.inventory]
+  );
   const items = useMemo(() => {
-    const available = snapshot.inventory[activeTab];
-    const memberIds = selectedScheme?.[activeTab] ?? [];
+    const memberIds = visibleDshSchemeResourceIds(selectedScheme?.[activeTab] ?? []);
     const members = new Set(memberIds);
-    return [...available.filter(item => members.has(item.id)), ...unavailableDshResources(memberIds, available, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))];
-  }, [activeTab, selectedScheme, snapshot.inventory, t]);
+    return [
+      ...availableResources.filter(item => members.has(item.id)),
+      ...unavailableDshResources(memberIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+    ];
+  }, [activeTab, availableResources, knownPluginIds, selectedScheme, t]);
   const filteredItems = useMemo(() => filterDshResources(items, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, items]);
 
   function startEdit(scheme: DshResourceScheme) {
@@ -159,7 +169,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
   if (editor) return (
     <div className="claude-resources-page claude-resources-page-dark claude-profiles-page">
       <RoutingToaster />
-      <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => setEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
+      <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} knownPluginIds={knownPluginIds} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => setEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
       {deleteConfirm && editorScheme ? <ConfirmDialog title={t("dshResources.deleteSchemeTitle", "Delete scheme?")} cancelLabel={t("common.cancel", "Cancel")} confirmLabel={t("common.delete", "Delete")} danger onCancel={() => setDeleteConfirm(false)} onConfirm={() => void deleteScheme(editorScheme.id)}><p>{t("dshResources.deleteSchemeMessage", "Delete \"{name}\" permanently?", { name: schemeDisplayName(editorScheme, t) })}</p></ConfirmDialog> : null}
     </div>
   );
@@ -183,7 +193,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
         </section>
 
         <nav className="claude-resource-subtabs compact claude-profile-resource-tabs dsh-resource-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
-          {tabs.map(tab => { const Icon = tab.icon; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{selectedScheme?.[tab.id].length ?? 0}</small></button>; })}
+          {tabs.map(tab => { const Icon = tab.icon; const count = visibleDshSchemeResourceIds(selectedScheme?.[tab.id] ?? []).length; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{count}</small></button>; })}
           <button type="button" className="claude-resource-subtab claude-resource-refresh-tab dsh-market-button" onClick={() => setMarketOpen(true)} aria-label={t("dshResources.marketplace", "Marketplace")} title={t("dshResources.marketplace", "Marketplace")}><Store size={17} /></button>
         </nav>
       </div>

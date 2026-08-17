@@ -2,29 +2,33 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DshResourceSchemesSnapshot } from "../src/shared/dshResources";
+import type { DshResourceSchemeSaveInput, DshResourceSchemesSnapshot } from "../src/shared/dshResources";
 import { PluginsPage } from "../src/renderer/clawd-migrated/components/plugins/PluginsPage";
-import { dshResourcePresentation } from "../src/renderer/clawd-migrated/components/plugins/dshSchemeResources";
+import { dshResourcePresentation, logicalDshResources, visibleDshSchemeResourceIds } from "../src/renderer/clawd-migrated/components/plugins/dshSchemeResources";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
 const plugins = Array.from({ length: 160 }, (_, index) => ({
   id: `plugin:entry-${index}`,
   kind: "plugin" as const,
   name: `@deepseek-ai/plugin-${index}`,
+  packageName: `@deepseek-ai/plugin-${index}`,
   description: "DSH Loader - active",
   detail: `entry-${index}`,
   enabled: true,
   manageable: index === 159,
   required: index !== 159
 }));
+const pluginAliases = plugins.map(plugin => `plugin:package:${plugin.packageName}`);
 
 const snapshot: DshResourceSchemesSnapshot = {
   schemaVersion: 1,
+  pluginRuntimePackages: Object.fromEntries(plugins.map(plugin => [plugin.id, plugin.packageName])),
+  legacyRuntimePluginIds: [],
   schemes: [{
     id: "default",
     name: "Default",
     skills: ["skill:name:review"],
-    plugins: plugins.map(plugin => plugin.id),
+    plugins: pluginAliases,
     isProtected: true,
     createdAt: 1,
     updatedAt: 1
@@ -32,7 +36,7 @@ const snapshot: DshResourceSchemesSnapshot = {
     id: "all",
     name: "All",
     skills: ["skill:name:review"],
-    plugins: plugins.map(plugin => plugin.id),
+    plugins: pluginAliases,
     isProtected: true,
     createdAt: 1,
     updatedAt: 1
@@ -50,7 +54,7 @@ const snapshot: DshResourceSchemesSnapshot = {
 function api(resourceSnapshot = snapshot) {
   return {
     getDshResourceSchemes: vi.fn(async () => resourceSnapshot),
-    saveDshResourceScheme: vi.fn(async () => ({ ok: false as const, issues: [{ code: "test", message: "test" }] })),
+    saveDshResourceScheme: vi.fn(async (_input: DshResourceSchemeSaveInput) => ({ ok: false as const, issues: [{ code: "test", message: "test" }] })),
     deleteDshResourceScheme: vi.fn(),
     applyDshResourceScheme: vi.fn(async (schemeId: string) => ({ ok: true, schemeId, snapshot: { ...snapshot, appliedSchemeId: schemeId } })),
     setDshResourceState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
@@ -78,6 +82,18 @@ afterEach(() => {
 });
 
 describe("DSH resource schemes page", () => {
+  it("groups runtime entries under one package identity without losing missing records", () => {
+    const ids = ["plugin:package:demo", "plugin:package:removed"];
+    const liveResources = logicalDshResources([
+      { id: "plugin:runtime-web", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: true, manageable: true },
+      { id: "plugin:runtime-headless", kind: "plugin" as const, name: "demo", packageName: "demo", enabled: false, manageable: true }
+    ], "plugins");
+    expect(liveResources).toEqual([
+      expect.objectContaining({ id: "plugin:package:demo", enabled: false, manageable: true })
+    ]);
+    expect(visibleDshSchemeResourceIds(ids)).toEqual(ids);
+  });
+
   it("omits descriptions and identifiers that repeat the resource name", () => {
     expect(dshResourcePresentation({ id: "plugin:demo", kind: "plugin", name: "demo", description: "demo", detail: "demo", enabled: true, manageable: true }, false, "Details hidden")).toEqual({});
     expect(dshResourcePresentation({ id: "plugin:desk", kind: "plugin", name: "dsh-desk-plugin", description: "DSH Desk bridge", detail: "dsh-desk-plugin", enabled: true, manageable: false }, false, "Details hidden")).toEqual({ description: "DSH Desk bridge" });
@@ -140,7 +156,7 @@ describe("DSH resource schemes page", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
       skills: [],
-      plugins: expect.arrayContaining(["plugin:entry-0"])
+      plugins: expect.arrayContaining(["plugin:package:@deepseek-ai/plugin-0"])
     }));
   });
 
@@ -158,7 +174,7 @@ describe("DSH resource schemes page", () => {
     expect((fixed as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
-      plugins: expect.arrayContaining(["plugin:fixed"])
+      plugins: expect.arrayContaining(["plugin:package:fixed-plugin"])
     }));
   });
 
@@ -191,6 +207,198 @@ describe("DSH resource schemes page", () => {
     expect(mockApi.saveDshResourceScheme).toHaveBeenLastCalledWith(expect.objectContaining({
       plugins: expect.not.arrayContaining([missingId])
     }));
+  });
+
+  it("shows an installed package once and preserves other package selections while editing", async () => {
+    const aliasId = "plugin:package:@deepseek-ai/plugin-0";
+    const aliasSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...scheme.plugins] }))
+    };
+    const mockApi = renderPage(api(aliasSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "package:@deepseek-ai/plugin-0" } });
+    expect(screen.queryByText("package:@deepseek-ai/plugin-0")).toBeNull();
+
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
+    fireEvent.click(await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
+      plugins: expect.arrayContaining([aliasId])
+    }));
+  });
+
+  it("removes a mapped package selection as one unit", async () => {
+    const runtimeId = "plugin:entry-159";
+    const aliasId = "plugin:package:@deepseek-ai/plugin-159";
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...scheme.plugins] }))
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
+    fireEvent.click(await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(aliasId);
+    expect(saved.plugins).not.toContain(runtimeId);
+  });
+
+  it("restores package selection when removal is undone", async () => {
+    const runtimeId = "plugin:entry-159";
+    const aliasId = "plugin:package:@deepseek-ai/plugin-159";
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...scheme.plugins] }))
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
+    fireEvent.click(await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ }));
+    const removed = await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ });
+    expect(removed.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(removed);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).toContain(aliasId);
+    expect(saved.plugins).not.toContain(runtimeId);
+  });
+
+  it("renders same-package runtime entries as one removable package", async () => {
+    const aliasId = "plugin:package:demo-package";
+    const mappedPlugins = [
+      { id: "plugin:runtime-a", kind: "plugin" as const, name: "demo-a", packageName: "demo-package", enabled: true, manageable: true },
+      { id: "plugin:runtime-b", kind: "plugin" as const, name: "demo-b", packageName: "demo-package", enabled: true, manageable: true }
+    ];
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      pluginRuntimePackages: Object.fromEntries(mappedPlugins.map(plugin => [plugin.id, plugin.packageName])),
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId] })),
+      inventory: { ...snapshot.inventory, plugins: mappedPlugins }
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("demo-a");
+    expect(screen.queryByText("demo-b")).toBeNull();
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(await screen.findByRole("button", { name: /demo-a/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(aliasId);
+    expect(saved.plugins).not.toContain("plugin:runtime-a");
+    expect(saved.plugins).not.toContain("plugin:runtime-b");
+  });
+
+  it("uses the package alias for a live state change", async () => {
+    const aliasId = "plugin:package:demo-package";
+    const mappedPlugins = [
+      { id: "plugin:runtime-a", kind: "plugin" as const, name: "demo-a", packageName: "demo-package", enabled: false, manageable: true },
+      { id: "plugin:runtime-b", kind: "plugin" as const, name: "demo-b", packageName: "demo-package", enabled: true, manageable: true }
+    ];
+    const mappedSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      pluginRuntimePackages: Object.fromEntries(mappedPlugins.map(plugin => [plugin.id, plugin.packageName])),
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId] })),
+      inventory: { ...snapshot.inventory, plugins: mappedPlugins }
+    };
+    const mockApi = renderPage(api(mappedSnapshot));
+    await screen.findByText("demo-a");
+    fireEvent.click(screen.getByRole("button", { name: "启用" }));
+    await waitFor(() => expect(mockApi.setDshResourceState).toHaveBeenCalledWith({
+      schemeId: "default",
+      resourceId: aliasId,
+      enabled: true
+    }));
+  });
+
+  it("keeps an unresolved Headless-only alias visible and removable while only Web is online", async () => {
+    const aliasId = "plugin:package:headless-only";
+    const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
+    const webAlias = "plugin:package:web-plugin";
+    const partialSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, webAlias] })),
+      inventory: { ...snapshot.inventory, plugins: [webPlugin] }
+    };
+    const mockApi = renderPage(api(partialSnapshot));
+    const alias = await screen.findByText("package:headless-only");
+    const row = alias.closest("article");
+    expect(row?.textContent).not.toContain("缺失");
+    expect(row?.textContent).not.toContain("本机上已不存在");
+    expect(row?.textContent).not.toContain("待处理");
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(await screen.findByRole("button", { name: /package:headless-only/ }));
+    expect(screen.queryByRole("alertdialog", { name: "删除缺失记录？" })).toBeNull();
+    const unselectedAlias = await screen.findByRole("button", { name: /package:headless-only/ });
+    expect(unselectedAlias.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(aliasId);
+  });
+
+  it("can add an installed alias whose Headless runtime is not online", async () => {
+    const aliasId = "plugin:package:headless-only";
+    const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
+    const webAlias = "plugin:package:web-plugin";
+    const partialSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: scheme.id === "all" ? [aliasId, webAlias] : [webAlias]
+      })),
+      inventory: { ...snapshot.inventory, plugins: [webPlugin] }
+    };
+    const mockApi = renderPage(api(partialSnapshot));
+    await screen.findByText("web-plugin");
+    fireEvent.click(screen.getByTitle("编辑"));
+    const alias = await screen.findByRole("button", { name: /package:headless-only/ });
+    expect(alias.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(alias);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).toContain(aliasId);
+  });
+
+  it("does not render a historical runtime ID beside its package", async () => {
+    const runtimeId = "plugin:headless-entry";
+    const aliasId = "plugin:package:headless-plugin";
+    const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
+    const webAlias = "plugin:package:web-plugin";
+    const partialSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      pluginRuntimePackages: { [runtimeId]: "headless-plugin" },
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: [aliasId, webAlias]
+      })),
+      inventory: { ...snapshot.inventory, plugins: [webPlugin] }
+    };
+    const mockApi = renderPage(api(partialSnapshot));
+    const alias = await screen.findByText("package:headless-plugin");
+    const row = alias.closest("article");
+    expect(screen.queryByText("headless-entry")).toBeNull();
+    expect(row?.textContent).not.toContain("缺失");
+    expect(row?.textContent).not.toContain("本机上已不存在");
+    expect(row?.textContent).not.toContain("待处理");
+
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(await screen.findByRole("button", { name: /package:headless-plugin/ }));
+    expect(screen.queryByRole("alertdialog", { name: "删除缺失记录？" })).toBeNull();
+    const unselectedAlias = await screen.findByRole("button", { name: /package:headless-plugin/ });
+    expect(unselectedAlias.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(aliasId);
+    expect(saved.plugins).not.toContain(runtimeId);
   });
 
   it("does not add a disconnected-runtime warning above installed plugins", async () => {

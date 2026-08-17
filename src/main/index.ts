@@ -99,7 +99,7 @@ import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager, inheritDshPluginPackageStates } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3741,25 +3741,32 @@ function restoreDesiredDshResources() {
     const selected = new Set(scheme.plugins);
     const selectedSkills = new Set(scheme.skills);
     const schemeSkillStates = dshDesiredSkillStates(snapshot.inventory.skills, selectedSkills);
-    const schemePluginStates = Object.fromEntries(
-      snapshot.inventory.plugins
-        .filter(item => item.manageable)
-        .map(item => [item.id.replace(/^plugin:/, ""), selected.has(item.id)])
-    );
+    const allPlugins = snapshot.schemes.find(item => item.id === ALL_DSH_SCHEME_ID)?.plugins ?? [];
+    const allowPluginDisable = !scheme.plugins.some(id => snapshot.legacyRuntimePluginIds.includes(id));
+    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected, dshPluginPackageNames(allPlugins), allowPluginDisable);
     const current = desiredDshResources.current();
     const next = desiredDshResources.reconcileScheme(
       schemeSkillStates,
       scheme.id === ALL_DSH_SCHEME_ID,
-      schemePluginStates
+      schemePluginStates,
+      allowPluginDisable
     );
-    const initialized = desiredDshResources.isInitialized();
-    if (!initialized
+    const skillsInitialized = desiredDshResources.isSkillsInitialized();
+    const pluginsInitialized = desiredDshResources.isPluginsInitialized();
+    if (!skillsInitialized
       || next.skillDefaultEnabled !== current.skillDefaultEnabled
       || !sameBooleanStates(next.skills, current.skills)) {
       setDesiredDshSkills(next.skills, next.skillDefaultEnabled);
     }
-    if (!initialized || !sameBooleanStates(next.plugins, current.plugins)) {
-      setDesiredDshPlugins(next.plugins);
+    const nextPlugins = inheritDshPluginPackageStates(
+      snapshot.inventory.plugins,
+      next.plugins,
+      pluginsInitialized && allowPluginDisable ? current.plugins : {},
+      snapshot.pluginRuntimePackages
+    );
+    if (snapshot.inventory.runtimeConnected
+      && (!pluginsInitialized || !sameBooleanStates(nextPlugins, current.plugins))) {
+      setDesiredDshPlugins(nextPlugins);
     }
   } catch {
     // A malformed scheme file is reported by the resource page; never block the event bridge.
