@@ -325,6 +325,30 @@ describe("DSH resource schemes page", () => {
     expect(saved.plugins).toContain(aliasId);
   });
 
+  it("does not report a retained Headless runtime ID as uninstalled", async () => {
+    const runtimeId = "plugin:headless-entry";
+    const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
+    const partialSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [runtimeId, webPlugin.id] })),
+      inventory: { ...snapshot.inventory, plugins: [webPlugin] }
+    };
+    const mockApi = renderPage(api(partialSnapshot));
+    const runtime = await screen.findByText("headless-entry");
+    const row = runtime.closest("article");
+    expect(row?.textContent).not.toContain("缺失");
+    expect(row?.textContent).not.toContain("本机上已不存在");
+    expect(row?.textContent).not.toContain("待处理");
+
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.click(await screen.findByRole("button", { name: /headless-entry/ }));
+    expect(screen.queryByRole("alertdialog", { name: "删除缺失记录？" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).not.toContain(runtimeId);
+  });
+
   it("does not add a disconnected-runtime warning above installed plugins", async () => {
     const disconnected = { ...snapshot, inventory: { ...snapshot.inventory, runtimeConnected: false } };
     renderPage(api(disconnected));

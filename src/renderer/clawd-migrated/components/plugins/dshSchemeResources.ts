@@ -37,17 +37,15 @@ export function unavailableDshResources(
   return resourceIds
     .filter(resourceId => !availableIds.has(resourceId))
     .map(resourceId => {
-      const knownPackage = tab === "plugins"
-        && resourceId.startsWith("plugin:package:")
-        && knownIds.has(resourceId);
+      const knownPlugin = tab === "plugins" && knownIds.has(resourceId);
       return {
         id: resourceId,
         kind: tab === "skills" ? "skill" as const : "plugin" as const,
         name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
-        ...(knownPackage ? {} : { description: missingDescription }),
-        enabled: knownPackage,
+        ...(knownPlugin ? {} : { description: missingDescription }),
+        enabled: knownPlugin,
         manageable: false,
-        ...(knownPackage ? { schemeSelectable: true } : { missing: true })
+        ...(knownPlugin ? { schemeSelectable: true } : { missing: true })
       };
     });
 }
