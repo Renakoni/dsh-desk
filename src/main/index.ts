@@ -99,7 +99,7 @@ import type { CompanionInitialState } from "../renderer/shared/events";
 import { DshPluginCatalog } from "./dshPluginCatalog";
 import { canRevealDshSkillPath, dshSkillResources, restoreLegacyDisabledDshSkills, scanDshSkills } from "./dshSkillCatalog";
 import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResources, normalizeDshRuntimePluginSnapshot } from "./dshRuntimePlugins";
-import { dshDesiredPluginStates, dshDesiredSkillStates, DshResourceSchemeManager } from "./dshResourceSchemes";
+import { dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 
@@ -3741,7 +3741,8 @@ function restoreDesiredDshResources() {
     const selected = new Set(scheme.plugins);
     const selectedSkills = new Set(scheme.skills);
     const schemeSkillStates = dshDesiredSkillStates(snapshot.inventory.skills, selectedSkills);
-    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected);
+    const allPlugins = snapshot.schemes.find(item => item.id === ALL_DSH_SCHEME_ID)?.plugins ?? [];
+    const schemePluginStates = dshDesiredPluginStates(snapshot.inventory.plugins, selected, dshPluginPackageNames(allPlugins));
     const current = desiredDshResources.current();
     const next = desiredDshResources.reconcileScheme(
       schemeSkillStates,

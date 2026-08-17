@@ -2,6 +2,23 @@ import type { DshResourceItem } from "../../../../shared/dshResources";
 
 export type DshResourceTab = "skills" | "plugins";
 
+export function visibleDshSchemeResourceIds(
+  resourceIds: string[],
+  runtimeConnected: boolean,
+  allPluginIds: string[],
+  tab: DshResourceTab,
+  availableResourceIds: string[]
+): string[] {
+  if (tab === "skills") return resourceIds;
+  const known = new Set(allPluginIds);
+  const available = new Set(availableResourceIds);
+  return resourceIds.filter(id => {
+    const packageAlias = id.startsWith("plugin:package:");
+    if (!known.has(id) || available.has(id)) return true;
+    return runtimeConnected ? !packageAlias : packageAlias;
+  });
+}
+
 export function unavailableDshResources(
   resourceIds: string[],
   availableResources: DshResourceItem[],

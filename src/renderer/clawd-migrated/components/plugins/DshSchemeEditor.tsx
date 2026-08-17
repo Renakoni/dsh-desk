@@ -3,7 +3,7 @@ import { ArrowLeft, Code2, Package, Search, Trash2 } from "lucide-react";
 import { isDshResourceSchemeSelectable, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
-import { dshResourcePresentation, filterDshResources, unavailableDshResources, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 const ROW_HEIGHT = 64;
@@ -12,6 +12,7 @@ const OVERSCAN = 5;
 export function DshSchemeEditor({
   initial,
   inventory,
+  allPluginIds,
   protectedScheme,
   canDelete,
   busy,
@@ -22,6 +23,7 @@ export function DshSchemeEditor({
 }: {
   initial: DshResourceSchemeSaveInput;
   inventory: DshResourceInventory;
+  allPluginIds: string[];
   protectedScheme: boolean;
   canDelete: boolean;
   busy: boolean;
@@ -45,12 +47,16 @@ export function DshSchemeEditor({
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
   const availableResources = inventory[activeTab];
+  const visibleDraftIds = useMemo(
+    () => visibleDshSchemeResourceIds(draft[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources.map(item => item.id)),
+    [activeTab, allPluginIds, availableResources, draft, inventory.runtimeConnected]
+  );
   const availableIds = useMemo(() => new Set(availableResources.map(resource => resource.id)), [availableResources]);
   const resources = useMemo<DshResourceItem[]>(() => [
     ...availableResources,
-    ...unavailableDshResources(draft[activeTab], availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))
-  ], [activeTab, availableResources, draft, t]);
-  const selected = useMemo(() => new Set(draft[activeTab]), [activeTab, draft]);
+    ...unavailableDshResources(visibleDraftIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))
+  ], [activeTab, availableResources, t, visibleDraftIds]);
+  const selected = useMemo(() => new Set(visibleDraftIds), [visibleDraftIds]);
   const filtered = useMemo(() => filterDshResources(resources, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, resources]);
   const unselected = useMemo(() => filtered.filter(resource => !selected.has(resource.id)), [filtered, selected]);
   const selectedItems = useMemo(() => filtered.filter(resource => selected.has(resource.id)), [filtered, selected]);
@@ -60,7 +66,11 @@ export function DshSchemeEditor({
   function moveResource(resource: DshResourceItem) {
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
-    setDraft(current => ({ ...current, [activeTab]: resources.filter(item => next.has(item.id)).map(item => item.id) }));
+    setDraft(current => {
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab], inventory.runtimeConnected, allPluginIds, activeTab, availableResources.map(item => item.id)));
+      const hidden = current[activeTab].filter(id => !visible.has(id));
+      return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
+    });
   }
 
   function toggleResource(resource: DshResourceItem) {

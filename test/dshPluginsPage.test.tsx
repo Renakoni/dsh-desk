@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshResourceSchemesSnapshot } from "../src/shared/dshResources";
 import { PluginsPage } from "../src/renderer/clawd-migrated/components/plugins/PluginsPage";
-import { dshResourcePresentation } from "../src/renderer/clawd-migrated/components/plugins/dshSchemeResources";
+import { dshResourcePresentation, visibleDshSchemeResourceIds } from "../src/renderer/clawd-migrated/components/plugins/dshSchemeResources";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
 const plugins = Array.from({ length: 160 }, (_, index) => ({
@@ -78,6 +78,19 @@ afterEach(() => {
 });
 
 describe("DSH resource schemes page", () => {
+  it("shows the resource identity appropriate to the current catalog without losing missing records", () => {
+    const ids = ["plugin:package:demo", "plugin:runtime-demo", "plugin:package:removed"];
+    const known = ["plugin:package:demo", "plugin:runtime-demo"];
+    expect(visibleDshSchemeResourceIds(ids, true, known, "plugins", ["plugin:runtime-demo"])).toEqual([
+      "plugin:runtime-demo",
+      "plugin:package:removed"
+    ]);
+    expect(visibleDshSchemeResourceIds(ids, false, known, "plugins", ["plugin:package:demo"])).toEqual([
+      "plugin:package:demo",
+      "plugin:package:removed"
+    ]);
+  });
+
   it("omits descriptions and identifiers that repeat the resource name", () => {
     expect(dshResourcePresentation({ id: "plugin:demo", kind: "plugin", name: "demo", description: "demo", detail: "demo", enabled: true, manageable: true }, false, "Details hidden")).toEqual({});
     expect(dshResourcePresentation({ id: "plugin:desk", kind: "plugin", name: "dsh-desk-plugin", description: "DSH Desk bridge", detail: "dsh-desk-plugin", enabled: true, manageable: false }, false, "Details hidden")).toEqual({ description: "DSH Desk bridge" });
@@ -190,6 +203,26 @@ describe("DSH resource schemes page", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(mockApi.saveDshResourceScheme).toHaveBeenLastCalledWith(expect.objectContaining({
       plugins: expect.not.arrayContaining([missingId])
+    }));
+  });
+
+  it("hides installed package aliases online and preserves them while editing runtime entries", async () => {
+    const aliasId = "plugin:package:demo";
+    const aliasSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({ ...scheme, plugins: [aliasId, ...scheme.plugins] }))
+    };
+    const mockApi = renderPage(api(aliasSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "package:demo" } });
+    expect(screen.queryByText("package:demo")).toBeNull();
+
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: "plugin-159" } });
+    fireEvent.click(await screen.findByRole("button", { name: /@deepseek-ai\/plugin-159/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(mockApi.saveDshResourceScheme).toHaveBeenCalledWith(expect.objectContaining({
+      plugins: expect.arrayContaining([aliasId])
     }));
   });
 
