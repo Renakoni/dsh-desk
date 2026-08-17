@@ -29,20 +29,27 @@ export function unavailableDshResources(
   resourceIds: string[],
   availableResources: DshResourceItem[],
   tab: DshResourceTab,
-  missingDescription: string
+  missingDescription: string,
+  knownResourceIds: string[] = []
 ): DshResourceItem[] {
   const availableIds = new Set(availableResources.map(resource => resource.id));
+  const knownIds = new Set(knownResourceIds);
   return resourceIds
     .filter(resourceId => !availableIds.has(resourceId))
-    .map(resourceId => ({
-      id: resourceId,
-      kind: tab === "skills" ? "skill" : "plugin",
-      name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
-      description: missingDescription,
-      enabled: false,
-      manageable: false,
-      missing: true
-    }));
+    .map(resourceId => {
+      const knownPackage = tab === "plugins"
+        && resourceId.startsWith("plugin:package:")
+        && knownIds.has(resourceId);
+      return {
+        id: resourceId,
+        kind: tab === "skills" ? "skill" as const : "plugin" as const,
+        name: tab === "skills" ? resourceId.split(":").at(-1) ?? resourceId : resourceId.replace(/^[^:]+:/, ""),
+        ...(knownPackage ? {} : { description: missingDescription }),
+        enabled: knownPackage,
+        manageable: false,
+        ...(knownPackage ? { schemeSelectable: true } : { missing: true })
+      };
+    });
 }
 
 export function dshResourcePresentation(resource: DshResourceItem, hideSensitiveContent: boolean, hiddenDescription: string) {

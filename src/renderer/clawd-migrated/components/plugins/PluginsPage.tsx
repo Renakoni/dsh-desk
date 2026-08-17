@@ -95,7 +95,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
       available
     );
     const members = new Set(memberIds);
-    return [...available.filter(item => members.has(item.id)), ...unavailableDshResources(memberIds, available, activeTab, t("dshResources.noLongerInstalled", "No longer installed"))];
+    return [...available.filter(item => members.has(item.id)), ...unavailableDshResources(memberIds, available, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), allPluginIds)];
   }, [activeTab, allPluginIds, selectedScheme, snapshot.inventory, t]);
   const filteredItems = useMemo(() => filterDshResources(items, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, items]);
 

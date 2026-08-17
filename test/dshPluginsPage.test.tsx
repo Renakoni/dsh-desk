@@ -286,15 +286,43 @@ describe("DSH resource schemes page", () => {
       inventory: { ...snapshot.inventory, plugins: [webPlugin] }
     };
     const mockApi = renderPage(api(partialSnapshot));
-    expect(await screen.findByText("package:headless-only")).not.toBeNull();
+    const alias = await screen.findByText("package:headless-only");
+    const row = alias.closest("article");
+    expect(row?.textContent).not.toContain("缺失");
+    expect(row?.textContent).not.toContain("本机上已不存在");
+    expect(row?.textContent).not.toContain("待处理");
     fireEvent.click(screen.getByTitle("编辑"));
     fireEvent.click(await screen.findByRole("button", { name: /package:headless-only/ }));
-    const dialog = screen.getByRole("alertdialog", { name: "删除缺失记录？" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "删除记录" }));
+    expect(screen.queryByRole("alertdialog", { name: "删除缺失记录？" })).toBeNull();
+    const unselectedAlias = await screen.findByRole("button", { name: /package:headless-only/ });
+    expect(unselectedAlias.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
     expect(saved.plugins).not.toContain(aliasId);
+  });
+
+  it("can add an installed alias whose Headless runtime is not online", async () => {
+    const aliasId = "plugin:package:headless-only";
+    const webPlugin = { id: "plugin:web", kind: "plugin" as const, name: "web-plugin", packageName: "web-plugin", enabled: true, manageable: true };
+    const partialSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      schemes: snapshot.schemes.map(scheme => ({
+        ...scheme,
+        plugins: scheme.id === "all" ? [aliasId, webPlugin.id] : [webPlugin.id]
+      })),
+      inventory: { ...snapshot.inventory, plugins: [webPlugin] }
+    };
+    const mockApi = renderPage(api(partialSnapshot));
+    await screen.findByText("web-plugin");
+    fireEvent.click(screen.getByTitle("编辑"));
+    const alias = await screen.findByRole("button", { name: /package:headless-only/ });
+    expect(alias.closest("[data-transfer-side]")?.getAttribute("data-transfer-side")).toBe("unselected");
+    fireEvent.click(alias);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const saved = mockApi.saveDshResourceScheme.mock.calls[0][0];
+    expect(saved.plugins).toContain(aliasId);
   });
 
   it("does not add a disconnected-runtime warning above installed plugins", async () => {
