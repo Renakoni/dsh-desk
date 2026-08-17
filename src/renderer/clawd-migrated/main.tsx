@@ -202,20 +202,20 @@ function PetApp() {
     }
   }
 
-  // 随机待机池是完整的可播放集合：启动或配置变化时立即选择一个成员，
-  // 播放间隔也回到池内成员，不隐式回退到可能已取消选择的 idle。
+  // 随机动作只在待机间隔结束后短暂播放；动画测试会暂停调度，
+  // 避免预览结束时突然露出后台已经推进到一半的动作。
   useEffect(() => {
     setIdleAnimConfig(previous => keepIdleAnimationConfigReference(previous, settings.idleAnim ?? null));
   }, [settings.idleAnim]);
 
   useEffect(() => {
     const plan = planIdleAnimation(idleAnimConfig);
-    if (!plan || petState !== "idle" || editMode || mainIdle !== "random") {
+    if (!plan || petState !== "idle" || editMode || mainIdle !== "random" || previewAnimation) {
       setRandomBubble(null);
       return;
     }
     return startIdleAnimator(plan, setRandomBubble);
-  }, [petState, editMode, idleAnimConfig, mainIdle]);
+  }, [petState, editMode, idleAnimConfig, mainIdle, previewAnimation]);
 
   // 同步 effectiveIdleBubble 到设置面板
   useEffect(() => {
