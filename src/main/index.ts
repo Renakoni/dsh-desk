@@ -103,6 +103,8 @@ import { DshRuntimeSnapshotSet, dshRuntimePluginResources, dshRuntimeSkillResour
 import { dshDesiredPluginComponentStates, dshDesiredPluginStates, dshDesiredSkillStates, dshPluginPackageNames, DshResourceSchemeManager } from "./dshResourceSchemes";
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
+import type { DshSkinMutationInput } from "../shared/dshSkins";
+import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE } from "./dshSkinMarketplace";
 
 type DailyRuntimeStats = {
   events: number;
@@ -159,6 +161,7 @@ let eventServer: ReturnType<typeof createServer> | null = null;
 const dshRuntimeSnapshots = new DshRuntimeSnapshotSet();
 const desiredDshResources = new DshDesiredResourceState();
 let dshSkillMarketplaceInstance: DshSkillMarketplace | null = null;
+let dshSkinMarketplaceInstance: DshSkinMarketplace | null = null;
 let tray: Tray | null = null;
 let startupWarmupTimer: ReturnType<typeof setTimeout> | null = null;
 let startupWarmupStarted = false;
@@ -3758,6 +3761,20 @@ function dshSkillMarketplace() {
   return dshSkillMarketplaceInstance;
 }
 
+function dshSkinMarketInstalled() {
+  const market = dshPluginCatalog().snapshot().plugins.find(plugin => plugin.packageName === DSH_SKIN_MARKET_PACKAGE);
+  return market?.states.some(state => state.profile === "web" && typeof state.dependencySpec === "string") === true;
+}
+
+function dshSkinMarketplace() {
+  dshSkinMarketplaceInstance ??= new DshSkinMarketplace({
+    cachePath: join(app.getPath("userData"), "dsh-skin-market-catalog.json"),
+    marketInstalled: dshSkinMarketInstalled,
+    installPlugin: input => dshPluginCatalog().install(input)
+  });
+  return dshSkinMarketplaceInstance;
+}
+
 function restoreDesiredDshResources() {
   try {
     const snapshot = dshResourceSchemeManager().snapshot();
@@ -4251,6 +4268,9 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-skill-repo-add", (_, repo: DshSkillRepo) => dshSkillMarketplace().addRepo(repo));
   ipcMain.handle("companion:dsh-skill-repo-remove", (_, owner: unknown, name: unknown) => dshSkillMarketplace().removeRepo(String(owner ?? ""), String(name ?? "")));
   ipcMain.handle("companion:dsh-skill-install", (_, skill: DshMarketplaceSkill) => dshSkillMarketplace().install(skill));
+  ipcMain.handle("companion:dsh-skins-marketplace", (_, force?: boolean) => dshSkinMarketplace().snapshot(Boolean(force)));
+  ipcMain.handle("companion:dsh-skins-market-install", () => dshSkinMarketplace().installMarket());
+  ipcMain.handle("companion:dsh-skins-mutate", (_, input: DshSkinMutationInput) => dshSkinMarketplace().mutate(input));
   ipcMain.handle("companion:dsh-skill-reveal", (_, targetPath: unknown) => {
     if (typeof targetPath !== "string" || !canRevealDshSkillPath(targetPath)) return false;
     if (existsSync(targetPath) && statSync(targetPath).isFile()) shell.showItemInFolder(targetPath);
