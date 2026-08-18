@@ -112,6 +112,10 @@
 .dsh-theme-empty-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 3px; border: 1px solid var(--settings-line); border-radius: 8px; color: var(--settings-accent); background: var(--theme-surface); }
 .dsh-theme-empty strong { color: var(--settings-ink); font-size: 14px; font-weight: 700; }
 .dsh-theme-empty p { margin: 0 0 5px; color: var(--settings-muted); font-size: 12px; }
+.dsh-theme-local-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 2px 8px; color: var(--settings-muted); }
+.dsh-theme-local-heading strong { color: var(--settings-ink); font-size: 13px; }
+.dsh-theme-local-heading span { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-theme-local-card { opacity: .88; }
 
 .dsh-theme-library-grid {
   display: grid;

@@ -205,7 +205,8 @@ class AppearanceManager {
   async execute(operation, skin, catalog) {
     try {
       const stored = readState(this.profileDir)
-      const existing = stored.skins[skin.id] ?? { active: false }
+      const legacyState = jsonFile(join(this.profileDir, '.dsh-skin-market', 'state.json'), {})
+      const existing = stored.skins[skin.id] ?? { active: legacyState?.activeSkinId === skin.id }
       if (operation.kind === 'install' || operation.kind === 'update') {
         if (operation.kind === 'update' || !Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
           operation.phase = 'downloading'
