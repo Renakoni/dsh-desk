@@ -83,9 +83,10 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
 
       <div className="animation-summary-row">
         <AnimationStat label={t("animation.pool", "动画池")} value={`${selectedSprites.length}/${options.length}`} />
-        <AnimationStat icon={<Clock3 size={14} />} label={t("data.playInterval", "播放间隔")} value={formatRange(config.intervalMin, config.intervalMax, value => `${value}s`)} />
-        <AnimationStat icon={<Repeat2 size={14} />} label={t("data.repeatCount", "每次播放")} value={formatRange(config.repeatMin, config.repeatMax, value => `${value}x`)} />
+        <AnimationStat icon={<Clock3 size={14} />} label={t("data.playInterval", "下次播放间隔")} value={formatRange(config.intervalMin, config.intervalMax, value => `${value}s`)} />
+        <AnimationStat icon={<Repeat2 size={14} />} label={t("data.repeatCount", "连续播放次数")} value={formatRange(config.repeatMin, config.repeatMax, value => `${value}x`)} />
       </div>
+      <p className="animation-timing-note">{t("data.idleAnimationTimingNote", "播放间隔是一轮动作结束后的等待时间；连续播放次数决定同一动作完整播放多少轮，期间不会切回待机。")}</p>
 
       <section className="animation-section-block">
         <SectionHead title={t("data.optionalPool", "可选动画池")} meta={t("animation.selectedCount", "已选 {count}").replace("{count}", String(selectedSprites.length))} />
@@ -105,7 +106,7 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
 
       <section className="animation-section-block animation-ranges">
         <RangeSlider
-          label={t("data.playInterval", "播放间隔")}
+          label={t("data.playInterval", "下次播放间隔")}
           min={5}
           max={120}
           step={5}
@@ -115,7 +116,7 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
           onChange={(low, high) => onChange({ ...config, intervalMin: low, intervalMax: high })}
         />
         <RangeSlider
-          label={t("data.repeatCount", "每次播放次数")}
+          label={t("data.repeatCount", "连续播放次数")}
           min={1}
           max={5}
           step={1}

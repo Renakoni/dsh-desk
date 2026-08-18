@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  IDLE_SPRITE_GAP_MS,
   IDLE_SPRITE_SHOW_MS,
   keepIdleAnimationConfigReference,
   planIdleAnimation,
@@ -39,6 +38,16 @@ describe("planIdleAnimation: config → runnable plan", () => {
       intervalMaxMs: 20_000,
       repeatMin: 1,
       repeatMax: 2
+    });
+  });
+
+  it("keeps valid spritesheet cycle durations for the selected pool", () => {
+    expect(planIdleAnimation(baseConfig, undefined, {
+      extra_action_7: 840,
+      extra_action_8: 1260,
+      idle: 500
+    })).toMatchObject({
+      animationDurationsMs: { extra_action_7: 840, extra_action_8: 1260 }
     });
   });
 
@@ -110,7 +119,7 @@ describe("startIdleAnimator: selected-pool choreography", () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it("waits in the normal idle pose, then returns to it between repeats", () => {
+  it("keeps repeated cycles mounted and returns to idle only after the batch", () => {
     const seen: Array<string | null> = [];
     // rng: 0.5 -> delay 15s; 0.9 -> sprite 1.
     const stop = startIdleAnimator(plan, key => seen.push(key), rngSequence([0.5, 0.9]));
@@ -123,15 +132,10 @@ describe("startIdleAnimator: selected-pool choreography", () => {
     vi.advanceTimersByTime(1);
     expect(seen).toEqual([null, "extra_action_8"]);
 
-    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
+    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS * 2 - 1);
+    expect(seen).toEqual([null, "extra_action_8"]);
+    vi.advanceTimersByTime(1);
     expect(seen).toEqual([null, "extra_action_8", null]);
-
-    // The same action restarts after a normal-idle gap.
-    vi.advanceTimersByTime(IDLE_SPRITE_GAP_MS);
-    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8"]);
-
-    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
-    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8", null]);
 
     // The next interval is entirely normal idle.
     vi.advanceTimersByTime(9_999);
@@ -156,13 +160,38 @@ describe("startIdleAnimator: selected-pool choreography", () => {
 
     vi.advanceTimersByTime(10_000);
     expect(seen).toEqual([null, "extra_action_8"]);
-    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
+    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS - 1);
+    expect(seen).toEqual([null, "extra_action_8"]);
+    vi.advanceTimersByTime(1);
     expect(seen).toEqual([null, "extra_action_8", null]);
     vi.advanceTimersByTime(10_000);
     expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8"]);
 
     stop();
     expect(seen.at(-1)).toBeNull();
+  });
+
+  it("uses a spritesheet cycle duration for continuous repeats", () => {
+    const seen: Array<string | null> = [];
+    const custom: IdleAnimationPlan = {
+      ...plan,
+      pool: ["extra_action_8"],
+      intervalMinMs: 5_000,
+      intervalMaxMs: 5_000,
+      repeatMin: 3,
+      repeatMax: 3,
+      animationDurationsMs: { extra_action_8: 800 }
+    };
+    const stop = startIdleAnimator(custom, key => seen.push(key), rngSequence([0, 0]));
+
+    vi.advanceTimersByTime(5_000);
+    expect(seen).toEqual([null, "extra_action_8"]);
+    vi.advanceTimersByTime(2_399);
+    expect(seen).toEqual([null, "extra_action_8"]);
+    vi.advanceTimersByTime(1);
+    expect(seen).toEqual([null, "extra_action_8", null]);
+
+    stop();
   });
 
   it("clears a deselected active sprite when the plan restarts", () => {
@@ -242,11 +271,9 @@ describe("startIdleAnimator: selected-pool choreography", () => {
     const stop = startIdleAnimator(variable, key => seen.push(key), rngSequence([0, 0.9, 0.99]));
 
     vi.advanceTimersByTime(10_000);
-    vi.advanceTimersByTime(3 * IDLE_SPRITE_SHOW_MS + 2 * IDLE_SPRITE_GAP_MS);
+    vi.advanceTimersByTime(3 * IDLE_SPRITE_SHOW_MS);
     expect(seen).toEqual([
       null,
-      "extra_action_8", null,
-      "extra_action_8", null,
       "extra_action_8", null
     ]);
 

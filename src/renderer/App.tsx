@@ -294,6 +294,15 @@ export default function App() {
     return packId ? petPacks.find(pack => pack.id === packId) ?? null : null;
   }, [petTheme, petPacks]);
   const spritesheet = useMemo(() => activePack ? spritesheetAssetsFromPack(activePack) : null, [activePack]);
+  const idleAnimationDurations = useMemo(() => {
+    if (!spritesheet) return undefined;
+    const durations = Object.fromEntries(
+      Object.values(spritesheet.animations)
+        .filter(animation => animation && animation.frameCount > 0 && animation.frameDurationMs > 0)
+        .map(animation => [animation!.key, animation!.frameCount * animation!.frameDurationMs])
+    );
+    return Object.keys(durations).length > 0 ? durations : undefined;
+  }, [spritesheet]);
   const petImageHeight = spritesheet
     ? displayedSpriteHeight(spritesheet.cellWidth, spritesheet.cellHeight, PET_IMAGE_SIZE)
     : PET_IMAGE_SIZE;
@@ -303,19 +312,19 @@ export default function App() {
 
   // Random idle rotation runs only while the pet is actually idling. Preview
   // and drag animations pause it so their end cannot reveal a batch that
-  // advanced while hidden.
+  // advanced while hidden; each batch itself stays mounted for full cycles.
   useEffect(() => {
     if (petState !== "idle" || previewAnimation || dragDirection) {
       setIdleAnimation(null);
       return;
     }
-    const plan = planIdleAnimation(idleAnimConfig, themeCatalog);
+    const plan = planIdleAnimation(idleAnimConfig, themeCatalog, idleAnimationDurations);
     if (!plan) {
       setIdleAnimation(null);
       return;
     }
     return startIdleAnimator(plan, setIdleAnimation);
-  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection]);
+  }, [petState, idleAnimConfig, themeCatalog, idleAnimationDurations, previewAnimation, dragDirection]);
 
   // Dragging is native OS window drag (-webkit-app-region: drag on the pet
   // element): the compositor moves the window at input rate — smoother than

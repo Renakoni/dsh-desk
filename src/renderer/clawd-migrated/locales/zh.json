@@ -17,7 +17,7 @@
       "animation": "动画",
       "data": "数据",
       "plugins": "插件",
-      "themes": "主题",
+      "themes": "外观",
       "sessions": "会话",
       "settings": "设置",
       "notifications": "通知"
@@ -792,6 +792,12 @@
     "lastActive": "最后活动"
   },
   "appearance": {
+    "eyebrow": "外观",
+    "navigation": "外观分类",
+    "dshThemes": "DSH 主题",
+    "desktopPet": "桌宠",
+    "petLibraryTitle": "桌宠库",
+    "petLibrarySummary": "选择角色、导入宠物包或从图库获取新的桌宠。",
     "themeNote": "选择浅色、桌宠主题或深色；右侧可切换经典 / 液态玻璃界面风格。",
     "enablePet": "启用桌宠",
     "alwaysOnTop": "始终置顶",
@@ -858,8 +864,9 @@
     "directoryUnavailable": "不可用",
     "enableIdleRandom": "启用待机随机动画",
     "optionalPool": "可选动画池",
-    "playInterval": "播放间隔",
-    "repeatCount": "每次播放次数",
+    "playInterval": "下次播放间隔",
+    "repeatCount": "连续播放次数",
+    "idleAnimationTimingNote": "播放间隔是一轮动作结束后的等待时间；连续播放次数决定同一动作完整播放多少轮，期间不会切回待机。",
     "clawdIdleAnimations": "各 Clawd 待机动画",
     "idleAnimationNote": "选择「随机」时使用上方动画池配置循环播放；选择固定动画则始终重复播放该 GIF，替代默认的静态 PNG。",
     "mainClawd": "主 Clawd",

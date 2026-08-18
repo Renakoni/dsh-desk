@@ -19,7 +19,7 @@
       "animation": "Animation",
       "data": "Data",
       "plugins": "Plugins",
-      "themes": "Themes",
+      "themes": "Appearance",
       "sessions": "Sessions",
       "settings": "Settings",
       "notifications": "Notifications"
@@ -792,6 +792,12 @@
     "lastActive": "Last active"
   },
   "appearance": {
+    "eyebrow": "Appearance",
+    "navigation": "Appearance sections",
+    "dshThemes": "DSH themes",
+    "desktopPet": "Desktop pet",
+    "petLibraryTitle": "Pet library",
+    "petLibrarySummary": "Choose a character, import a pet pack, or browse the gallery.",
     "themeNote": "Choose light, pet theme, or dark mode. Switch between classic and liquid glass UI on the right.",
     "enablePet": "Enable pet",
     "alwaysOnTop": "Always on top",
@@ -858,8 +864,9 @@
     "directoryUnavailable": "Unavailable",
     "enableIdleRandom": "Enable random idle animations",
     "optionalPool": "Optional animation pool",
-    "playInterval": "Playback interval",
-    "repeatCount": "Repeats per play",
+    "playInterval": "Next-play interval",
+    "repeatCount": "Consecutive cycles",
+    "idleAnimationTimingNote": "The interval is the wait after a batch ends. Consecutive cycles controls how many complete loops play before returning to idle.",
     "clawdIdleAnimations": "Idle animations per Clawd",
     "idleAnimationNote": "When Random is selected, the animation pool above is used for looping playback; when a fixed animation is selected, that GIF repeats instead of the default static PNG.",
     "mainClawd": "Main Clawd",

@@ -45,7 +45,7 @@ import { SettingsSection } from "./features/settings/SettingsSection";
 import { AnimationSection } from "./features/animation/AnimationSection";
 import { DataSection } from "./features/data/DataSection";
 import { PluginsPage } from "./components/plugins/PluginsPage";
-import { DshThemesPage } from "./components/themes/DshThemesPage";
+import { DshAppearancePage } from "./components/appearance/DshAppearancePage";
 import { connectionSurfaceKey } from "./features/overview/connectionState";
 import { useConnectionSurface } from "./features/overview/useConnectionSurface";
 import { petAnimationAssets } from "./utils/petAnimationAssets";
@@ -903,7 +903,7 @@ function SettingsApp() {
         {[
           { id: "general", icon: <Gauge size={16} />, label: t("settings.tabs.general", "总览") },
           { id: "animation", icon: <Wand2 size={16} />, label: t("settings.tabs.animation", "动画") },
-          { id: "themes", icon: <Palette size={16} />, label: t("settings.tabs.themes", "主题") },
+          { id: "themes", icon: <Palette size={16} />, label: t("settings.tabs.themes", "外观") },
           { id: "plugins", icon: <PlugZap size={16} />, label: t("settings.tabs.plugins", "插件") },
           { id: "data", icon: <FileText size={16} />, label: t("settings.tabs.data", "数据") },
           { id: "settings", icon: <Wrench size={16} />, label: t("settings.tabs.settings", "设置") }
@@ -956,7 +956,6 @@ function SettingsApp() {
               checkingUpdate={checkingUpdate}
               handleCheckUpdate={handleCheckUpdate}
               petPacks={petPacks}
-              refreshPetPacks={refreshPetPacks}
             />
           </div>
         )}
@@ -975,7 +974,13 @@ function SettingsApp() {
 
         {(activeSection === "themes" || backgroundSectionsMounted) && (
           <div style={{ display: activeSection === "themes" ? "contents" : "none" }} aria-hidden={activeSection !== "themes"}>
-            <DshThemesPage active={activeSection === "themes"} />
+            <DshAppearancePage
+              active={activeSection === "themes"}
+              settings={settings}
+              updateSettings={stableUpdateSettings}
+              petPacks={petPacks}
+              refreshPetPacks={refreshPetPacks}
+            />
           </div>
         )}
 

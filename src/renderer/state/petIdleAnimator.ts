@@ -3,13 +3,13 @@ import { MINATO_AQUA_CATALOG, normalizeMappableAnimationKeys, type PetThemeCatal
 
 // Random idle-animation rotation shared by the floating pet and settings
 // preview: wait in the theme's normal idle pose, play one pool member for a
-// random number of beats, then return to normal idle before the next batch.
+// random number of complete cycles, then return to normal idle before the
+// next batch.
 //
 // The scheduler is React-free with injectable timers/rng so the choreography
 // is unit-testable with fake timers.
 
 export const IDLE_SPRITE_SHOW_MS = 2500;
-export const IDLE_SPRITE_GAP_MS = 1500;
 
 export interface IdleAnimationConfig {
   enabled?: boolean;
@@ -26,6 +26,8 @@ export interface IdleAnimationPlan {
   intervalMaxMs: number;
   repeatMin: number;
   repeatMax: number;
+  /** Complete cycle durations for spritesheet-backed animations. */
+  animationDurationsMs?: Partial<Record<PetAnimationKey, number>>;
 }
 
 export function keepIdleAnimationConfigReference(
@@ -49,7 +51,8 @@ function toRepeat(value: unknown, fallback: number): number {
 // dropped, and an empty pool disables rotation rather than inventing sprites.
 export function planIdleAnimation(
   config: IdleAnimationConfig | null | undefined,
-  catalog: PetThemeCatalog = MINATO_AQUA_CATALOG
+  catalog: PetThemeCatalog = MINATO_AQUA_CATALOG,
+  animationDurationsMs?: Partial<Record<PetAnimationKey, number>>
 ): IdleAnimationPlan | null {
   if (!config?.enabled) return null;
   const pool = normalizeMappableAnimationKeys(catalog, config.selectedSprites);
@@ -58,13 +61,23 @@ export function planIdleAnimation(
   const intervalMax = Math.max(intervalMin, toSeconds(config.intervalMax, intervalMin));
   const repeatMin = toRepeat(config.repeatMin, 1);
   const repeatMax = Math.max(repeatMin, toRepeat(config.repeatMax, repeatMin));
-  return {
+  const plan: IdleAnimationPlan = {
     pool,
     intervalMinMs: intervalMin * 1000,
     intervalMaxMs: intervalMax * 1000,
     repeatMin,
     repeatMax
   };
+  const durations = Object.fromEntries(
+    pool
+      .filter(key => {
+        const duration = animationDurationsMs?.[key];
+        return typeof duration === "number" && Number.isFinite(duration) && duration > 0;
+      })
+      .map(key => [key, animationDurationsMs![key]])
+  ) as Partial<Record<PetAnimationKey, number>>;
+  if (Object.keys(durations).length > 0) plan.animationDurationsMs = durations;
+  return plan;
 }
 
 // Start the rotation. A shuffle bag visits every selected sprite before a new
@@ -112,20 +125,15 @@ export function startIdleAnimator(
     const sprite = takeNextSprite();
     const span = plan.repeatMax - plan.repeatMin;
     const repeats = plan.repeatMin + (span > 0 ? Math.floor(rng() * (span + 1)) : 0);
-    let count = 0;
-    function show() {
-      display(sprite);
-      schedule(() => {
-        display(null);
-        count++;
-        if (count < repeats) {
-          schedule(show, IDLE_SPRITE_GAP_MS);
-        } else {
-          scheduleNext();
-        }
-      }, IDLE_SPRITE_SHOW_MS);
-    }
-    show();
+    // Keep the same animation mounted for the entire batch. A spritesheet or
+    // GIF can then complete each loop naturally instead of being interrupted
+    // by an artificial idle gap between repeats.
+    display(sprite);
+    const cycleDuration = plan.animationDurationsMs?.[sprite] ?? IDLE_SPRITE_SHOW_MS;
+    schedule(() => {
+      display(null);
+      scheduleNext();
+    }, cycleDuration * repeats);
   }
 
   display(null);

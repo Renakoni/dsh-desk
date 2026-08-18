@@ -7,7 +7,6 @@ import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
 import { NotificationRulesPanel } from "../../components/NotificationRulesPanel";
 import { CurrencySegmented, GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
 import { ConnectionManagement } from "./ConnectionManagement";
-import { PetThemeGrid } from "./PetThemeGrid";
 import { getPetTheme } from "../../utils/petThemes";
 
 export function SettingsSection({
@@ -30,8 +29,7 @@ export function SettingsSection({
   updateStatus,
   checkingUpdate,
   handleCheckUpdate,
-  petPacks = [],
-  refreshPetPacks
+  petPacks = []
 }: {
   settings: any;
   updateSettings: (settings: any) => void;
@@ -53,7 +51,6 @@ export function SettingsSection({
   checkingUpdate: boolean;
   handleCheckUpdate: () => void;
   petPacks?: any[];
-  refreshPetPacks?: () => void;
 }) {
   const { t } = useI18n();
   const activePetTheme = getPetTheme(settings.petTheme, petPacks);
@@ -164,15 +161,6 @@ export function SettingsSection({
             <Toggle label={t("appearance.enablePet", "启用桌宠")} checked={settings.petEnabled} onChange={petEnabled => updateSettings({ petEnabled })} />
             <Toggle label={t("appearance.alwaysOnTop", "始终置顶")} checked={settings.alwaysOnTop} onChange={alwaysOnTop => updateSettings({ alwaysOnTop })} />
             <Toggle label={t("appearance.showBubbles", "显示气泡")} checked={settings.showBubbles} onChange={showBubbles => updateSettings({ showBubbles })} />
-          </GroupCard>
-
-          <GroupCard icon={<Sparkles size={18} />} title={t("sections.petTheme", "桌宠选择")}>
-            <PetThemeGrid
-              activeThemeId={activePetTheme.id}
-              petPacks={petPacks}
-              onSelectTheme={themeId => updateSettings({ petTheme: themeId })}
-              refreshPetPacks={() => refreshPetPacks?.()}
-            />
           </GroupCard>
 
           <div className="pet-display-controls">
