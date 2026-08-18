@@ -3762,13 +3762,13 @@ function dshSkillMarketplace() {
 }
 
 function dshSkinMarketInstalled() {
-  const market = dshPluginCatalog().snapshot().plugins.find(plugin => plugin.packageName === DSH_SKIN_MARKET_PACKAGE);
-  return market?.states.some(state => state.profile === "web" && typeof state.dependencySpec === "string") === true;
+  const desk = dshPluginCatalog().snapshot().plugins.find(plugin => plugin.packageName === DSH_SKIN_MARKET_PACKAGE);
+  return desk?.states.some(state => state.profile === "web" && typeof state.dependencySpec === "string") === true;
 }
 
 function dshSkinMarketplace() {
   dshSkinMarketplaceInstance ??= new DshSkinMarketplace({
-    cachePath: join(app.getPath("userData"), "dsh-skin-market-catalog.json"),
+    cachePath: join(app.getPath("userData"), "dsh-appearance-catalog.json"),
     webProfileDir: join(resolveDshHome(), "profiles", "web"),
     marketInstalled: dshSkinMarketInstalled,
     installPlugin: input => dshPluginCatalog().install(input)

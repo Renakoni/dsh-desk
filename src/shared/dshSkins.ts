@@ -11,7 +11,7 @@ export type DshSkinCatalogEntry = {
   name: { zh: string; en: string };
   author: string;
   description: string;
-  repositoryUrl: string;
+  repositoryUrl: string | null;
   packageName: string;
   tags: string[];
   modes: DshSkinMode[];
@@ -21,8 +21,20 @@ export type DshSkinCatalogEntry = {
   listScreenshot?: string;
   review?: DshSkinReview;
   license: { code: string; commercialUse: boolean; notice?: string };
-  stars: number;
+  stars: number | null;
   updatedAt: string;
+};
+
+export type DshLocalSkin = {
+  id: string;
+  packageName: string;
+  name: { zh: string; en: string };
+  author: string;
+  description: string;
+  version: string | null;
+  repositoryUrl: string | null;
+  active: boolean;
+  broken: boolean;
 };
 
 export type DshSkinRuntimeState = {
@@ -45,6 +57,7 @@ export type DshSkinHostState = {
 
 export type DshSkinMarketplaceSnapshot = {
   skins: DshSkinCatalogEntry[];
+  localSkins?: DshLocalSkin[];
   generatedAt: string | null;
   catalogSource: "remote" | "cache" | "unavailable";
   catalogCheckedAt: number;

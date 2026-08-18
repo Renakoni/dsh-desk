@@ -2,8 +2,13 @@
     - id: dsh-desk
       name: dsh-desk-plugin
       config:
+        component: desk
         port: 17321
         eventTimeoutMs: 800
         permissionCreateTimeoutMs: 5000
         permissionWaitTimeoutMs: 65000
         inventoryPublishMs: 3000
+    - id: dsh-appearance-manager
+      name: dsh-desk-plugin
+      config:
+        component: appearance-manager

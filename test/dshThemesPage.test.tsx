@@ -94,11 +94,9 @@ describe("DshThemesPage", () => {
     expect(screen.queryByText("安装组件")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
     await screen.findByText("海洋主题");
-    api.mutateDshSkin.mockResolvedValueOnce({ ok: false, supportPrepared: true, snapshot: snapshot({ connected: false, marketInstalled: true }) });
     const oceanCard = screen.getAllByTestId("dsh-theme-card").find(card => within(card).queryByText("海洋主题"));
-    fireEvent.click(within(oceanCard!).getByRole("button", { name: "安装" }));
-    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "install" }));
-    expect(await screen.findByText("主题管理已准备好。重启 DSH 后继续操作。")).not.toBeNull();
+    expect(within(oceanCard!).getByRole("button", { name: "安装" })).toHaveProperty("disabled", true);
+    expect(api.mutateDshSkin).not.toHaveBeenCalled();
     expect(api.installDshSkinMarketplace).not.toHaveBeenCalled();
   });
 
@@ -108,5 +106,13 @@ describe("DshThemesPage", () => {
     expect(screen.queryByText("纸张主题")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "使用" }));
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "activate" }));
+  });
+
+  it("shows an installed theme outside the catalog without offering destructive controls", async () => {
+    renderPage({ ...snapshot(), localSkins: [{ id: "local:custom", packageName: "custom-theme", name: { zh: "本地主题", en: "Local theme" }, author: "local", description: "local", version: "1.0.0", repositoryUrl: null, active: false, broken: false }] });
+    await screen.findByText("本地未收录主题");
+    expect(screen.getAllByText("本地主题").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "使用" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "卸载" })).toBeNull();
   });
 });

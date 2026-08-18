@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type {
   DshSkinAction,
   DshSkinCatalogEntry,
+  DshLocalSkin,
   DshSkinHostState,
   DshSkinMarketInstallResult,
   DshSkinMarketplaceSnapshot,
@@ -12,9 +13,9 @@ import type {
 } from "../shared/dshSkins";
 import { writeTextFileAtomic } from "./filePersistence";
 
-export const DSH_SKIN_CATALOG_URL = "https://kingofsoysauce.github.io/dsh-skin-market/catalog.json";
-export const DSH_SKIN_MARKET_INSTALL_SPEC = "github:kingOfSoySauce/dsh-skin-market";
-export const DSH_SKIN_MARKET_PACKAGE = "dsh-skin-market";
+export const DSH_SKIN_CATALOG_URL = "https://raw.githubusercontent.com/Renakoni/dsh-appearance-catalog/main/data/catalog.json";
+export const DSH_SKIN_MARKET_INSTALL_SPEC = "";
+export const DSH_SKIN_MARKET_PACKAGE = "dsh-desk-plugin";
 export const DSH_SKIN_MARKET_REFRESH_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_DSH_WEB_ORIGIN = "http://127.0.0.1:3080";
 const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
@@ -40,6 +41,7 @@ type CatalogCache = {
 
 type RuntimePayload = {
   skins?: unknown;
+  localSkins?: unknown;
   restartAvailable?: unknown;
   runningAgentCount?: unknown;
 };
@@ -55,6 +57,7 @@ type WebProfileManifest = {
 
 type PersistedSkinState = {
   activeSkinId?: unknown;
+  skins?: Record<string, { active?: unknown }>;
 };
 
 export type DshSkinMarketplaceOptions = {
@@ -102,13 +105,14 @@ function parseSkin(value: unknown): DshSkinCatalogEntry {
   if (!source || !name || !install || !compatibility || !license) throw new Error("Invalid skin catalog entry.");
 
   const id = requiredString(source.id, "skin id");
-  const repositoryUrl = requiredString(source.repo, `${id} repository`);
+  const repositoryValue = source.repositoryUrl ?? source.repo;
+  const repositoryUrl = repositoryValue === null || repositoryValue === undefined ? null : requiredString(repositoryValue, `${id} repository`);
   const screenshots = [...new Set([
     ...stringArray(source.marketScreenshots ?? [], `${id} market screenshots`),
     ...stringArray(source.screenshots, `${id} screenshots`)
   ])];
   const modes = stringArray(source.modes, `${id} modes`);
-  if (!/^https:\/\/github\.com\//i.test(repositoryUrl)
+  if (repositoryUrl !== null && !/^https:\/\/github\.com\//i.test(repositoryUrl)
     || screenshots.some(url => !/^https:\/\//i.test(url))
     || modes.some(mode => mode !== "light" && mode !== "dark")) {
     throw new Error(`Invalid URLs or modes for ${id}.`);
@@ -129,15 +133,16 @@ function parseSkin(value: unknown): DshSkinCatalogEntry {
     || !["verified", "manual-only"].includes(String(reviewValue.installation))
   )) throw new Error(`Invalid review state for ${id}.`);
 
-  const stars = Number(source.githubStars ?? source.starsSnapshot ?? 0);
-  if (!Number.isInteger(stars) || stars < 0) throw new Error(`Invalid Stars count for ${id}.`);
+  const rawStars = source.stars ?? source.githubStars ?? source.starsSnapshot;
+  const stars = rawStars === null || rawStars === undefined ? null : Number(rawStars);
+  if (stars !== null && (!Number.isInteger(stars) || stars < 0)) throw new Error(`Invalid Stars count for ${id}.`);
   return {
     id,
     name: { zh: requiredString(name.zh, `${id} Chinese name`), en: requiredString(name.en, `${id} English name`) },
     author: requiredString(source.author, `${id} author`),
     description: requiredString(source.description, `${id} description`),
     repositoryUrl,
-    packageName: requiredString(source.package, `${id} package`),
+    packageName: requiredString(source.packageName ?? source.package, `${id} package`),
     tags: stringArray(source.tags, `${id} tags`),
     modes: modes as DshSkinCatalogEntry["modes"],
     install: {
@@ -259,32 +264,29 @@ export class DshSkinMarketplace {
       return { ok: false, error: "Invalid theme operation.", snapshot: await this.snapshot() };
     }
     if (!this.options.marketInstalled()) {
-      const prepared = await this.installMarket();
-      return {
-        ok: false,
-        snapshot: prepared.snapshot,
-        supportPrepared: prepared.ok,
-        ...(prepared.error ? { error: prepared.error } : {})
-      };
+      return { ok: false, error: "DSH 主题管理组件不可用，请先启动 DSH Desk 插件。", snapshot: await this.snapshot() };
     }
     try {
+      await this.refreshCatalog(false);
       if (input.action === "restart") {
-        await this.hostRequest("/dsh-skin-market/restart", {
+        await this.hostRequest("/dsh-appearance-manager/restart", {
           method: "POST",
           headers: { "content-type": "application/json", origin: this.webOrigin },
           body: JSON.stringify({ skinId: input.skinId })
         });
         return { ok: true, restartRequested: true, snapshot: this.createSnapshot(this.offlineHost(true)) };
       }
-      const started = objectValue(await this.hostRequest(`/dsh-skin-market/${input.action}`, {
+      const skin = this.catalog?.skins.find(item => item.id === input.skinId);
+      if (!skin) throw new Error("Theme is not present in the current catalog.");
+      const started = objectValue(await this.hostRequest(`/dsh-appearance-manager/${input.action}`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: this.webOrigin },
-        body: JSON.stringify({ skinId: input.skinId })
+        body: JSON.stringify({ skinId: input.skinId, skin, catalog: this.catalog?.skins ?? [] })
       }));
       const operationId = requiredString(started?.operationId, "operation id");
       const deadline = this.now() + OPERATION_TIMEOUT_MS;
       while (this.now() < deadline) {
-        const operation = await this.hostRequest(`/dsh-skin-market/operations/${encodeURIComponent(operationId)}`) as OperationPayload;
+        const operation = await this.hostRequest(`/dsh-appearance-manager/operations/${encodeURIComponent(operationId)}`) as OperationPayload;
         if (operation.phase === "done") {
           const snapshot = await this.snapshot();
           if (input.action === "activate" || input.action === "update") {
@@ -310,21 +312,13 @@ export class DshSkinMarketplace {
   }
 
   async installMarket(): Promise<DshSkinMarketInstallResult> {
-    if (!this.options.installPlugin) {
-      return { ok: false, restartRequired: false, error: "Theme market installation is unavailable.", snapshot: await this.snapshot() };
-    }
-    const result = await this.options.installPlugin({ installSpec: DSH_SKIN_MARKET_INSTALL_SPEC, profiles: ["web"] });
-    return {
-      ok: result.ok,
-      restartRequired: result.restartRequired,
-      snapshot: await this.snapshot(),
-      ...(result.error ? { error: result.error } : {})
-    };
+    return { ok: false, restartRequired: false, error: "主题管理已内置于 dsh-desk-plugin，无需安装额外市场插件。", snapshot: await this.snapshot() };
   }
 
   private createSnapshot(host: DshSkinHostState): DshSkinMarketplaceSnapshot {
     return {
       skins: this.catalog?.skins ?? [],
+      localSkins: this.localSkins(),
       generatedAt: this.catalog?.generatedAt ?? null,
       catalogSource: this.catalog ? this.catalogSource : "unavailable",
       catalogCheckedAt: this.catalog?.fetchedAt ?? 0,
@@ -340,7 +334,8 @@ export class DshSkinMarketplace {
   private localSkinStates(): DshSkinRuntimeState[] {
     const manifest = readJsonFile<WebProfileManifest>(join(this.options.webProfileDir, "package.json"), {});
     const dependencies = manifest.dependencies ?? {};
-    const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-skin-market", "state.json"), {});
+    const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-appearance-manager", "state.json"),
+      readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-skin-market", "state.json"), {}));
     return (this.catalog?.skins ?? []).flatMap(skin => {
       const spec = dependencies[skin.packageName];
       if (typeof spec !== "string") return [];
@@ -356,12 +351,41 @@ export class DshSkinMarketplace {
       return [{
         skinId: skin.id,
         installation: installed ? "installed" : "broken",
-        activation: state.activeSkinId === skin.id ? "active" : "inactive",
+      activation: state.activeSkinId === skin.id || state.skins?.[skin.id]?.active === true ? "active" : "inactive",
         installedVersion,
         installedAt,
         updateAvailable: installed && (installedVersion !== skin.install.version || !spec.includes(skin.install.commit)),
         ...(!installed ? { error: "Installed package is incomplete." } : {})
       } satisfies DshSkinRuntimeState];
+    });
+  }
+
+  private localSkins(): DshLocalSkin[] {
+    const manifest = readJsonFile<WebProfileManifest>(join(this.options.webProfileDir, "package.json"), {});
+    const dependencies = manifest.dependencies ?? {};
+    const known = new Set((this.catalog?.skins ?? []).map(skin => skin.packageName));
+    return Object.keys(dependencies).filter(packageName => !known.has(packageName)
+      && packageName !== "dsh-desk-plugin"
+      && !packageName.startsWith("@deepseek-ai/")).flatMap(packageName => {
+      const packagePath = join(this.options.webProfileDir, "node_modules", ...packageName.split("/"), "package.json");
+      const packageManifest = readJsonFile<Record<string, unknown> | null>(packagePath, null);
+      const dsh = objectValue(packageManifest?.dsh);
+      if (!dsh || dsh.client === undefined) return [];
+      const repository = typeof packageManifest?.homepage === "string" && /^https:\/\//i.test(packageManifest.homepage)
+        ? packageManifest.homepage
+        : objectValue(packageManifest?.repository)?.url;
+      const version = typeof packageManifest?.version === "string" ? packageManifest.version : null;
+      return [{
+        id: `local:${packageName}`,
+        packageName,
+        name: { zh: packageName, en: packageName },
+        author: typeof packageManifest?.author === "string" ? packageManifest.author : "本地主题",
+        description: typeof packageManifest?.description === "string" ? packageManifest.description : "未收录到 DSH 主题目录的本地主题。",
+        version,
+        repositoryUrl: typeof repository === "string" && /^https:\/\//i.test(repository) ? repository.replace(/^git\+/, "").replace(/\.git$/, "") : null,
+        active: false,
+        broken: packageManifest === null
+      } satisfies DshLocalSkin];
     });
   }
 
@@ -393,7 +417,7 @@ export class DshSkinMarketplace {
 
   private async hostState(): Promise<DshSkinHostState> {
     try {
-      const payload = await this.hostRequest("/dsh-skin-market/state") as RuntimePayload;
+      const payload = await this.hostRequest("/dsh-appearance-manager/state") as RuntimePayload;
       const states = new Map(this.localSkinStates().map(item => [item.skinId, item]));
       const liveStates = Array.isArray(payload.skins)
         ? payload.skins.map(parseRuntimeSkin).filter((item): item is DshSkinRuntimeState => item !== null)

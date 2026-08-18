@@ -40,6 +40,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       return leftActive - rightActive || left.name.zh.localeCompare(right.name.zh);
     });
   }, [snapshot]);
+  const localInstalled = snapshot?.localSkins ?? [];
 
   async function mutate(skin: DshSkinCatalogEntry, action: DshSkinAction) {
     setBusy(`${skin.id}:${action}`);
@@ -72,7 +73,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
         <div>
           <h2>{t("dshThemes.libraryTitle", "主题库")}</h2>
           <p>{snapshot
-            ? t("dshThemes.librarySummary", "{count} 个已安装主题", { count: installed.length })
+            ? t("dshThemes.librarySummary", "{count} 个已安装主题", { count: installed.length + localInstalled.length })
             : t("dshThemes.loadingLibrary", "正在读取本机主题…")}</p>
         </div>
         <div className="dsh-theme-header-actions">
@@ -85,7 +86,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
 
       <section className="dsh-theme-library-content" aria-live="polite">
         {loading && !snapshot ? <div className="dsh-theme-empty"><RefreshCw size={20} className="spinning" /><span>{t("dshThemes.loadingLibrary", "正在读取本机主题…")}</span></div> : null}
-        {!loading && snapshot && installed.length === 0 ? (
+        {!loading && snapshot && installed.length === 0 && localInstalled.length === 0 ? (
           <div className="dsh-theme-empty">
             <span className="dsh-theme-empty-icon"><Palette size={24} /></span>
             <strong>{t("dshThemes.emptyLibrary", "还没有安装主题")}</strong>
@@ -96,14 +97,14 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
         {snapshot && installed.length > 0 ? <div className="dsh-theme-library-grid">{installed.map(skin => {
           const state = runtimeFor(snapshot, skin.id)!;
           const activeTheme = state.activation === "active";
-          const canManage = snapshot.host.connected || !snapshot.host.marketInstalled;
+          const canManage = snapshot.host.connected;
           const isBusy = busy?.startsWith(`${skin.id}:`) === true;
           return (
             <article key={skin.id} className={`dsh-theme-library-card ${activeTheme ? "active" : ""}`}>
               <div className="dsh-theme-library-preview"><ThemePreview skin={skin} />{activeTheme ? <span className="dsh-theme-status active"><Check size={12} />{t("dshThemes.inUse", "使用中")}</span> : state.updateAvailable ? <span className="dsh-theme-status update">{t("dshThemes.updateAvailable", "可更新")}</span> : null}</div>
               <div className="dsh-theme-library-copy">
                 <div><strong title={locale === "zh" ? skin.name.zh : skin.name.en}>{locale === "zh" ? skin.name.zh : skin.name.en}</strong><span title={skin.author}>{skin.author}</span></div>
-                <button type="button" className="dsh-theme-repository-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={15} /></button>
+                {skin.repositoryUrl ? <button type="button" className="dsh-theme-repository-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl!)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={15} /></button> : null}
               </div>
               <div className="dsh-theme-library-actions">
                 {state.installation === "broken" ? <span className="dsh-theme-broken">{t("dshThemes.broken", "安装不完整")}</span> : null}
@@ -113,6 +114,16 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
             </article>
           );
         })}</div> : null}
+        {localInstalled.length > 0 ? <>
+          <div className="dsh-theme-local-heading"><strong>{t("dshThemes.localThemes", "本地未收录主题")}</strong><span>{t("dshThemes.localThemesDetail", "这些主题保留在本机，不属于当前目录。", { count: localInstalled.length })}</span></div>
+          <div className="dsh-theme-library-grid">{localInstalled.map(skin => (
+            <article key={skin.id} className="dsh-theme-library-card dsh-theme-local-card">
+              <div className="dsh-theme-library-preview"><div className="dsh-theme-preview-fallback"><Palette size={24} /><span>{t("dshThemes.notCatalogued", "未收录")}</span></div></div>
+              <div className="dsh-theme-library-copy"><div><strong title={skin.name.en}>{locale === "zh" ? skin.name.zh : skin.name.en}</strong><span title={skin.author}>{skin.author}</span></div>{skin.repositoryUrl ? <button type="button" className="dsh-theme-repository-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl!)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={15} /></button> : null}</div>
+              <div className="dsh-theme-library-actions"><span className="dsh-theme-broken">{skin.broken ? t("dshThemes.broken", "安装不完整") : t("dshThemes.keptLocally", "仅保留在本机")}</span></div>
+            </article>
+          ))}</div>
+        </> : null}
       </section>
     </div>
   );

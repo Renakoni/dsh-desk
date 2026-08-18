@@ -18,6 +18,7 @@ import {
   createAgentSkillPolicy,
   createPluginPackageController,
   loaderInventory,
+  mountAppearanceManager,
   runtimeEntryOwners,
 } from '../src/index.js'
 
@@ -270,6 +271,28 @@ describe('DSH Desk loopback transport', () => {
 })
 
 describe('DSH Loader inventory bridge', () => {
+  it('mounts the built-in appearance manager under its own Host route namespace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(profile, { recursive: true })
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+    })
+    assert.deepEqual(routes.map(route => route.path), [
+      '/dsh-appearance-manager/state',
+      '/dsh-appearance-manager/install',
+      '/dsh-appearance-manager/activate',
+      '/dsh-appearance-manager/deactivate',
+      '/dsh-appearance-manager/update',
+      '/dsh-appearance-manager/uninstall',
+      '/dsh-appearance-manager/operations',
+    ])
+    dispose()
+  })
+
   it('waits for the initial policy exchange before plugin startup settles', async () => {
     let release
     const { port } = await listen((_request, response) => {
