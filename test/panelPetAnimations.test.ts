@@ -21,7 +21,7 @@ describe("normalizeAnimationKeys: one empty-pool rule for UI, preview, and pet",
   });
 
   it("agrees with the live pet: an empty persisted pool halts rotation everywhere", () => {
-    const persisted = { enabled: true, selectedSprites: [] as string[], intervalMin: 10, intervalMax: 20, repeatMin: 1, repeatMax: 2 };
+    const persisted = { enabled: true, selectedSprites: [] as string[], intervalMin: 10, intervalMax: 20 };
     expect(normalizeAnimationKeys(persisted.selectedSprites)).toEqual([]);
     expect(planIdleAnimation(persisted)).toBeNull();
   });

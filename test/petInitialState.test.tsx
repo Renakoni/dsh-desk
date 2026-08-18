@@ -32,7 +32,7 @@ describe("floating pet initial state", () => {
     await waitFor(() => expect(notifyPetRendered).toHaveBeenCalledOnce());
   });
 
-  it("pauses idle rotation during a preview and restarts the full wait afterward", () => {
+  it("pauses idle rotation during a preview and selects again when it ends", () => {
     vi.useFakeTimers();
     const settings = {
       ...defaultSettings,
@@ -40,9 +40,7 @@ describe("floating pet initial state", () => {
         enabled: true,
         selectedSprites: ["extra_action_7"],
         intervalMin: 5,
-        intervalMax: 5,
-        repeatMin: 1,
-        repeatMax: 1
+        intervalMax: 5
       }
     };
     let previewListener: ((animationKey: string) => void) | null = null;
@@ -57,9 +55,6 @@ describe("floating pet initial state", () => {
     });
 
     render(<App />);
-    expect(screen.getByRole("img").getAttribute("alt")).toBe("idle");
-
-    act(() => { vi.advanceTimersByTime(5_000); });
     expect(screen.getByRole("img").getAttribute("alt")).toBe("extra_action_7");
 
     act(() => { previewListener?.("extra_action_8"); });
@@ -68,10 +63,6 @@ describe("floating pet initial state", () => {
     expect(screen.getByRole("img").getAttribute("alt")).toBe("extra_action_8");
 
     act(() => { previewListener?.("__clear_preview"); });
-    expect(screen.getByRole("img").getAttribute("alt")).toBe("idle");
-    act(() => { vi.advanceTimersByTime(4_999); });
-    expect(screen.getByRole("img").getAttribute("alt")).toBe("idle");
-    act(() => { vi.advanceTimersByTime(1); });
     expect(screen.getByRole("img").getAttribute("alt")).toBe("extra_action_7");
   });
 
@@ -85,9 +76,7 @@ describe("floating pet initial state", () => {
         enabled: true,
         selectedSprites: ["waving"],
         intervalMin: 5,
-        intervalMax: 5,
-        repeatMin: 1,
-        repeatMax: 1
+        intervalMax: 5
       }
     };
     let dragListener: ((direction: "left" | "right" | null) => void) | null = null;
@@ -103,8 +92,6 @@ describe("floating pet initial state", () => {
     });
 
     render(<App />);
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("idle");
-    act(() => { vi.advanceTimersByTime(5_000); });
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
 
     act(() => { dragListener?.("right"); });
@@ -113,8 +100,6 @@ describe("floating pet initial state", () => {
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("running_right");
 
     act(() => { dragListener?.(null); });
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("idle");
-    act(() => { vi.advanceTimersByTime(5_000); });
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
   });
 });

@@ -337,8 +337,6 @@ export interface IdleAnimConfig {
   selectedSprites: string[];
   intervalMin: number;
   intervalMax: number;
-  repeatMin: number;
-  repeatMax: number;
 }
 
 export interface SoundSettings {
@@ -665,10 +663,8 @@ export const defaultSettings: CompanionSettings = {
   idleAnim: {
     enabled: true,
     selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
-    intervalMin: 15,
-    intervalMax: 40,
-    repeatMin: 2,
-    repeatMax: 3
+    intervalMin: 12,
+    intervalMax: 28
   },
   stateAnimations: {}
 };

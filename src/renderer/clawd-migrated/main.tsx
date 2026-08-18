@@ -204,8 +204,8 @@ function PetApp() {
     }
   }
 
-  // 随机动作只在待机间隔结束后短暂播放；动画测试会暂停调度，
-  // 避免预览结束时突然露出后台已经推进到一半的动作。
+  // 随机动作在待机期间持续轮换；动画测试会暂停调度，避免预览
+  // 结束时突然露出后台已经切换过的动作。
   useEffect(() => {
     setIdleAnimConfig(previous => keepIdleAnimationConfigReference(previous, settings.idleAnim ?? null));
   }, [settings.idleAnim]);

@@ -107,9 +107,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
     enabled: true,
     selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
     intervalMin: 12,
-    intervalMax: 28,
-    repeatMin: 1,
-    repeatMax: 2
+    intervalMax: 28
   },
   stateAnimations: {},
   // Per-theme snapshots of stateAnimations + idleAnim, keyed by theme id.
@@ -128,11 +126,19 @@ export const CANONICAL_SETTINGS_KEYS: ReadonlySet<string> = new Set([
 
 const SOUND_SETTINGS_KEYS = new Set(["enabled", "volume", "fileDone", "fileError", "filePermission", "eventFiles"]);
 const NOTIFICATION_RULE_KEYS = new Set(["eventType", "enabled", "playSound"]);
+const IDLE_ANIMATION_KEYS = new Set(["enabled", "selectedSprites", "intervalMin", "intervalMax"]);
+
+function pickIdleAnimation(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([key]) => IDLE_ANIMATION_KEYS.has(key))
+  );
+}
 
 /**
  * Reduce a parsed settings object to the canonical schema. Unknown top-level
- * keys are dropped, and the two nested structures with fixed shapes (sound,
- * notificationRules entries) are reduced to their known keys. Values are not
+ * keys are dropped, and nested structures with fixed shapes are reduced to
+ * their known keys. Values are not
  * validated here — numeric display fields go through
  * normalizePetDisplaySettings and everything else is read defensively at its
  * point of use.
@@ -152,6 +158,17 @@ export function pickCanonicalSettings(parsed: Record<string, unknown>): Record<s
       rule && typeof rule === "object" && !Array.isArray(rule)
         ? Object.fromEntries(Object.entries(rule as Record<string, unknown>).filter(([key]) => NOTIFICATION_RULE_KEYS.has(key)))
         : rule
+    );
+  }
+  if ("idleAnim" in canonical) canonical.idleAnim = pickIdleAnimation(canonical.idleAnim);
+  if (canonical.themeAnimationProfiles && typeof canonical.themeAnimationProfiles === "object" && !Array.isArray(canonical.themeAnimationProfiles)) {
+    canonical.themeAnimationProfiles = Object.fromEntries(
+      Object.entries(canonical.themeAnimationProfiles as Record<string, unknown>).map(([themeId, profile]) => {
+        if (!profile || typeof profile !== "object" || Array.isArray(profile)) return [themeId, profile];
+        const next = { ...(profile as Record<string, unknown>) };
+        if ("idleAnim" in next) next.idleAnim = pickIdleAnimation(next.idleAnim);
+        return [themeId, next];
+      })
     );
   }
   return canonical;
