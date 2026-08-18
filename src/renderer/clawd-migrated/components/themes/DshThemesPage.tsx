@@ -25,6 +25,10 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
     if (active) void refresh(false);
   }, [active]);
 
+  useEffect(() => {
+    if (!active) setMarketOpen(false);
+  }, [active]);
+
   const installed = useMemo(() => {
     if (!snapshot) return [];
     return snapshot.skins.filter(skin => {

@@ -76,8 +76,12 @@ describe("DshThemesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
     await screen.findByText("主题市场");
     expect(screen.getAllByTestId("dsh-theme-card").map(card => card.querySelector("strong")?.textContent)).toEqual(["纸张主题", "海洋主题"]);
+    expect(screen.getByRole("button", { name: "Stars" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "最近更新" }).getAttribute("aria-pressed")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "最近更新" }));
+    expect(screen.getByRole("button", { name: "Stars" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "最近更新" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getAllByTestId("dsh-theme-card").map(card => card.querySelector("strong")?.textContent)).toEqual(["海洋主题", "纸张主题"]);
     fireEvent.change(screen.getByPlaceholderText("搜索主题或作者"), { target: { value: "paper-author" } });
     expect(screen.queryByText("海洋主题")).toBeNull();

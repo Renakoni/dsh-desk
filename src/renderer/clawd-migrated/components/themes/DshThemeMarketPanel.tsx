@@ -110,8 +110,8 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
       <section className="dsh-theme-market-toolbar" aria-label={t("dshThemes.filters", "主题筛选")}>
         <label className="dsh-theme-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t("dshThemes.search", "搜索主题或作者")} /></label>
         <div className="dsh-theme-sort" aria-label={t("dshThemes.sort", "排序")}>
-          <button type="button" className={sort === "stars" ? "active" : ""} onClick={() => setSort("stars")}><Star size={14} />{t("dshThemes.stars", "Stars")}</button>
-          <button type="button" className={sort === "latest" ? "active" : ""} onClick={() => setSort("latest")}><Clock3 size={14} />{t("dshThemes.latest", "最近更新")}</button>
+          <button type="button" className={sort === "stars" ? "active" : ""} aria-pressed={sort === "stars"} onClick={() => setSort("stars")}><Star size={14} />{t("dshThemes.stars", "Stars")}</button>
+          <button type="button" className={sort === "latest" ? "active" : ""} aria-pressed={sort === "latest"} onClick={() => setSort("latest")}><Clock3 size={14} />{t("dshThemes.latest", "最近更新")}</button>
         </div>
       </section>
 
