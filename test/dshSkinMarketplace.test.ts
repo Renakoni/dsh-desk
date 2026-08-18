@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -45,7 +45,7 @@ describe("DshSkinMarketplace", () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(response(skinCatalog()))
       .mockResolvedValueOnce(response({ error: "offline" }, 503));
-    const market = new DshSkinMarketplace({ cachePath, marketInstalled: () => false, fetcher, now: () => 100 });
+    const market = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => false, fetcher, now: () => 100 });
 
     const fresh = await market.snapshot();
     expect(fetcher).toHaveBeenCalledWith(DSH_SKIN_CATALOG_URL, expect.anything());
@@ -53,7 +53,7 @@ describe("DshSkinMarketplace", () => {
     expect(JSON.parse(readFileSync(cachePath, "utf8"))).toMatchObject({ version: 1, skins: [{ id: "demo.skin" }] });
 
     const diskCacheFetcher = vi.fn();
-    const reloaded = new DshSkinMarketplace({ cachePath, marketInstalled: () => false, fetcher: diskCacheFetcher, now: () => 101 });
+    const reloaded = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => false, fetcher: diskCacheFetcher, now: () => 101 });
     expect(await reloaded.snapshot()).toMatchObject({ catalogSource: "cache", skins: [{ id: "demo.skin", stars: 42 }] });
     expect(diskCacheFetcher).not.toHaveBeenCalled();
 
@@ -68,10 +68,30 @@ describe("DshSkinMarketplace", () => {
     const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
       ? response(skinCatalog())
       : response({ skins: [{ skinId: "demo.skin", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }], restartAvailable: true, runningAgentCount: 0 }));
-    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), marketInstalled: () => true, fetcher });
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher });
 
     const snapshot = await market.snapshot();
     expect(snapshot.host).toMatchObject({ connected: true, marketInstalled: true, restartAvailable: true, skins: [{ skinId: "demo.skin", activation: "active" }] });
+  });
+
+  it("reads the local theme library without the market controller", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-local-"));
+    const webProfileDir = join(root, "web");
+    const packageDir = join(webProfileDir, "node_modules", "demo-skin");
+    mkdirSync(packageDir, { recursive: true });
+    mkdirSync(join(webProfileDir, ".dsh-skin-market"), { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: { "demo-skin": "github:demo/skin#1234567890123456789012345678901234567890" } }));
+    writeFileSync(join(packageDir, "package.json"), JSON.stringify({ version: "1.0.0", dsh: { client: {} } }));
+    writeFileSync(join(webProfileDir, ".dsh-skin-market", "state.json"), JSON.stringify({ version: 1, activeSkinId: "demo.skin", disabledSkinIds: [] }));
+    const market = new DshSkinMarketplace({
+      cachePath: join(root, "catalog.json"),
+      webProfileDir,
+      marketInstalled: () => false,
+      fetcher: async () => response(skinCatalog())
+    });
+
+    const snapshot = await market.snapshot();
+    expect(snapshot.host).toMatchObject({ connected: false, marketInstalled: false, skins: [{ skinId: "demo.skin", installation: "installed", activation: "active" }] });
   });
 
   it("forwards a same-origin mutation and polls it to completion", async () => {
@@ -85,7 +105,7 @@ describe("DshSkinMarketplace", () => {
       if (url.endsWith("/operations/op-1")) return response({ phase: "done" });
       return response({ skins: [], restartAvailable: false });
     });
-    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
 
     const result = await market.mutate({ skinId: "demo.skin", action: "install" });
     expect(result.ok).toBe(true);
@@ -100,7 +120,7 @@ describe("DshSkinMarketplace", () => {
       if (url.endsWith("/operations/op-2")) return response({ phase: "done" });
       return response({ skins: [{ skinId: "demo.skin", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }], restartAvailable: true });
     });
-    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
 
     const result = await market.mutate({ skinId: "demo.skin", action: "activate" });
     expect(result).toMatchObject({ ok: true, browserRefreshRequired: true, snapshot: { host: { skins: [{ activation: "restart-required" }] } } });
@@ -111,6 +131,7 @@ describe("DshSkinMarketplace", () => {
     const installPlugin = vi.fn(async () => ({ ok: true, restartRequired: true }));
     const market = new DshSkinMarketplace({
       cachePath: join(root, "catalog.json"),
+      webProfileDir: join(root, "web"),
       marketInstalled: () => false,
       fetcher: async () => response(skinCatalog()),
       installPlugin

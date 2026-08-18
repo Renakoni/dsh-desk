@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type {
   DshSkinAction,
   DshSkinCatalogEntry,
@@ -48,8 +49,17 @@ type OperationPayload = {
   message?: unknown;
 };
 
+type WebProfileManifest = {
+  dependencies?: Record<string, string>;
+};
+
+type PersistedSkinState = {
+  activeSkinId?: unknown;
+};
+
 export type DshSkinMarketplaceOptions = {
   cachePath: string;
+  webProfileDir: string;
   marketInstalled: () => boolean;
   fetcher?: Fetcher;
   now?: () => number;
@@ -62,6 +72,10 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function readJsonFile<T>(path: string, fallback: T): T {
+  try { return JSON.parse(readFileSync(path, "utf8")) as T; } catch { return fallback; }
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -244,6 +258,15 @@ export class DshSkinMarketplace {
       || !["install", "activate", "deactivate", "update", "uninstall", "restart"].includes(input.action)) {
       return { ok: false, error: "Invalid theme operation.", snapshot: await this.snapshot() };
     }
+    if (!this.options.marketInstalled()) {
+      const prepared = await this.installMarket();
+      return {
+        ok: false,
+        snapshot: prepared.snapshot,
+        supportPrepared: prepared.ok,
+        ...(prepared.error ? { error: prepared.error } : {})
+      };
+    }
     try {
       if (input.action === "restart") {
         await this.hostRequest("/dsh-skin-market/restart", {
@@ -311,7 +334,35 @@ export class DshSkinMarketplace {
   }
 
   private offlineHost(marketInstalled: boolean): DshSkinHostState {
-    return { connected: false, marketInstalled, skins: [], restartAvailable: false, runningAgentCount: null };
+    return { connected: false, marketInstalled, skins: this.localSkinStates(), restartAvailable: false, runningAgentCount: null };
+  }
+
+  private localSkinStates(): DshSkinRuntimeState[] {
+    const manifest = readJsonFile<WebProfileManifest>(join(this.options.webProfileDir, "package.json"), {});
+    const dependencies = manifest.dependencies ?? {};
+    const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-skin-market", "state.json"), {});
+    return (this.catalog?.skins ?? []).flatMap(skin => {
+      const spec = dependencies[skin.packageName];
+      if (typeof spec !== "string") return [];
+      const packagePath = join(this.options.webProfileDir, "node_modules", ...skin.packageName.split("/"), "package.json");
+      const packageManifest = readJsonFile<Record<string, unknown> | null>(packagePath, null);
+      const installedVersion = typeof packageManifest?.version === "string" ? packageManifest.version : null;
+      let installedAt: string | null = null;
+      try { installedAt = statSync(packagePath).mtime.toISOString(); } catch { /* Broken installations are reported below. */ }
+      const installed = packageManifest !== null
+        && typeof packageManifest.dsh === "object"
+        && packageManifest.dsh !== null
+        && Object.prototype.hasOwnProperty.call(packageManifest.dsh, "client");
+      return [{
+        skinId: skin.id,
+        installation: installed ? "installed" : "broken",
+        activation: state.activeSkinId === skin.id ? "active" : "inactive",
+        installedVersion,
+        installedAt,
+        updateAvailable: installed && (installedVersion !== skin.install.version || !spec.includes(skin.install.commit)),
+        ...(!installed ? { error: "Installed package is incomplete." } : {})
+      } satisfies DshSkinRuntimeState];
+    });
   }
 
   private async refreshCatalog(force: boolean): Promise<void> {
@@ -343,10 +394,15 @@ export class DshSkinMarketplace {
   private async hostState(): Promise<DshSkinHostState> {
     try {
       const payload = await this.hostRequest("/dsh-skin-market/state") as RuntimePayload;
+      const states = new Map(this.localSkinStates().map(item => [item.skinId, item]));
+      const liveStates = Array.isArray(payload.skins)
+        ? payload.skins.map(parseRuntimeSkin).filter((item): item is DshSkinRuntimeState => item !== null)
+        : [];
+      for (const state of liveStates) states.set(state.skinId, state);
       return {
         connected: true,
         marketInstalled: true,
-        skins: Array.isArray(payload.skins) ? payload.skins.map(parseRuntimeSkin).filter((item): item is DshSkinRuntimeState => item !== null) : [],
+        skins: [...states.values()],
         restartAvailable: payload.restartAvailable === true,
         runningAgentCount: typeof payload.runningAgentCount === "number" && Number.isInteger(payload.runningAgentCount)
           ? payload.runningAgentCount

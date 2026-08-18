@@ -71,5 +71,6 @@ export type DshSkinMutationResult = {
   snapshot: DshSkinMarketplaceSnapshot;
   restartRequested?: boolean;
   browserRefreshRequired?: boolean;
+  supportPrepared?: boolean;
   error?: string;
 };

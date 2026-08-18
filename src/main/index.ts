@@ -3769,6 +3769,7 @@ function dshSkinMarketInstalled() {
 function dshSkinMarketplace() {
   dshSkinMarketplaceInstance ??= new DshSkinMarketplace({
     cachePath: join(app.getPath("userData"), "dsh-skin-market-catalog.json"),
+    webProfileDir: join(resolveDshHome(), "profiles", "web"),
     marketInstalled: dshSkinMarketInstalled,
     installPlugin: input => dshPluginCatalog().install(input)
   });

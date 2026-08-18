@@ -53,8 +53,8 @@ function snapshot(host: Partial<DshSkinMarketplaceSnapshot["host"]> = {}): DshSk
 function renderPage(value = snapshot()) {
   const api = {
     getDshSkinMarketplace: vi.fn(async () => value),
-    installDshSkinMarketplace: vi.fn(async () => ({ ok: true, restartRequired: true, snapshot: snapshot({ connected: false, marketInstalled: true }) })),
-    mutateDshSkin: vi.fn(async () => ({ ok: true, snapshot: value })),
+    installDshSkinMarketplace: vi.fn(async () => ({ ok: true, restartRequired: true, snapshot: value })),
+    mutateDshSkin: vi.fn(async (): Promise<{ ok: boolean; snapshot: DshSkinMarketplaceSnapshot; supportPrepared?: boolean }> => ({ ok: true, snapshot: value })),
     openExternal: vi.fn(async () => undefined)
   };
   Object.assign(window, { companion: api });
@@ -68,31 +68,41 @@ afterEach(() => {
 });
 
 describe("DshThemesPage", () => {
-  it("renders visual cards and supports search and catalog sorting", async () => {
+  it("keeps the local library separate from the visual market", async () => {
     renderPage();
-    await screen.findByText("海洋主题");
+    await screen.findByText("还没有安装主题");
+    expect(screen.queryByText("海洋主题")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    await screen.findByText("主题市场");
     expect(screen.getAllByTestId("dsh-theme-card").map(card => card.querySelector("strong")?.textContent)).toEqual(["纸张主题", "海洋主题"]);
 
     fireEvent.click(screen.getByRole("button", { name: "最近更新" }));
     expect(screen.getAllByTestId("dsh-theme-card").map(card => card.querySelector("strong")?.textContent)).toEqual(["海洋主题", "纸张主题"]);
-
     fireEvent.change(screen.getByPlaceholderText("搜索主题或作者"), { target: { value: "paper-author" } });
     expect(screen.queryByText("海洋主题")).toBeNull();
     expect(screen.getByText("纸张主题")).not.toBeNull();
   });
 
-  it("installs the Web theme support from the offline state", async () => {
+  it("does not expose the internal market component as a user-facing install", async () => {
     const api = renderPage(snapshot({ connected: false, marketInstalled: false }));
-    fireEvent.click(await screen.findByRole("button", { name: "安装组件" }));
-    await waitFor(() => expect(api.installDshSkinMarketplace).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("主题组件已安装，重启 DSH Web 后即可管理主题。")).not.toBeNull();
-  });
-
-  it("installs a catalog theme through the Host API", async () => {
-    const api = renderPage();
+    expect(await screen.findByText("还没有安装主题")).not.toBeNull();
+    expect(screen.queryByText("安装组件")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
     await screen.findByText("海洋主题");
+    api.mutateDshSkin.mockResolvedValueOnce({ ok: false, supportPrepared: true, snapshot: snapshot({ connected: false, marketInstalled: true }) });
     const oceanCard = screen.getAllByTestId("dsh-theme-card").find(card => within(card).queryByText("海洋主题"));
     fireEvent.click(within(oceanCard!).getByRole("button", { name: "安装" }));
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "install" }));
+    expect(await screen.findByText("主题管理已准备好。重启 DSH 后继续操作。")).not.toBeNull();
+    expect(api.installDshSkinMarketplace).not.toHaveBeenCalled();
+  });
+
+  it("shows installed themes in the library and keeps their controls there", async () => {
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }));
+    await screen.findByText("海洋主题");
+    expect(screen.queryByText("纸张主题")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "使用" }));
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "activate" }));
   });
 });
