@@ -95,7 +95,7 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
-function parseSkin(value: unknown): DshSkinCatalogEntry {
+function parseSkin(value: unknown, fallbackUpdatedAt?: string): DshSkinCatalogEntry {
   const source = objectValue(value);
   const name = objectValue(source?.name);
   const install = objectValue(source?.install);
@@ -117,7 +117,7 @@ function parseSkin(value: unknown): DshSkinCatalogEntry {
     || modes.some(mode => mode !== "light" && mode !== "dark")) {
     throw new Error(`Invalid URLs or modes for ${id}.`);
   }
-  const updatedAt = requiredString(source.releaseUpdatedAt ?? source.updatedAt, `${id} update time`);
+  const updatedAt = requiredString(source.releaseUpdatedAt ?? source.updatedAt ?? fallbackUpdatedAt, `${id} update time`);
   if (!Number.isFinite(Date.parse(updatedAt))) throw new Error(`Invalid update time for ${id}.`);
 
   const reviewValue = review && review.compatibility !== undefined && review.preview !== undefined && review.installation !== undefined
@@ -169,12 +169,13 @@ function parseSkin(value: unknown): DshSkinCatalogEntry {
 
 export function parseDshSkinCatalog(value: unknown): { generatedAt: string; skins: DshSkinCatalogEntry[] } {
   const source = objectValue(value);
-  if (!source || source.schemaVersion !== 1 || !Array.isArray(source.skins) || source.skins.length > 5000) {
+  const entries = Array.isArray(source?.themes) ? source.themes : source?.skins;
+  if (!source || source.schemaVersion !== 1 || !Array.isArray(entries) || entries.length > 5000) {
     throw new Error("Unsupported skin catalog.");
   }
   const generatedAt = requiredString(source.generatedAt, "catalog generation time");
   if (!Number.isFinite(Date.parse(generatedAt))) throw new Error("Invalid catalog generation time.");
-  const skins = source.skins.map(parseSkin);
+  const skins = entries.map(value => parseSkin(value, generatedAt));
   if (new Set(skins.map(skin => skin.id)).size !== skins.length) throw new Error("Duplicate skin id in catalog.");
   return { generatedAt, skins };
 }

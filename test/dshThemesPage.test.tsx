@@ -108,6 +108,20 @@ describe("DshThemesPage", () => {
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "activate" }));
   });
 
+  it("does not offer lifecycle actions while the built-in manager is offline", async () => {
+    const api = renderPage(snapshot({
+      connected: false,
+      marketInstalled: true,
+      skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
+    }));
+    await screen.findByText("海洋主题");
+    const deactivate = screen.getByRole("button", { name: "停用" });
+    const uninstall = screen.getByRole("button", { name: "卸载" });
+    expect(deactivate).toHaveProperty("disabled", true);
+    expect(uninstall).toHaveProperty("disabled", true);
+    expect(api.mutateDshSkin).not.toHaveBeenCalled();
+  });
+
   it("shows an installed theme outside the catalog without offering destructive controls", async () => {
     renderPage({ ...snapshot(), localSkins: [{ id: "local:custom", packageName: "custom-theme", name: { zh: "本地主题", en: "Local theme" }, author: "local", description: "local", version: "1.0.0", repositoryUrl: null, active: false, broken: false }] });
     await screen.findByText("本地未收录主题");
