@@ -110,75 +110,93 @@ describe("startIdleAnimator: selected-pool choreography", () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it("promotes each batch sprite to the resting pose for the next interval", () => {
+  it("waits in the normal idle pose, then returns to it between repeats", () => {
     const seen: Array<string | null> = [];
-    // rng: 0 → initial sprite 0; 0.5 → delay 15s; 0.9 → next sprite 1.
-    const stop = startIdleAnimator(plan, key => seen.push(key), rngSequence([0, 0.5, 0.9]));
+    // rng: 0.5 -> delay 15s; 0.9 -> sprite 1.
+    const stop = startIdleAnimator(plan, key => seen.push(key), rngSequence([0.5, 0.9]));
 
-    expect(seen).toEqual(["extra_action_7"]);
+    expect(seen).toEqual([null]);
 
     vi.advanceTimersByTime(14_999);
-    expect(seen).toEqual(["extra_action_7"]);
+    expect(seen).toEqual([null]);
 
     vi.advanceTimersByTime(1);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8"]);
+    expect(seen).toEqual([null, "extra_action_8"]);
 
     vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8", "extra_action_7"]);
+    expect(seen).toEqual([null, "extra_action_8", null]);
 
-    // Second repeat of the SAME sprite after the gap.
+    // The same action restarts after a normal-idle gap.
     vi.advanceTimersByTime(IDLE_SPRITE_GAP_MS);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8", "extra_action_7", "extra_action_8"]);
+    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8"]);
 
     vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8", "extra_action_7", "extra_action_8"]);
+    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8", null]);
 
-    // The batch sprite remains active for the next full interval instead of
-    // snapping back to the animator's initial sprite.
+    // The next interval is entirely normal idle.
     vi.advanceTimersByTime(9_999);
-    expect(seen.at(-1)).toBe("extra_action_8");
+    expect(seen.at(-1)).toBeNull();
     vi.advanceTimersByTime(1);
     expect(seen.at(-1)).toBe("extra_action_7");
 
     stop();
   });
 
-  it("keeps a single selected sprite active for the entire idle plan", () => {
+  it("plays a single selected sprite as a temporary action on every interval", () => {
     const seen: Array<string | null> = [];
-    const singleSprite: IdleAnimationPlan = { ...plan, pool: ["extra_action_8"], repeatMin: 1, repeatMax: 1 };
+    const singleSprite: IdleAnimationPlan = {
+      ...plan,
+      pool: ["extra_action_8"],
+      intervalMinMs: 10_000,
+      intervalMaxMs: 10_000,
+      repeatMin: 1,
+      repeatMax: 1
+    };
     const stop = startIdleAnimator(singleSprite, key => seen.push(key), rngSequence([0, 0, 0]));
 
-    vi.advanceTimersByTime(10_000 + IDLE_SPRITE_SHOW_MS + 10_000);
-    expect(seen).toEqual(["extra_action_8"]);
+    vi.advanceTimersByTime(10_000);
+    expect(seen).toEqual([null, "extra_action_8"]);
+    vi.advanceTimersByTime(IDLE_SPRITE_SHOW_MS);
+    expect(seen).toEqual([null, "extra_action_8", null]);
+    vi.advanceTimersByTime(10_000);
+    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_8"]);
 
     stop();
     expect(seen.at(-1)).toBeNull();
   });
 
-  it("immediately replaces a deselected active sprite when the plan restarts", () => {
+  it("clears a deselected active sprite when the plan restarts", () => {
     const seen: Array<string | null> = [];
-    const stopA = startIdleAnimator({ ...plan, pool: ["extra_action_7"] }, key => seen.push(key), rngSequence([0]));
-    expect(seen).toEqual(["extra_action_7"]);
+    const fixed = { ...plan, intervalMinMs: 10_000, intervalMaxMs: 10_000, repeatMin: 1, repeatMax: 1 };
+    const stopA = startIdleAnimator({ ...fixed, pool: ["extra_action_7"] }, key => seen.push(key), rngSequence([0, 0]));
+    vi.advanceTimersByTime(10_000);
+    expect(seen.at(-1)).toBe("extra_action_7");
 
     stopA();
-    const stopRemaining = startIdleAnimator({ ...plan, pool: ["extra_action_aqua_bocchi", "extra_action_8"] }, key => seen.push(key), rngSequence([0.99]));
-    expect(seen.at(-1)).toBe("extra_action_8");
+    const stopRemaining = startIdleAnimator({ ...fixed, pool: ["extra_action_aqua_bocchi", "extra_action_8"] }, key => seen.push(key), rngSequence([0, 0.99]));
+    expect(seen.at(-1)).toBeNull();
 
     stopRemaining();
   });
 
-  it("schedules the next transition after the promoted sprite's full interval", () => {
+  it("schedules the next transition after the completed batch's full interval", () => {
     const seen: Array<string | null> = [];
-    const singleRepeat: IdleAnimationPlan = { ...plan, repeatMin: 1, repeatMax: 1 };
-    const stop = startIdleAnimator(singleRepeat, key => seen.push(key), rngSequence([0, 0, 0.9, 0, 0.9]));
+    const singleRepeat: IdleAnimationPlan = {
+      ...plan,
+      intervalMinMs: 10_000,
+      intervalMaxMs: 10_000,
+      repeatMin: 1,
+      repeatMax: 1
+    };
+    const stop = startIdleAnimator(singleRepeat, key => seen.push(key), rngSequence([0, 0.9, 0]));
 
     vi.advanceTimersByTime(10_000 + IDLE_SPRITE_SHOW_MS);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8"]);
+    expect(seen).toEqual([null, "extra_action_8", null]);
 
     vi.advanceTimersByTime(9_999);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8"]);
+    expect(seen).toEqual([null, "extra_action_8", null]);
     vi.advanceTimersByTime(1);
-    expect(seen).toEqual(["extra_action_7", "extra_action_8", "extra_action_7"]);
+    expect(seen).toEqual([null, "extra_action_8", null, "extra_action_7"]);
 
     stop();
   });
@@ -193,16 +211,25 @@ describe("startIdleAnimator: selected-pool choreography", () => {
       repeatMin: 1,
       repeatMax: 1
     };
-    // Start on 7, then take 8 and Aqua from the first shuffle bag. Only after
-    // both have appeared may the refilled bag select 7 again.
+    // Take 7, 8 and Aqua from the first shuffle bag. Only after all three have
+    // appeared may the refilled bag select 7 again.
     const stop = startIdleAnimator(threeSprites, key => seen.push(key), rngSequence([
-      0, 0, 0.99,
-      0, 0.99,
-      0, 0
+      0, 0.99, 0,
+      0.99, 0,
+      0, 0,
+      0.99
     ]));
 
     vi.advanceTimersByTime(3 * (10_000 + IDLE_SPRITE_SHOW_MS));
-    expect(seen).toEqual(["extra_action_7", "extra_action_8", "extra_action_aqua_bocchi", "extra_action_7"]);
+    expect(seen).toEqual([
+      null,
+      "extra_action_8", null,
+      "extra_action_aqua_bocchi", null,
+      "extra_action_7", null
+    ]);
+
+    vi.advanceTimersByTime(10_000);
+    expect(seen.at(-1)).toBe("extra_action_8");
 
     stop();
   });
@@ -210,17 +237,17 @@ describe("startIdleAnimator: selected-pool choreography", () => {
   it("rolls the repeat count within repeatMin..repeatMax", () => {
     const seen: Array<string | null> = [];
     const variable: IdleAnimationPlan = { ...plan, repeatMin: 1, repeatMax: 3 };
-    // rest rng 0 → extra_action_7; delay rng 0 → 10s; sprite rng 0.9 →
-    // extra_action_8; repeat rng 0.99 → 1 + floor(0.99*3) = 3.
-    const stop = startIdleAnimator(variable, key => seen.push(key), rngSequence([0, 0, 0.9, 0.99]));
+    // delay rng 0 -> 10s; sprite rng 0.9 -> extra_action_8; repeat rng 0.99
+    // -> 1 + floor(0.99*3) = 3.
+    const stop = startIdleAnimator(variable, key => seen.push(key), rngSequence([0, 0.9, 0.99]));
 
     vi.advanceTimersByTime(10_000);
     vi.advanceTimersByTime(3 * IDLE_SPRITE_SHOW_MS + 2 * IDLE_SPRITE_GAP_MS);
     expect(seen).toEqual([
-      "extra_action_7",
-      "extra_action_8", "extra_action_7",
-      "extra_action_8", "extra_action_7",
-      "extra_action_8"
+      null,
+      "extra_action_8", null,
+      "extra_action_8", null,
+      "extra_action_8", null
     ]);
 
     stop();
@@ -230,13 +257,13 @@ describe("startIdleAnimator: selected-pool choreography", () => {
     const seen: Array<string | null> = [];
     const stop = startIdleAnimator(plan, key => seen.push(key), rngSequence([0, 0, 0]));
 
-    expect(seen).toEqual(["extra_action_7"]);
+    expect(seen).toEqual([null]);
 
     stop();
-    expect(seen).toEqual(["extra_action_7", null]);
+    expect(seen).toEqual([null]);
 
     // Nothing fires after stop, even across a long horizon.
     vi.advanceTimersByTime(600_000);
-    expect(seen).toEqual(["extra_action_7", null]);
+    expect(seen).toEqual([null]);
   });
 });

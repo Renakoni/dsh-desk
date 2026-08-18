@@ -104,6 +104,7 @@ export default function App() {
   const [petPacks, setPetPacks] = useState<PetPackManifest[]>(initialState?.petPacks ?? []);
   const [displayLanguage, setDisplayLanguage] = useState<"zh" | "en">(initialSettings.displayLanguage);
   const [previewAnimation, setPreviewAnimation] = useState<{ key: string; nonce: number } | null>(null);
+  const [dragDirection, setDragDirection] = useState<DragDirection | null>(null);
   const resetTimer = useRef<number | null>(null);
   const notificationTimer = useRef<number | null>(null);
   const stableEvent = useRef<PetEvent | null>(null);
@@ -300,11 +301,11 @@ export default function App() {
   const activePermission = permissions[0];
   const petState: PetState = activePermission ? "permission-prompt" : state;
 
-  // Random idle rotation runs only while the pet is actually idling (a pending
-  // permission counts as busy); leaving idle or changing the config stops the
-  // animator, which also clears any sprite it is currently showing.
+  // Random idle rotation runs only while the pet is actually idling. Preview
+  // and drag animations pause it so their end cannot reveal a batch that
+  // advanced while hidden.
   useEffect(() => {
-    if (petState !== "idle") {
+    if (petState !== "idle" || previewAnimation || dragDirection) {
       setIdleAnimation(null);
       return;
     }
@@ -314,7 +315,7 @@ export default function App() {
       return;
     }
     return startIdleAnimator(plan, setIdleAnimation);
-  }, [petState, idleAnimConfig, themeCatalog]);
+  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection]);
 
   // Dragging is native OS window drag (-webkit-app-region: drag on the pet
   // element): the compositor moves the window at input rate — smoother than
@@ -322,7 +323,6 @@ export default function App() {
   // watches the window's move stream and reports the walk direction
   // (reference 4px threshold), which is all the renderer needs to play the
   // codex-pet locomotion rows.
-  const [dragDirection, setDragDirection] = useState<DragDirection | null>(null);
   useEffect(() => {
     return petCompanion()?.onPetDragDirection?.(direction => {
       setDragDirection(direction === "left" || direction === "right" ? direction : null);
