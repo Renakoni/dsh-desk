@@ -106,19 +106,27 @@ describe("floating pet initial state", () => {
   it("tracks the pointer with v2 look cells while idle", () => {
     const pack = makeV2PackManifest();
     const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { ...defaultSettings.idleAnim!, enabled: false } };
+    let lookListener: ((point: { x: number; y: number }) => void) | null = null;
+    const setPetLookTracking = vi.fn();
     Reflect.set(window, "companion", {
       initialState: { settings, petPacks: [pack] },
       getSettings: () => new Promise(() => {}),
       onSettings: vi.fn(() => vi.fn()),
       onPreviewPetAnimation: vi.fn(() => vi.fn()),
-      onPetDragDirection: vi.fn(() => vi.fn())
+      onPetDragDirection: vi.fn(() => vi.fn()),
+      setPetLookTracking,
+      onPetLookPoint: vi.fn(callback => {
+        lookListener = callback;
+        return vi.fn();
+      })
     });
 
     const view = render(<App />);
     const pet = view.container.querySelector<HTMLElement>(".pet");
     expect(pet).toBeTruthy();
     vi.spyOn(pet!, "getBoundingClientRect").mockReturnValue({ left: 100, top: 100, width: 200, height: 200, right: 300, bottom: 300, x: 100, y: 100, toJSON: () => ({}) });
-    act(() => { window.dispatchEvent(new MouseEvent("pointermove", { clientX: 300, clientY: 200 })); });
+    expect(setPetLookTracking).toHaveBeenCalledWith(true);
+    act(() => { lookListener?.({ x: 300, y: 200 }); });
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("pointer look");
   });
 });

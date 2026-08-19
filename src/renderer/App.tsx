@@ -57,6 +57,8 @@ type PetCompanionApi = {
   listPetPacks?: () => Promise<PetPackManifest[]>;
   onPetPacksChanged?: (callback: (payload: unknown) => void) => () => void;
   onPetDragDirection?: (callback: (direction: "left" | "right" | null) => void) => () => void;
+  setPetLookTracking?: (enabled: boolean) => void;
+  onPetLookPoint?: (callback: (point: { x: number; y: number }) => void) => () => void;
   onPetDoubleClickProbe?: (callback: (point: { x: number; y: number }) => void) => () => void;
   openSettings?: () => Promise<void> | void;
 };
@@ -303,29 +305,29 @@ export default function App() {
   const activePermission = permissions[0];
   const petState: PetState = activePermission ? "permission-prompt" : state;
 
-  // v2 pointer look is an idle-only interaction. Tracking against the real
-  // rendered pet bounds keeps direction math correct at every pet scale.
+  // Native Electron drag regions do not emit DOM pointer events. Main polls
+  // the global cursor only while v2 look is usable and sends window-relative
+  // points; the renderer still owns sprite bounds and stabilized direction.
   useEffect(() => {
-    if (!spritesheet?.look || petState !== "idle" || previewAnimation || dragDirection) {
+    const companion = petCompanion();
+    const enabled = Boolean(spritesheet?.look && petState === "idle" && !previewAnimation && !dragDirection);
+    if (!enabled) {
       setLookTarget(null);
+      companion?.setPetLookTracking?.(false);
       return;
     }
-    const onPointerMove = (event: PointerEvent) => {
+
+    const unsubscribe = companion?.onPetLookPoint?.(point => {
       const pet = document.querySelector<HTMLElement>(".pet");
       if (!pet) return;
-      const next = lookTargetForPointer(event.clientX, event.clientY, pet.getBoundingClientRect());
-      setLookTarget(current => current === next ? current : next);
-    };
-    const clear = () => setLookTarget(null);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("blur", clear);
-    document.documentElement.addEventListener("pointerleave", clear);
+      setLookTarget(current => lookTargetForPointer(point.x, point.y, pet.getBoundingClientRect(), current));
+    });
+    companion?.setPetLookTracking?.(true);
     return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("blur", clear);
-      document.documentElement.removeEventListener("pointerleave", clear);
+      unsubscribe?.();
+      companion?.setPetLookTracking?.(false);
     };
-  }, [spritesheet?.look, petState, previewAnimation, dragDirection]);
+  }, [spritesheet?.look, petState, previewAnimation, dragDirection, petDisplay.scale]);
 
   // Random idle rotation runs only while the pet is actually idling. Preview
   // and drag animations pause it so their end cannot reveal a rotation that

@@ -240,7 +240,7 @@ function LookCapabilityPreview({ spritesheet }: { spritesheet: any }) {
 
   function trackPointer(event: React.PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    setTarget(lookTargetForPointer(event.clientX, event.clientY, rect));
+    setTarget(current => lookTargetForPointer(event.clientX, event.clientY, rect, current));
   }
 
   function resetPointer() {

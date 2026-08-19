@@ -90,6 +90,8 @@ type CompanionApi = {
   setPetInteractive: (interactive: boolean) => Promise<void>;
   updatePermissionCardRect: (rect: unknown) => Promise<void>;
   onPetDragDirection: (callback: Listener<"left" | "right" | null>) => Unsubscribe;
+  setPetLookTracking: (enabled: boolean) => void;
+  onPetLookPoint: (callback: Listener<{ x: number; y: number }>) => Unsubscribe;
   onTrayMenuState: (callback: Listener<unknown>) => Unsubscribe;
   trayMenuReady: () => Promise<unknown>;
   trayMenuRendered: () => Promise<void>;
@@ -725,6 +727,8 @@ export function installClawdCompat() {
     setPetInteractive: async () => undefined,
     updatePermissionCardRect: async () => undefined,
     onPetDragDirection: () => () => undefined,
+    setPetLookTracking: () => undefined,
+    onPetLookPoint: () => () => undefined,
     onTrayMenuState: () => () => undefined,
     trayMenuReady: async () => null,
     trayMenuRendered: async () => undefined,
