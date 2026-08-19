@@ -45,11 +45,13 @@ describe("DshSkinMarketplace", () => {
     value.themes = value.skins;
     delete value.skins;
     delete value.themes[0].releaseUpdatedAt;
+    value.themes[0].activationGroup = "base-theme";
 
     const parsed = parseDshSkinCatalog(value);
     expect(parsed.skins).toHaveLength(1);
     expect(parsed.skins[0]).toMatchObject({
       id: "demo.skin",
+      activationGroup: "base-theme",
       updatedAt: "2026-08-18T00:00:00.000Z",
       repositoryUrl: "https://github.com/demo/skin"
     });
@@ -204,13 +206,13 @@ describe("DshSkinMarketplace", () => {
     writeFileSync(join(webProfileDir, "cordis.patch.yml"), "- insert:\n    - id: local-skin-row\n      name: local-skin\n");
     writeFileSync(join(localPackageDir, "package.json"), JSON.stringify({ name: "local-skin", version: "2.0.0", dsh: { client: {} } }));
     writeFileSync(join(webProfileDir, ".dsh-appearance-manager", "state.json"), JSON.stringify({ version: 1, skins: {
-      "local:local-skin": { active: true, packageName: "local-skin", version: "2.0.0" }
+      "local:local-skin": { active: true, packageName: "local-skin", version: "2.0.0", activationGroup: "base-theme" }
     } }));
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
       if (url.endsWith("/deactivate")) {
         expect(JSON.parse(String(init?.body))).toMatchObject({ skin: {
-          id: "local:local-skin", packageName: "local-skin", rowId: "local-skin-row"
+          id: "local:local-skin", packageName: "local-skin", rowId: "local-skin-row", activationGroup: "base-theme"
         } });
         return response({ operationId: "local-op" }, 202);
       }

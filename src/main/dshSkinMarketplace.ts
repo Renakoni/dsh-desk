@@ -58,7 +58,7 @@ type WebProfileManifest = {
 
 type PersistedSkinState = {
   activeSkinId?: unknown;
-  skins?: Record<string, { active?: unknown; packageName?: unknown }>;
+  skins?: Record<string, { active?: unknown; packageName?: unknown; activationGroup?: unknown }>;
 };
 
 export type DshSkinMarketplaceOptions = {
@@ -174,6 +174,9 @@ function parseSkin(value: unknown, fallbackUpdatedAt?: string): DshSkinCatalogEn
   const rawStars = source.stars ?? source.githubStars ?? source.starsSnapshot;
   const stars = rawStars === null || rawStars === undefined ? null : Number(rawStars);
   if (stars !== null && (!Number.isInteger(stars) || stars < 0)) throw new Error(`Invalid Stars count for ${id}.`);
+  const activationGroup = source.activationGroup === undefined
+    ? undefined
+    : requiredString(source.activationGroup, `${id} activation group`).trim();
   return {
     id,
     name: { zh: requiredString(name.zh, `${id} Chinese name`), en: requiredString(name.en, `${id} English name`) },
@@ -182,6 +185,7 @@ function parseSkin(value: unknown, fallbackUpdatedAt?: string): DshSkinCatalogEn
     repositoryUrl,
     packageName: requiredString(source.packageName ?? source.package, `${id} package`),
     rowId: requiredString(source.rowId, `${id} row id`),
+    ...(activationGroup ? { activationGroup } : {}),
     tags: stringArray(source.tags, `${id} tags`),
     modes: modes as DshSkinCatalogEntry["modes"],
     install: {
@@ -410,7 +414,9 @@ export class DshSkinMarketplace {
     const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-appearance-manager", "state.json"), {});
     // dsh.client is shared by themes and ordinary Web features. Only Desk's
     // appearance state proves that an uncatalogued package is a local theme.
-    const managed = new Set(Object.values(state.skins ?? {}).flatMap(skin => typeof skin.packageName === "string" ? [skin.packageName] : []));
+    const managed = new Map(Object.values(state.skins ?? {}).flatMap(skin => typeof skin.packageName === "string"
+      ? [[skin.packageName, typeof skin.activationGroup === "string" ? skin.activationGroup : undefined] as const]
+      : []));
     return Object.keys(dependencies).filter(packageName => !known.has(packageName)
       && managed.has(packageName)).flatMap(packageName => {
       const packagePath = join(this.options.webProfileDir, "node_modules", ...packageName.split("/"), "package.json");
@@ -431,6 +437,7 @@ export class DshSkinMarketplace {
         description: typeof packageManifest?.description === "string" ? packageManifest.description : "未收录到 DSH 主题目录的本地主题。",
         version,
         repositoryUrl: typeof repository === "string" && /^https:\/\//i.test(repository) ? repository.replace(/^git\+/, "").replace(/\.git$/, "") : null,
+        ...(managed.get(packageName) ? { activationGroup: managed.get(packageName) } : {}),
         active: registration.active,
         broken: packageManifest === null
       } satisfies DshLocalSkin];
@@ -448,6 +455,7 @@ export class DshSkinMarketplace {
       repositoryUrl: local.repositoryUrl,
       packageName: local.packageName,
       rowId: local.rowId,
+      ...(local.activationGroup ? { activationGroup: local.activationGroup } : {}),
       tags: [],
       modes: ["light", "dark"],
       install: { target: "", version: local.version ?? "0.0.0", commit: "" },

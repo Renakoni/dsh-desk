@@ -14,6 +14,7 @@ export type DshSkinCatalogEntry = {
   repositoryUrl: string | null;
   packageName: string;
   rowId: string;
+  activationGroup?: string;
   tags: string[];
   modes: DshSkinMode[];
   install: { target: string; version: string; commit: string };
@@ -35,6 +36,7 @@ export type DshLocalSkin = {
   description: string;
   version: string | null;
   repositoryUrl: string | null;
+  activationGroup?: string;
   active: boolean;
   broken: boolean;
 };

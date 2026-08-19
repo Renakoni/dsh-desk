@@ -116,7 +116,7 @@ function bundleRowIds(profileDir, packageName) {
   } catch { return new Set() }
 }
 
-function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage) {
+function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage, activationGroup) {
   const knownPackages = new Set(Array.isArray(catalog)
     ? catalog.flatMap(skin => typeof skin?.packageName === 'string' ? [skin.packageName] : [])
     : [])
@@ -124,7 +124,7 @@ function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage) 
   // ownership may classify a package outside the catalog as a theme.
   const managedPackages = new Set(Object.values(readState(profileDir).skins).flatMap(value => {
     const skin = objectValue(value)
-    return typeof skin?.packageName === 'string' ? [skin.packageName] : []
+    return typeof skin?.packageName === 'string' && skin.activationGroup === activationGroup ? [skin.packageName] : []
   }))
   const entries = [...loader.entries()]
   return Object.keys(dependencies(profileDir)).flatMap(packageName => {
@@ -141,8 +141,8 @@ function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage) 
   })
 }
 
-async function disableUncataloguedThemes(profileDir, loader, catalog, selectedPackage) {
-  for (const theme of uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage)) {
+async function disableUncataloguedThemes(profileDir, loader, catalog, selectedPackage, activationGroup) {
+  for (const theme of uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage, activationGroup)) {
     ensureRegistration(profileDir, theme, true)
     if (theme.entry.options?.disabled === true || typeof theme.entry.update !== 'function') continue
     await theme.entry.update({ disabled: true }, false, true)
@@ -278,21 +278,23 @@ class AppearanceManager {
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
         ensureRegistration(this.profileDir, skin, existing.active !== true)
-        stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, version: skin.install.version }
+        stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, version: skin.install.version, ...(typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? { activationGroup: skin.activationGroup } : {}) }
       } else if (operation.kind === 'activate' || operation.kind === 'deactivate') {
         if (!Object.hasOwn(dependencies(this.profileDir), skin.packageName)) throw new Error('install the theme before using it')
         const active = operation.kind === 'activate'
-        if (active && Array.isArray(catalog)) {
+        const activationGroup = typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? skin.activationGroup : null
+        if (active && activationGroup && Array.isArray(catalog)) {
           for (const other of catalog) {
             if (!other || other.id === skin.id || typeof other.packageName !== 'string' || typeof other.rowId !== 'string') continue
+            if (other.activationGroup !== activationGroup) continue
             if (!Object.hasOwn(dependencies(this.profileDir), other.packageName)) continue
             ensureRegistration(this.profileDir, other, true)
-            stored.skins[other.id] = { active: false, packageName: other.packageName, version: other.install?.version }
+            stored.skins[other.id] = { active: false, packageName: other.packageName, version: other.install?.version, activationGroup }
           }
-          await disableUncataloguedThemes(this.profileDir, this.loader, catalog, skin.packageName)
+          await disableUncataloguedThemes(this.profileDir, this.loader, catalog, skin.packageName, activationGroup)
         }
         ensureRegistration(this.profileDir, skin, !active)
-        stored.skins[skin.id] = { active, packageName: skin.packageName, version: skin.install.version }
+        stored.skins[skin.id] = { active, packageName: skin.packageName, version: skin.install.version, ...(activationGroup ? { activationGroup } : {}) }
       } else {
         if (Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
           const result = await this.pluginRunner(this.profile, ['remove', skin.packageName])
