@@ -21,6 +21,9 @@ export interface PetLookWatcher {
  * Poll Electron's global cursor position while v2 look is active. Native
  * app-region drag areas do not emit renderer pointer events, so main is the
  * only reliable source for points over the pet itself.
+ *
+ * @deprecated Retained for integrations that explicitly opt into legacy v2
+ * pointer look. The current Desk renderer never enables this watcher.
  */
 export function createPetLookWatcher(options: {
   readCursor: () => PetLookPoint;

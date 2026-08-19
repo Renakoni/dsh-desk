@@ -103,11 +103,11 @@ describe("floating pet initial state", () => {
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
   });
 
-  it("tracks the pointer with v2 look cells while idle", () => {
+  it("keeps v2 pointer look dormant in the floating runtime", () => {
     const pack = makeV2PackManifest();
-    const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { ...defaultSettings.idleAnim!, enabled: false } };
-    let lookListener: ((point: { x: number; y: number }) => void) | null = null;
+    const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { enabled: true, selectedSprites: ["waving"], intervalMin: 1, intervalMax: 1 } };
     const setPetLookTracking = vi.fn();
+    const onPetLookPoint = vi.fn(() => vi.fn());
     Reflect.set(window, "companion", {
       initialState: { settings, petPacks: [pack] },
       getSettings: () => new Promise(() => {}),
@@ -115,43 +115,12 @@ describe("floating pet initial state", () => {
       onPreviewPetAnimation: vi.fn(() => vi.fn()),
       onPetDragDirection: vi.fn(() => vi.fn()),
       setPetLookTracking,
-      onPetLookPoint: vi.fn(callback => {
-        lookListener = callback;
-        return vi.fn();
-      })
-    });
-
-    const view = render(<App />);
-    const pet = view.container.querySelector<HTMLElement>(".pet");
-    expect(pet).toBeTruthy();
-    vi.spyOn(pet!, "getBoundingClientRect").mockReturnValue({ left: 100, top: 100, width: 200, height: 200, right: 300, bottom: 300, x: 100, y: 100, toJSON: () => ({}) });
-    expect(setPetLookTracking).toHaveBeenCalledWith(true);
-    act(() => { lookListener?.({ x: 300, y: 200 }); });
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("pointer look");
-    act(() => { lookListener?.({ x: 320, y: 200 }); });
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("idle");
-  });
-
-  it("keeps the default idle pool available when the cursor is away", () => {
-    vi.useFakeTimers();
-    const pack = makeV2PackManifest();
-    const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { enabled: true, selectedSprites: ["waving"], intervalMin: 1, intervalMax: 1 } };
-    let lookListener: ((point: { x: number; y: number } | null) => void) | null = null;
-    Reflect.set(window, "companion", {
-      initialState: { settings, petPacks: [pack] },
-      getSettings: () => new Promise(() => {}),
-      onSettings: vi.fn(() => vi.fn()),
-      onPreviewPetAnimation: vi.fn(() => vi.fn()),
-      onPetDragDirection: vi.fn(() => vi.fn()),
-      setPetLookTracking: vi.fn(),
-      onPetLookPoint: vi.fn(callback => {
-        lookListener = callback;
-        return vi.fn();
-      })
+      onPetLookPoint
     });
 
     render(<App />);
-    act(() => { lookListener?.(null); vi.advanceTimersByTime(1_000); });
+    expect(setPetLookTracking).not.toHaveBeenCalled();
+    expect(onPetLookPoint).not.toHaveBeenCalled();
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
   });
 });

@@ -235,7 +235,7 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
               <code>{staged?.manifest.id ?? ""}</code>
               {staged?.manifest.description ? <p>{staged.manifest.description}</p> : null}
               {scanResult ? (
-                <small>{t("petImport.animationsFound", "识别动画：")} {scanResult.rowFrameCounts.slice(0, 9).filter(count => count > 0).length}{staged?.manifest.spriteVersionNumber === 2 ? t("petImport.lookCapability", " · 16 方向视线") : ""}</small>
+                <small>{t("petImport.animationsFound", "识别动画：")} {scanResult.rowFrameCounts.slice(0, 9).filter(count => count > 0).length}</small>
               ) : null}
               {creator ? <small className="pet-import-creator">{t("petImport.byCreator", "作者：")}{creator}</small> : null}
               {galleryUrl ? (

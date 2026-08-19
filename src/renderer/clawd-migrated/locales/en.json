@@ -240,7 +240,6 @@
     "invalidPackage": "This package cannot be imported",
     "decodeFailed": "The spritesheet could not be decoded",
     "animationsFound": "Animations found:",
-    "lookCapability": " · 16-direction look",
     "remove": "Remove",
     "removeConfirm": "Click again to remove",
     "removeArmedLabel": "Confirm remove",
@@ -463,9 +462,6 @@
     "testBlock": "Click a pose to preview it",
     "temporaryPreview": "Temporary preview",
     "stopTest": "Stop preview",
-    "pointerLook": "Pointer look",
-    "pointerLookMeta": "v2 · 16 directions",
-    "pointerLookPreview": "16-direction pointer look preview",
     "sprite": {
       "idle": "Idle",
       "running": "Running",

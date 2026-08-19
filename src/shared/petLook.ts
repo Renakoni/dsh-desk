@@ -1,3 +1,4 @@
+/** Legacy v2 pointer-look target. The current Desk runtime does not produce it. */
 export type PetLookTarget = "neutral" | number | null;
 
 export interface PetLookRect {
@@ -25,6 +26,9 @@ function circularDistance(left: number, right: number): number {
  * Map a pointer vector to v2's 16 clockwise directions; direction 0 is up.
  * The previous target adds hysteresis at both the center and sector borders,
  * preventing tiny cursor/window movements from alternating adjacent frames.
+ *
+ * @deprecated Kept as a legacy integration helper. Desk does not invoke it in
+ * the default desktop runtime or expose it in the current UI.
  */
 export function lookTargetForPointer(clientX: number, clientY: number, rect: PetLookRect, previous: PetLookTarget = null): PetLookTarget {
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || rect.width <= 0 || rect.height <= 0) return null;

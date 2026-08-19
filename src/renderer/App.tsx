@@ -19,7 +19,6 @@ import { spritesheetAssetsFromPack } from "../shared/petPackAssets";
 import { packIdFromThemeId, resolveThemeCatalog } from "../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../shared/spriteFrame";
 import { dragAnimationForDirection, type DragDirection } from "../shared/petDrag";
-import { lookTargetForPointer, type PetLookTarget } from "../shared/petLook";
 import { keepIdleAnimationConfigReference, type IdleAnimationConfig, planIdleAnimation, startIdleAnimator } from "./state/petIdleAnimator";
 import { nextPetState } from "./state/petStateMachine";
 import { isPetElement } from "./petHitTest";
@@ -57,8 +56,6 @@ type PetCompanionApi = {
   listPetPacks?: () => Promise<PetPackManifest[]>;
   onPetPacksChanged?: (callback: (payload: unknown) => void) => () => void;
   onPetDragDirection?: (callback: (direction: "left" | "right" | null) => void) => () => void;
-  setPetLookTracking?: (enabled: boolean) => void;
-  onPetLookPoint?: (callback: (point: { x: number; y: number } | null) => void) => () => void;
   onPetDoubleClickProbe?: (callback: (point: { x: number; y: number }) => void) => () => void;
   openSettings?: () => Promise<void> | void;
 };
@@ -108,7 +105,6 @@ export default function App() {
   const [displayLanguage, setDisplayLanguage] = useState<"zh" | "en">(initialSettings.displayLanguage);
   const [previewAnimation, setPreviewAnimation] = useState<{ key: string; nonce: number } | null>(null);
   const [dragDirection, setDragDirection] = useState<DragDirection | null>(null);
-  const [lookTarget, setLookTarget] = useState<PetLookTarget>(null);
   const resetTimer = useRef<number | null>(null);
   const notificationTimer = useRef<number | null>(null);
   const stableEvent = useRef<PetEvent | null>(null);
@@ -305,41 +301,11 @@ export default function App() {
   const activePermission = permissions[0];
   const petState: PetState = activePermission ? "permission-prompt" : state;
 
-  // Native Electron drag regions do not emit DOM pointer events. Main polls
-  // the global cursor only while v2 look is usable and sends window-relative
-  // points; the renderer still owns sprite bounds and stabilized direction.
-  useEffect(() => {
-    const companion = petCompanion();
-    const enabled = Boolean(spritesheet?.look && petState === "idle" && !previewAnimation && !dragDirection);
-    if (!enabled) {
-      setLookTarget(null);
-      companion?.setPetLookTracking?.(false);
-      return;
-    }
-
-    const unsubscribe = companion?.onPetLookPoint?.(point => {
-      if (!point) {
-        setLookTarget(null);
-        return;
-      }
-      const pet = document.querySelector<HTMLElement>(".pet");
-      if (!pet) return;
-      const rect = pet.getBoundingClientRect();
-      const insidePet = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
-      setLookTarget(current => insidePet ? lookTargetForPointer(point.x, point.y, rect, current) : null);
-    });
-    companion?.setPetLookTracking?.(true);
-    return () => {
-      unsubscribe?.();
-      companion?.setPetLookTracking?.(false);
-    };
-  }, [spritesheet?.look, petState, previewAnimation, dragDirection, petDisplay.scale]);
-
   // Random idle rotation runs only while the pet is actually idling. Preview
   // and drag animations pause it so their end cannot reveal a rotation that
   // advanced while hidden; the selected action stays mounted until switching.
   useEffect(() => {
-    if (petState !== "idle" || previewAnimation || dragDirection || lookTarget !== null) {
+    if (petState !== "idle" || previewAnimation || dragDirection) {
       setIdleAnimation(null);
       return;
     }
@@ -349,7 +315,7 @@ export default function App() {
       return;
     }
     return startIdleAnimator(plan, setIdleAnimation);
-  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection, lookTarget]);
+  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection]);
 
   // Dragging is native OS window drag (-webkit-app-region: drag on the pet
   // element): the compositor moves the window at input rate — smoother than
@@ -397,7 +363,6 @@ export default function App() {
         idleAnimation={idleAnimation}
         previewAnimation={previewAnimation}
         dragAnimation={dragAnimationForDirection(themeCatalog, dragDirection)}
-        lookTarget={lookTarget}
         scale={petDisplay.scale}
         opacity={petDisplay.opacity}
         catalog={themeCatalog}

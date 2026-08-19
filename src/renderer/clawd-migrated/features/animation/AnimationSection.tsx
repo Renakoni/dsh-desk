@@ -10,7 +10,6 @@ import { displayedMappingKey, mappingRowMeta, stateMappingRowsFor } from "../../
 import { MINATO_AQUA_CATALOG, normalizeMappableAnimationKey } from "../../../../shared/petThemeCatalog";
 import { SpritesheetSprite } from "../../../components/SpritesheetSprite";
 import { displayedSpriteHeight } from "../../../../shared/spriteFrame";
-import { lookFrameForTarget, lookTargetForPointer, type PetLookTarget } from "../../../../shared/petLook";
 
 function AnimationSectionInner({ settings, updateSettings, catalog = MINATO_AQUA_CATALOG, spritesheet = null, active = true }: {
   settings: CompanionSettings;
@@ -226,52 +225,7 @@ function AnimationTestBlock({ options, spritesheet, active }: { options: any[]; 
           <button type="button" className="animation-test-stop" onClick={stopPreview} disabled={!activeKey}>{t("animation.stopTest", "停止测试")}</button>
         </div>
       </section>
-      {spritesheet?.look ? <LookCapabilityPreview spritesheet={spritesheet} /> : null}
     </div>
-  );
-}
-
-function LookCapabilityPreview({ spritesheet }: { spritesheet: any }) {
-  const { t } = useI18n();
-  const [target, setTarget] = useState<PetLookTarget>("neutral");
-  const frame = lookFrameForTarget(target, spritesheet.look.startRow, spritesheet.look.columns, spritesheet.look.neutralFrame);
-  const width = 92;
-  const height = displayedSpriteHeight(spritesheet.cellWidth, spritesheet.cellHeight, width);
-
-  function trackPointer(event: React.PointerEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setTarget(current => lookTargetForPointer(event.clientX, event.clientY, rect, current));
-  }
-
-  function resetPointer() {
-    setTarget("neutral");
-  }
-
-  return (
-    <section className="animation-section-block pet-look-capability">
-      <SectionHead title={t("animation.pointerLook", "视线跟随")} meta={t("animation.pointerLookMeta", "v2 · 16 方向")} />
-      <div
-        className="pet-look-stage"
-        onPointerMove={trackPointer}
-        onPointerLeave={resetPointer}
-        aria-label={t("animation.pointerLookPreview", "16 方向视线预览")}
-      >
-        {frame ? (
-          <SpritesheetSprite
-            sheetUrl={spritesheet.sheetUrl}
-            columns={spritesheet.columns}
-            rows={spritesheet.rows}
-            row={frame.row}
-            frameCount={1}
-            frameDurationMs={160}
-            fixedFrame={frame.column}
-            width={width}
-            height={height}
-            alt=""
-          />
-        ) : null}
-      </div>
-    </section>
   );
 }
 

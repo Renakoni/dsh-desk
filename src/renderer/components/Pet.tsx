@@ -35,7 +35,7 @@ interface PetProps {
   previewAnimation?: { key: string; nonce: number } | null;
   /** Transient drag-direction locomotion; overrides every other resolution while set. */
   dragAnimation?: PetAnimationKey | null;
-  /** Pointer-driven v2 look cell; App only supplies it while truly idle. */
+  /** Legacy v2 hook. Current Desk runtime intentionally leaves it unset. */
   lookTarget?: PetLookTarget;
   scale?: number;
   opacity?: number;

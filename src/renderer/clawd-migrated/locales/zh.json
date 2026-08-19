@@ -240,7 +240,6 @@
     "invalidPackage": "无法导入该宠物包",
     "decodeFailed": "精灵图无法解析",
     "animationsFound": "识别动画：",
-    "lookCapability": " · 16 方向视线",
     "remove": "移除",
     "removeConfirm": "再次点击确认移除",
     "removeArmedLabel": "确认移除",
@@ -463,9 +462,6 @@
     "testBlock": "点击测试姿势",
     "temporaryPreview": "临时预览",
     "stopTest": "停止测试",
-    "pointerLook": "视线跟随",
-    "pointerLookMeta": "v2 · 16 方向",
-    "pointerLookPreview": "16 方向视线预览",
     "sprite": {
       "idle": "待机",
       "running": "运行中",
