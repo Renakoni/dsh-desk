@@ -108,6 +108,27 @@ describe("DshSkinMarketplace", () => {
     expect(snapshot.host.skins).toEqual([expect.objectContaining({ skinId: "demo.skin", updateAvailable: true })]);
   });
 
+  it("keeps a locally detected broken installation broken when the runtime reports installed", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-broken-host-"));
+    const webProfileDir = join(root, "web");
+    const packageDir = join(webProfileDir, "node_modules", "demo-skin");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: {
+      "demo-skin": "github:demo/skin#1234567890123456789012345678901234567890"
+    } }));
+    const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
+      ? response(skinCatalog())
+      : response({ skins: [{ skinId: "demo.skin", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }], restartAvailable: false }));
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir, marketInstalled: () => true, fetcher });
+
+    const snapshot = await market.snapshot();
+    expect(snapshot.host.skins).toEqual([expect.objectContaining({
+      skinId: "demo.skin",
+      installation: "broken",
+      error: "Installed package is incomplete."
+    })]);
+  });
+
   it("reads the local theme library without the market controller", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-local-"));
     const webProfileDir = join(root, "web");

@@ -39,6 +39,12 @@ function packageManifest(profileDir, packageName) {
   return existsSync(file) ? objectValue(jsonFile(file, null)) : null
 }
 
+function validThemePackage(profileDir, packageName) {
+  if (!Object.hasOwn(dependencies(profileDir), packageName)) return false
+  const manifest = packageManifest(profileDir, packageName)
+  return typeof manifest?.version === 'string' && objectValue(manifest.dsh)?.client !== undefined
+}
+
 function stateFile(profileDir) { return join(profileDir, '.dsh-appearance-manager', 'state.json') }
 function readState(profileDir) {
   const value = objectValue(jsonFile(stateFile(profileDir), null))
@@ -201,7 +207,7 @@ function commandError(result) { return (result.stderr || result.stdout || `plugi
 function skinState(profileDir, skin, stored) {
   const installed = Object.hasOwn(dependencies(profileDir), skin.packageName)
   const manifest = packageManifest(profileDir, skin.packageName)
-  const valid = installed && typeof manifest?.version === 'string' && objectValue(manifest.dsh)?.client !== undefined
+  const valid = validThemePackage(profileDir, skin.packageName)
   return {
     skinId: skin.id,
     installation: !installed ? 'missing' : valid ? 'installed' : 'broken',
@@ -214,10 +220,11 @@ function skinState(profileDir, skin, stored) {
 }
 
 class AppearanceManager {
-  constructor(profileDir, loader) {
+  constructor(profileDir, loader, pluginRunner = runPlugin) {
     this.profileDir = profileDir
     this.profile = profileDir.split(/[\\/]/).pop() || 'web'
     this.loader = loader
+    this.pluginRunner = pluginRunner
     this.instanceId = randomUUID()
     this.operations = new Map()
     this.activeOperation = null
@@ -231,13 +238,15 @@ class AppearanceManager {
         const packageName = typeof saved.packageName === 'string' ? saved.packageName : ''
         const manifest = packageName ? packageManifest(this.profileDir, packageName) : null
         const installed = packageName !== '' && Object.hasOwn(dependencies(this.profileDir), packageName)
+        const valid = validThemePackage(this.profileDir, packageName)
         return {
           skinId,
-          installation: installed ? 'installed' : 'missing',
+          installation: !installed ? 'missing' : valid ? 'installed' : 'broken',
           activation: saved.active === true ? 'active' : 'inactive',
-          installedVersion: typeof manifest?.version === 'string' ? manifest.version : null,
+          installedVersion: valid && typeof manifest?.version === 'string' ? manifest.version : null,
           installedAt: null,
-          updateAvailable: false
+          updateAvailable: false,
+          ...(!valid && installed ? { error: 'Installed theme package is incomplete.' } : {})
         }
       })
     return { skins: values, operation: this.activeOperation ? this.operations.get(this.activeOperation) ?? null : null, instanceId: this.instanceId, restartAvailable: false, runningAgentCount: null }
@@ -257,9 +266,9 @@ class AppearanceManager {
       const legacyState = jsonFile(join(this.profileDir, '.dsh-skin-market', 'state.json'), {})
       const existing = stored.skins[skin.id] ?? { active: legacyState?.activeSkinId === skin.id }
       if (operation.kind === 'install' || operation.kind === 'update') {
-        if (operation.kind === 'update' || !Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
+        if (operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName)) {
           operation.phase = 'downloading'
-          const result = await runPlugin(this.profile, ['add', skin.install.target])
+          const result = await this.pluginRunner(this.profile, ['add', skin.install.target])
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
         ensureRegistration(this.profileDir, skin, existing.active !== true)
@@ -280,7 +289,7 @@ class AppearanceManager {
         stored.skins[skin.id] = { active, packageName: skin.packageName, version: skin.install.version }
       } else {
         if (Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
-          const result = await runPlugin(this.profile, ['remove', skin.packageName])
+          const result = await this.pluginRunner(this.profile, ['remove', skin.packageName])
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
         removeRegistration(this.profileDir, skin)
@@ -325,10 +334,10 @@ function method(request, response, expected) {
   response.writeHead(405, { allow: expected }); response.end(); return false
 }
 
-export function mountAppearanceManager({ webServer, loader }) {
+export function mountAppearanceManager({ webServer, loader, runPlugin: pluginRunner }) {
   const profileDir = profileDirectory(loader)
   if (!profileDir || !PROFILE_NAME.test(profileDir.split(/[\\/]/).pop() || '')) return () => undefined
-  const manager = new AppearanceManager(profileDir, loader)
+  const manager = new AppearanceManager(profileDir, loader, pluginRunner ?? runPlugin)
   const routes = []
   const register = route => routes.push(webServer.register(route))
   register({ kind: 'exact', path: '/dsh-appearance-manager/state', handler: (request, response) => {

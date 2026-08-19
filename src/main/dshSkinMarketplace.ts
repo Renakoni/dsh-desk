@@ -494,11 +494,16 @@ export class DshSkinMarketplace {
         states.set(state.skinId, local
           ? {
             ...state,
+            // The profile scan validates the package on disk. A connected
+            // runtime can add activation details, but cannot turn a broken
+            // package into an installed one.
+            installation: local.installation === "broken" ? "broken" : state.installation,
             // The Desk profile scan includes the pinned commit. A runtime
             // response has no catalog context and must not erase that flag.
             updateAvailable: local.updateAvailable || state.updateAvailable,
             installedVersion: state.installedVersion ?? local.installedVersion,
-            installedAt: state.installedAt ?? local.installedAt
+            installedAt: state.installedAt ?? local.installedAt,
+            ...(local.installation === "broken" && local.error ? { error: local.error } : {})
           }
           : state);
       }

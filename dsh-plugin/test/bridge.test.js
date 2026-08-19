@@ -312,6 +312,57 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('reports and repairs a dependency whose theme package is incomplete', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-broken-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'demo-skin')
+    mkdirSync(packageDir, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'demo-skin': 'github:demo/skin#1234567890123456789012345678901234567890' },
+    }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'demo.skin': { active: true, packageName: 'demo-skin', version: '1.0.0' } },
+    }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const calls = []
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async (profileName, args) => {
+        calls.push([profileName, args])
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const stateRoute = routes.find(route => route.path === '/dsh-appearance-manager/state')
+    const state = await invokeRoute(stateRoute)
+    assert.equal(state.body.skins[0].installation, 'broken')
+
+    const installRoute = routes.find(route => route.path === '/dsh-appearance-manager/install')
+    const started = await invokeRoute(installRoute, { method: 'POST', body: {
+      skin: {
+        id: 'demo.skin',
+        packageName: 'demo-skin',
+        rowId: 'demo-skin',
+        install: { target: 'github:demo/skin#1234567890123456789012345678901234567890', version: '1.0.0' },
+      },
+    }})
+    assert.equal(started.status, 202)
+    const operations = routes.find(route => route.kind === 'prefix')
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(calls, [['web', ['add', 'github:demo/skin#1234567890123456789012345678901234567890']]])
+    dispose()
+  })
+
   it('disables an installed uncatalogued client theme when activating a catalog theme', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-mutual-exclusion-'))
     temporaryDirectories.add(root)
