@@ -19,12 +19,12 @@ export const DSH_REASONING_EFFORTS = [
 export type DshReasoningEffort = typeof DSH_REASONING_EFFORTS[number];
 export type DshReasoningEfforts = Partial<Record<DshReasoningEffort, string | null>>;
 
-export const DEFAULT_DSH_REASONING_EFFORTS: DshReasoningEfforts = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  xhigh: "xhigh",
-  max: "max"
+export type DshProviderModelReasoning = {
+  efforts: Array<{
+    id: string;
+    name: string;
+  }>;
+  defaultEffort?: string;
 };
 
 export type DshProviderModel = {
@@ -33,6 +33,7 @@ export type DshProviderModel = {
   contextWindow?: number;
   maxTokens?: number;
   reasoningEfforts?: DshReasoningEfforts | false;
+  reasoning?: DshProviderModelReasoning;
 };
 
 export type DshProviderUiMeta = {
@@ -70,6 +71,7 @@ export type DshProvider = DshProviderUiMeta & {
   isOfficial: boolean;
   isDefault: boolean;
   defaultModel?: string;
+  reasoningDefault?: DshReasoningEffort;
 };
 
 export type DshProviderListResult = {
@@ -93,7 +95,7 @@ export type DshProviderSaveInput = DshProviderUiMeta & {
   inheritModels?: boolean;
   catalogProvider?: boolean;
   enabled?: boolean;
-  reasoningEnabled?: boolean;
+  reasoningDefault?: DshReasoningEffort;
   apiKey?: string;
 };
 

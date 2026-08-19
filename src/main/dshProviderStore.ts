@@ -3,7 +3,6 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { basename, dirname, join } from "node:path";
 import { Document, parseDocument } from "yaml";
 import {
-  DEFAULT_DSH_REASONING_EFFORTS,
   DSH_PROVIDER_PROTOCOLS,
   DSH_REASONING_EFFORTS,
   type DshCatalogProvider,
@@ -14,6 +13,7 @@ import {
   type DshProviderProbeInput,
   type DshProviderProbeResult,
   type DshProviderProtocol,
+  type DshReasoningEffort,
   type DshProviderSaveInput,
   type DshProviderSwitchResult,
   type DshProviderUiMeta
@@ -260,15 +260,55 @@ function modelList(value: unknown, fallback: DshProviderModel[] = []): DshProvid
             : [];
         }))
         : undefined;
+    const runtimeReasoningValue = isObject(item.reasoning) ? item.reasoning : undefined;
+    const runtimeEfforts = Array.isArray(runtimeReasoningValue?.efforts)
+      ? runtimeReasoningValue.efforts.flatMap(effort => isObject(effort)
+        && typeof effort.id === "string"
+        && effort.id
+        ? [{
+            id: effort.id,
+            name: typeof effort.name === "string" && effort.name ? effort.name : effort.id
+          }]
+        : [])
+      : [];
+    const reasoning = runtimeEfforts.length > 0
+      ? {
+          efforts: runtimeEfforts,
+          ...(typeof runtimeReasoningValue?.defaultEffort === "string"
+            ? { defaultEffort: runtimeReasoningValue.defaultEffort }
+            : {})
+        }
+      : undefined;
     models.push({
       id: item.id.trim(),
       ...(typeof item.name === "string" && item.name.trim() ? { name: item.name.trim() } : {}),
       ...(typeof item.contextWindow === "number" && Number.isSafeInteger(item.contextWindow) && item.contextWindow > 0 ? { contextWindow: item.contextWindow } : {}),
       ...(typeof item.maxTokens === "number" && Number.isSafeInteger(item.maxTokens) && item.maxTokens > 0 ? { maxTokens: item.maxTokens } : {}),
-      ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {})
+      ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {}),
+      ...(reasoning ? { reasoning } : {})
     });
   }
   return models;
+}
+
+function configuredReasoningEffort(value: unknown): DshReasoningEffort | undefined {
+  return typeof value === "string" && DSH_REASONING_EFFORTS.includes(value as DshReasoningEffort)
+    ? value as DshReasoningEffort
+    : undefined;
+}
+
+function officialReasoning(profile: JsonObject) {
+  if (profile.thinking === "disabled") {
+    return { efforts: [{ id: "off", name: "Off" }], defaultEffort: "off" };
+  }
+  return {
+    efforts: [
+      { id: "off", name: "Off" },
+      { id: "high", name: "High" },
+      { id: "max", name: "Max" }
+    ],
+    defaultEffort: configuredReasoningEffort(profile.reasoningEffort) ?? "high"
+  };
 }
 
 function credentialMap(root: JsonObject, filePath: string) {
@@ -374,6 +414,7 @@ function providerFromProfile(
   const apiKey = credentialRef ? process.env[credentialRef] || credentials.get(credentialRef) : undefined;
   const modelsInherited = !Array.isArray(profile.models);
   const configuredModels = modelList(profile.models);
+  const reasoningDefault = configuredReasoningEffort(profile.reasoning);
   return {
     ...meta,
     id,
@@ -390,7 +431,8 @@ function providerFromProfile(
     hasCredential: !!apiKey,
     isOfficial: false,
     isDefault: defaultProvider === id,
-    ...(defaultProvider === id ? { defaultModel } : {})
+    ...(defaultProvider === id ? { defaultModel } : {}),
+    ...(reasoningDefault ? { reasoningDefault } : {})
   };
 }
 
@@ -416,6 +458,11 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
     const officialRef = typeof deepseek.apiKeyEnv === "string" ? deepseek.apiKeyEnv : OFFICIAL_CREDENTIAL;
     const officialApiKey = process.env[officialRef] || credentials.get(officialRef);
     const officialGroup = groupById.get(OFFICIAL_PROVIDER);
+    const officialModels = (Array.isArray(deepseek.models)
+      ? modelList(deepseek.models)
+      : officialGroup?.models ?? DEFAULT_MODELS)
+      .map(model => model.reasoning ? model : { ...model, reasoning: officialReasoning(deepseek) });
+    const officialReasoningDefault = configuredReasoningEffort(deepseek.reasoningEffort);
     const officialMeta = deskState.providers[OFFICIAL_PROVIDER] ?? {};
     const officialEnabled = officialProviderEnabled(patchDocument.root);
     const providers: DshProvider[] = [{
@@ -424,7 +471,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       name: "DeepSeek",
       baseUrl: typeof deepseek.baseURL === "string" ? deepseek.baseURL : OFFICIAL_BASE_URL,
       protocol: "deepseek-chat-completions",
-      models: Array.isArray(deepseek.models) ? modelList(deepseek.models) : officialGroup?.models ?? DEFAULT_MODELS,
+      models: officialModels,
       modelsInherited: !Array.isArray(deepseek.models),
       catalogProvider: true,
       enabled: officialEnabled,
@@ -436,6 +483,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       icon: "deepseek",
       iconColor: "#4D6BFE",
       isDefault: defaultProvider === OFFICIAL_PROVIDER,
+      ...(officialReasoningDefault ? { reasoningDefault: officialReasoningDefault } : {}),
       ...(defaultProvider === OFFICIAL_PROVIDER ? { defaultModel } : {})
     }];
     const piProviders = asObject(asObject(root["llm-pi-ai"]).providers);
@@ -532,7 +580,7 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   if (id !== OFFICIAL_PROVIDER && protocol !== undefined && !DSH_PROVIDER_PROTOCOLS.includes(protocol as DshProviderProtocol)) {
     throw new Error("Unsupported DeepSeek Harness provider protocol");
   }
-  const models = catalogProvider ? [] : modelList(input.models);
+  const models = modelList(input.models);
   if (new Set(models.map(model => model.id)).size !== models.length) throw new Error("Model IDs must be unique");
   const apiKey = input.apiKey?.trim();
   if (apiKey && (!/^[\x21-\x7E]+$/.test(apiKey) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(apiKey))) {
@@ -554,19 +602,18 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     baseUrl,
     protocol,
     models,
-    inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
+    inheritModels: input.inheritModels === true || input.models === undefined,
     catalogProvider,
     enabled: input.enabled !== false,
-    reasoningEnabled: input.reasoningEnabled,
+    reasoningDefault: input.reasoningDefault,
     apiKey,
     meta
   };
 }
 
-function serializeModels(models: DshProviderModel[], addDefaultReasoningEfforts = false) {
+function serializeModels(models: DshProviderModel[]) {
   return models.map(model => {
-    const reasoningEfforts = model.reasoningEfforts
-      ?? (addDefaultReasoningEfforts ? DEFAULT_DSH_REASONING_EFFORTS : undefined);
+    const reasoningEfforts = model.reasoningEfforts;
     return {
       id: model.id,
       ...(model.name ? { name: model.name } : {}),
@@ -584,10 +631,6 @@ function piProviderProfile(
   normalized: ReturnType<typeof normalizeSaveInput>,
   credentialRef: string | undefined
 ) {
-  const managesReasoning = !normalized.catalogProvider
-    && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses");
-  const reasoningEnabled = normalized.reasoningEnabled
-    ?? (Object.keys(current).length === 0 ? true : undefined);
   const next: JsonObject = {
     ...current,
     displayName: normalized.name,
@@ -598,13 +641,10 @@ function piProviderProfile(
   else delete next.api;
   if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
   else delete next.baseURL;
-  if (managesReasoning && reasoningEnabled === true && next.reasoning === undefined) next.reasoning = "high";
-  else if (managesReasoning && reasoningEnabled === false) delete next.reasoning;
+  if (normalized.reasoningDefault) next.reasoning = normalized.reasoningDefault;
+  else delete next.reasoning;
   if (normalized.inheritModels) delete next.models;
-  else next.models = serializeModels(
-    normalized.models,
-    managesReasoning && reasoningEnabled === true
-  );
+  else next.models = serializeModels(normalized.models);
   return next;
 }
 
@@ -659,6 +699,8 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
         };
         if (normalized.inheritModels) delete next.models;
         else next.models = serializeModels(normalized.models);
+        if (normalized.reasoningDefault) next.reasoningEffort = normalized.reasoningDefault;
+        else delete next.reasoningEffort;
         document.setIn(["llm-deepseek"], next);
       });
       await mutateDeskState(options, state => {

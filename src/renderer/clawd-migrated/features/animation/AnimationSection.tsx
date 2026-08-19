@@ -108,7 +108,7 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
           label={t("data.playInterval", "动作切换间隔")}
           min={5}
           max={120}
-          step={5}
+          step={1}
           low={config.intervalMin}
           high={config.intervalMax}
           format={value => `${value} ${t("common.seconds", "秒")}`}

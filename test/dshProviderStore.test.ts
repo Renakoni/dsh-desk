@@ -52,14 +52,34 @@ describe("DSH provider settings", () => {
         isDefault: true,
         hasCredential: false,
         models: [
-          expect.objectContaining({ id: "deepseek-v4-flash" }),
+          expect.objectContaining({
+            id: "deepseek-v4-flash",
+            reasoning: expect.objectContaining({ defaultEffort: "high" })
+          }),
           expect.objectContaining({ id: "deepseek-v4-pro" })
         ]
       })
     ]);
   });
 
-  it("stores a custom route in DSH settings and its secret only in the credential store", async () => {
+  it("stores an explicit official DeepSeek reasoning default", async () => {
+    const dshHome = home();
+    const result = await saveDshProvider({
+      id: "deepseek-official",
+      name: "DeepSeek",
+      baseUrl: "https://api.deepseek.com",
+      protocol: "deepseek-chat-completions",
+      inheritModels: true,
+      catalogProvider: true,
+      reasoningDefault: "off"
+    }, { dshHome });
+
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(dshHome, "settings.yaml"), "utf8")).toContain("reasoningEffort: off");
+    expect((await listDshProviders({ dshHome })).providers[0]).toEqual(expect.objectContaining({ reasoningDefault: "off" }));
+  });
+
+  it("stores a custom route without inventing reasoning capabilities", async () => {
     const dshHome = home();
     const result = await saveDshProvider({
       id: "team-gateway",
@@ -76,13 +96,8 @@ describe("DSH provider settings", () => {
     expect(settings).toContain("llm-pi-ai:");
     expect(settings).toContain("api: openai-completions");
     expect(settings).toContain("baseURL: https://gateway.example/v1");
-    expect(settings).toContain("reasoning: high");
-    expect(settings).toContain("reasoningEfforts:");
-    expect(settings).toContain("low: low");
-    expect(settings).toContain("medium: medium");
-    expect(settings).toContain("high: high");
-    expect(settings).toContain("xhigh: xhigh");
-    expect(settings).toContain("max: max");
+    expect(settings).not.toContain("reasoning:");
+    expect(settings).not.toContain("reasoningEfforts:");
     expect(settings).not.toContain("sk-private");
     expect(credentials).toContain(`${deriveDshCredentialRef("team-gateway")}: sk-private`);
 
@@ -149,6 +164,36 @@ describe("DSH provider settings", () => {
     expect(settings).toContain("api: openai-responses");
   });
 
+  it("preserves an existing provider reasoning default when editing other fields", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "llm-pi-ai:",
+      "  providers:",
+      "    team-gateway:",
+      "      displayName: Team",
+      "      api: openai-responses",
+      "      baseURL: https://gateway.example/v1",
+      "      reasoning: high",
+      "      models:",
+      "        - id: gpt-5.6-sol",
+      ""
+    ].join("\n"));
+
+    const existing = (await listDshProviders({ dshHome })).providers.find(provider => provider.id === "team-gateway");
+    expect(existing).toEqual(expect.objectContaining({ reasoningDefault: "high" }));
+
+    const result = await saveDshProvider({
+      ...existing!,
+      name: "Team renamed",
+      inheritModels: existing!.modelsInherited
+    }, { dshHome });
+
+    expect(result.ok).toBe(true);
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).toContain("displayName: Team renamed");
+    expect(settings).toContain("reasoning: high");
+  });
+
   it("preserves an existing credential reference when replacing its key", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
@@ -205,14 +250,13 @@ describe("DSH provider settings", () => {
     ]);
   });
 
-  it("omits the provider reasoning default when reasoning is disabled", async () => {
+  it("stores a model-level reasoning opt-out without a provider default", async () => {
     const dshHome = home();
     await saveDshProvider({
       id: "plain-gateway",
       name: "Plain Gateway",
       baseUrl: "https://gateway.example/v1",
       protocol: "openai-completions",
-      reasoningEnabled: false,
       models: [{ id: "plain-model", reasoningEfforts: false }]
     }, { dshHome });
 
@@ -408,6 +452,28 @@ describe("DSH provider settings", () => {
     }));
   });
 
+  it("allows a catalog route to replace the built-in model list explicitly", async () => {
+    const dshHome = home();
+    const result = await saveDshProvider({
+      id: "openai",
+      name: "OpenAI",
+      inheritModels: false,
+      catalogProvider: true,
+      models: [{ id: "gpt-5.6-sol", reasoningEfforts: { off: null, high: "high", max: "ultimate" } }]
+    }, { dshHome });
+
+    expect(result.ok).toBe(true);
+    const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
+    expect(settings).toContain("models:");
+    expect(settings).toContain("id: gpt-5.6-sol");
+    expect(settings).toContain("max: ultimate");
+    expect(result.provider).toEqual(expect.objectContaining({
+      id: "openai",
+      modelsInherited: false,
+      models: [expect.objectContaining({ id: "gpt-5.6-sol" })]
+    }));
+  });
+
   it("merges DSH runtime catalog metadata and inherited models", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
@@ -427,7 +493,18 @@ describe("DSH provider settings", () => {
           { provider: "anthropic", displayName: "Anthropic", active: false, declared: false }
         ] },
         "llm.models": { groups: [
-          { id: "openai", name: "OpenAI", models: [{ id: "gpt-runtime", name: "Runtime GPT" }] }
+          { id: "openai", name: "OpenAI", models: [{
+            id: "gpt-runtime",
+            name: "Runtime GPT",
+            reasoning: {
+              efforts: [
+                { id: "off", name: "Off" },
+                { id: "high", name: "High" },
+                { id: "max", name: "Max" }
+              ],
+              defaultEffort: "high"
+            }
+          }] }
         ] }
       })
     });
@@ -439,7 +516,18 @@ describe("DSH provider settings", () => {
       catalogProvider: true,
       runtimeActive: true,
       modelsInherited: true,
-      models: [{ id: "gpt-runtime", name: "Runtime GPT" }]
+      models: [{
+        id: "gpt-runtime",
+        name: "Runtime GPT",
+        reasoning: {
+          efforts: [
+            { id: "off", name: "Off" },
+            { id: "high", name: "High" },
+            { id: "max", name: "Max" }
+          ],
+          defaultEffort: "high"
+        }
+      }]
     }));
   });
 

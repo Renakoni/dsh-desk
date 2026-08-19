@@ -12,7 +12,7 @@ const packCatalog = catalogFromPetPack(makePackManifest());
 
 const settings = {
   ...defaultSettings,
-  idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 10, intervalMax: 20 },
+  idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 12, intervalMax: 28 },
   stateAnimations: {}
 };
 
@@ -92,9 +92,11 @@ describe("imported-theme Animation page localization", () => {
     const view = renderSection("en");
     const tracks = view.container.querySelectorAll<HTMLElement>(".range-track");
     const intervalTrack = tracks[0];
+    const inputs = intervalTrack.querySelectorAll<HTMLInputElement>('input[type="range"]');
 
-    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-left"))).toBeCloseTo(4.3478, 3);
-    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-width"))).toBeCloseTo(8.6957, 3);
+    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-left"))).toBeCloseTo(6.087, 3);
+    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-width"))).toBeCloseTo(13.913, 3);
+    expect(Array.from(inputs, input => input.step)).toEqual(["1", "1"]);
     expect(intervalTrack.querySelector(".range-fill-boundary > .range-fill")).toBeTruthy();
   });
 });

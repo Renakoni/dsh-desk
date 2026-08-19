@@ -902,9 +902,9 @@ function SettingsApp() {
       <nav className="tab-bar">
         {[
           { id: "general", icon: <Gauge size={16} />, label: t("settings.tabs.general", "总览") },
-          { id: "animation", icon: <Wand2 size={16} />, label: t("settings.tabs.animation", "动画") },
-          { id: "themes", icon: <Palette size={16} />, label: t("settings.tabs.themes", "外观") },
           { id: "plugins", icon: <PlugZap size={16} />, label: t("settings.tabs.plugins", "插件") },
+          { id: "themes", icon: <Palette size={16} />, label: t("settings.tabs.themes", "外观") },
+          { id: "animation", icon: <Wand2 size={16} />, label: t("settings.tabs.animation", "动画") },
           { id: "data", icon: <FileText size={16} />, label: t("settings.tabs.data", "数据") },
           { id: "settings", icon: <Wrench size={16} />, label: t("settings.tabs.settings", "设置") }
         ].map(tab => (
