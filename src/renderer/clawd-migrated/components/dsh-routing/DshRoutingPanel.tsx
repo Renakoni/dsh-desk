@@ -236,7 +236,11 @@ export function DshRoutingPanel() {
       toast.error(result.error ?? t("routing.applyFailed", "切换失败"));
       return;
     }
-    toast.success(formatI18n(t("dshProviders.switchedToProvider", "默认供应商已切换为 {name}"), { name: provider.name }));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "默认供应商已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(formatI18n(t("dshProviders.switchedToProvider", "默认供应商已切换为 {name}"), { name: provider.name }));
+    }
     await refresh();
   }, [companion, refresh, t]);
 

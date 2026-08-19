@@ -134,6 +134,7 @@
     "defaultNamed": "默认 {name}",
     "noModelForDefault": "暂无可用模型，无法设为默认",
     "switchedToProvider": "默认供应商已切换为 {name}",
+    "sessionSyncFailed": "默认供应商已保存，但部分空白会话未能同步；重启 DSH 后生效",
     "enabled": "已启用",
     "disabled": "已停用",
     "enable": "启用",

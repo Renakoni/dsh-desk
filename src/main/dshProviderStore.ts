@@ -391,6 +391,25 @@ async function runtimeSnapshot(options?: DshProviderStoreOptions): Promise<Runti
   }
 }
 
+async function syncBlankSessionModels(provider: string, model: string, options?: DshProviderStoreOptions) {
+  try {
+    const value = await runtimeRpc("session.list", {}, options);
+    const sessions = Array.isArray(value.items) ? value.items : [];
+    let synced = true;
+    for (const item of sessions) {
+      if (!isObject(item) || item.blank !== true || typeof item.sessionId !== "string") continue;
+      try {
+        await runtimeRpc("session.selectModel", { sessionId: item.sessionId, provider, model }, options);
+      } catch {
+        synced = false;
+      }
+    }
+    return synced;
+  } catch {
+    return false;
+  }
+}
+
 export function deriveDshCredentialRef(providerId: string) {
   return `CHARA_DSH_${providerId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
@@ -917,7 +936,15 @@ export async function switchDshProvider(id: string, options?: DshProviderStoreOp
     await mutateYaml(settingsPath(options), document => {
       document.setIn(["agent-default-model"], { provider: id, model: selectedModel });
     });
-    return { ok: true, provider: id, model: selectedModel };
+    const sessionSyncFailed = listing.runtimeAvailable
+      ? !await syncBlankSessionModels(id, selectedModel, options)
+      : false;
+    return {
+      ok: true,
+      provider: id,
+      model: selectedModel,
+      ...(sessionSyncFailed ? { sessionSyncFailed: true } : {})
+    };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }

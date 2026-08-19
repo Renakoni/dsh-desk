@@ -681,6 +681,87 @@ describe("DSH provider settings", () => {
     });
   });
 
+  it("updates reusable blank sessions without changing completed sessions", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    const requests: Array<{ method: string; payload: Record<string, unknown> }> = [];
+    const runtimeOptions = {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: (async (_input: string | URL | Request, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as { rpcId: string; method: string; payload: Record<string, unknown> };
+        requests.push({ method: request.method, payload: request.payload });
+        const value = request.method === "llm.providers"
+          ? { providers: [{ provider: "team-gateway", displayName: "Team Gateway", active: true }] }
+          : request.method === "llm.models"
+            ? { groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }] }
+            : request.method === "session.list"
+              ? { items: [
+                { sessionId: "blank-session", blank: true },
+                { sessionId: "completed-session", blank: false }
+              ] }
+              : { selected: { provider: "team-gateway", model: "team-model" } };
+        return new Response(JSON.stringify({ rpcId: request.rpcId, result: { ok: true, value } }), { status: 200 });
+      }) as typeof fetch
+    };
+
+    await expect(switchDshProvider("team-gateway", runtimeOptions)).resolves.toEqual({
+      ok: true,
+      provider: "team-gateway",
+      model: "team-model"
+    });
+    expect(requests.filter(request => request.method === "session.selectModel")).toEqual([{
+      method: "session.selectModel",
+      payload: { sessionId: "blank-session", provider: "team-gateway", model: "team-model" }
+    }]);
+  });
+
+  it("keeps the saved default when a blank session cannot be synchronized", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    const runtimeOptions = {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: (async (_input: string | URL | Request, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as { rpcId: string; method: string };
+        const value = request.method === "llm.providers"
+          ? { providers: [{ provider: "team-gateway", displayName: "Team Gateway", active: true }] }
+          : request.method === "llm.models"
+            ? { groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }] }
+            : request.method === "session.list"
+              ? { items: [{ sessionId: "blank-session", blank: true }] }
+              : { selected: { provider: "team-gateway", model: "team-model" } };
+        if (request.method === "session.selectModel") {
+          return new Response(JSON.stringify({ rpcId: request.rpcId, result: { ok: false, error: { message: "session unavailable" } } }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ rpcId: request.rpcId, result: { ok: true, value } }), { status: 200 });
+      }) as typeof fetch
+    };
+
+    await expect(switchDshProvider("team-gateway", runtimeOptions)).resolves.toEqual({
+      ok: true,
+      provider: "team-gateway",
+      model: "team-model",
+      sessionSyncFailed: true
+    });
+    expect(await listDshProviders({ dshHome })).toEqual(expect.objectContaining({
+      defaultProvider: "team-gateway",
+      defaultModel: "team-model"
+    }));
+  });
+
   it("does not reuse another provider's model when the target has no models", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [

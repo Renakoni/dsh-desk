@@ -108,6 +108,7 @@ export type DshProviderSwitchResult = {
   ok: boolean;
   provider?: string;
   model?: string;
+  sessionSyncFailed?: boolean;
   error?: string;
 };
 
