@@ -595,7 +595,6 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   if (hasOwn(input, "iconColor")) meta.iconColor = input.iconColor?.trim() || undefined;
   if (typeof input.createdAt === "number") meta.createdAt = input.createdAt;
   if (typeof input.sortIndex === "number") meta.sortIndex = input.sortIndex;
-  if (hasOwn(input, "preferredModel")) meta.preferredModel = input.preferredModel?.trim() || undefined;
   return {
     id,
     name,
@@ -661,7 +660,7 @@ function updateDeskProviderMeta(state: DshDeskState, id: string, meta: DshProvid
 function fallbackSelection(providers: DshProvider[], excludingId: string) {
   for (const provider of providers) {
     if (provider.id === excludingId || !provider.enabled) continue;
-    const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id;
+    const model = provider.models[0]?.id;
     if (model) return { provider: provider.id, model };
   }
   return undefined;
@@ -907,22 +906,16 @@ export async function reorderDshProviders(ids: string[], options?: DshProviderSt
   }
 }
 
-export async function switchDshProvider(id: string, model?: string, options?: DshProviderStoreOptions): Promise<DshProviderSwitchResult> {
+export async function switchDshProvider(id: string, options?: DshProviderStoreOptions): Promise<DshProviderSwitchResult> {
   try {
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === id);
     if (!provider) throw new Error("Provider not found");
     if (!provider.enabled) throw new Error("Provider is disabled");
-    const selectedModel = model?.trim()
-      || (provider.modelsInherited
-        ? listing.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
-        : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing.defaultModel);
-    if (!selectedModel) throw new Error("No model is selected. Enter a model ID or choose one from the DSH catalog first");
+    const selectedModel = provider.models[0]?.id;
+    if (!selectedModel) throw new Error("This provider has no available models. Start DSH to load its catalog or configure a model first");
     await mutateYaml(settingsPath(options), document => {
       document.setIn(["agent-default-model"], { provider: id, model: selectedModel });
-    });
-    await mutateDeskState(options, state => {
-      state.providers[id] = { ...(state.providers[id] ?? {}), preferredModel: selectedModel };
     });
     return { ok: true, provider: id, model: selectedModel };
   } catch (error) {

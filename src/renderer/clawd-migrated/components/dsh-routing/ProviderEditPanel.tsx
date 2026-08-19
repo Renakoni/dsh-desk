@@ -179,7 +179,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [reasoningDefault, setReasoningDefault] = useState<DshReasoningEffort | undefined>(provider.reasoningDefault);
-  const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [probing, setProbing] = useState(false);
@@ -209,7 +208,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
     setReasoningDefault(undefined);
-    setPreferredModel(preset.preferredModel ?? preset.models[0]?.id ?? "");
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
     setWebsiteUrl(preset.websiteUrl ?? "");
@@ -230,7 +228,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setModels([]);
     setCatalogModels([]);
     setReasoningDefault(undefined);
-    setPreferredModel("");
     setBaseUrl("");
     setProtocol("openai-completions");
     setWebsiteUrl("");
@@ -264,7 +261,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       const discovered = result.models ?? [];
       setCatalogModels(discovered);
       if (!inheritModels && models.length === 0) setModels(discovered.map(model => ({ ...model })));
-      if (!preferredModel && discovered[0]) setPreferredModel(discovered[0].id);
     } catch (error) {
       setDiscoveryError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -319,9 +315,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       const { reasoning: _runtimeReasoning, ...configuredModel } = model;
       return { ...configuredModel, id: model.id.trim() };
     }).filter(model => model.id);
-    const normalizedPreferredModel = inheritModels
-      ? preferredModel
-      : normalizedModels.some(model => model.id === preferredModel) ? preferredModel : normalizedModels[0]?.id;
     return {
       id: id.trim() || undefined,
       name: name.trim(),
@@ -340,8 +333,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       icon,
       iconColor: iconColor || undefined,
       createdAt: provider.createdAt,
-      sortIndex: provider.sortIndex,
-      preferredModel: normalizedPreferredModel || undefined
+      sortIndex: provider.sortIndex
     };
   }
 

@@ -110,8 +110,7 @@ function editDraft(provider: DshProvider): DshProviderSaveInput {
     icon: provider.icon,
     iconColor: provider.iconColor,
     createdAt: provider.createdAt,
-    sortIndex: provider.sortIndex,
-    preferredModel: provider.preferredModel ?? provider.defaultModel ?? provider.models[0]?.id
+    sortIndex: provider.sortIndex
   };
 }
 
@@ -160,10 +159,9 @@ export function DshRoutingPanel() {
     return ordered;
   }, [orderOverride, providers]);
   const currentProvider = providers.find(provider => provider.id === currentId) ?? sortedProviders[0];
-  const currentModel = listing?.defaultModel || currentProvider?.defaultModel || currentProvider?.preferredModel || currentProvider?.models[0]?.id || "";
   const enabledCount = providers.filter(provider => provider.enabled).length;
   const providerSummary = currentProvider
-    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
+    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: currentProvider.name })
     : formatI18n(t("routing.providerCount", "{count} 个供应商"), { count: sortedProviders.length });
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -233,17 +231,14 @@ export function DshRoutingPanel() {
   }, [companion, refresh, t]);
 
   const handleSwitch = useCallback(async (provider: DshProvider) => {
-    const model = provider.modelsInherited
-      ? listing?.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
-      : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing?.defaultModel;
-    const result = await companion.switchDshProvider(provider.id, model);
+    const result = await companion.switchDshProvider(provider.id);
     if (!result.ok) {
       toast.error(result.error ?? t("routing.applyFailed", "切换失败"));
       return;
     }
-    toast.success(formatI18n(t("dshProviders.switchedTo", "已切换到 {name} · {model}"), { name: provider.name, model: result.model ?? model ?? "" }));
+    toast.success(formatI18n(t("dshProviders.switchedToProvider", "默认供应商已切换为 {name}"), { name: provider.name }));
     await refresh();
-  }, [companion, listing?.defaultModel, refresh, t]);
+  }, [companion, refresh, t]);
 
   const handleTest = useCallback(async (provider: DshProvider) => {
     setTestingId(provider.id);

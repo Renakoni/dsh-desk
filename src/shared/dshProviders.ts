@@ -45,7 +45,6 @@ export type DshProviderUiMeta = {
   iconColor?: string;
   createdAt?: number;
   sortIndex?: number;
-  preferredModel?: string;
 };
 
 export type DshCatalogProvider = {

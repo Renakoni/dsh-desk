@@ -275,7 +275,7 @@ describe("DSH provider settings", () => {
       apiKey: "sk-private",
       models: [{ id: "team-model" }]
     }, { dshHome });
-    await switchDshProvider("team-gateway", "team-model", { dshHome });
+    await switchDshProvider("team-gateway", { dshHome });
 
     const disabled = await setDshProviderEnabled("team-gateway", false, { dshHome });
     expect(disabled).toEqual(expect.objectContaining({
@@ -628,8 +628,7 @@ describe("DSH provider settings", () => {
       websiteUrl: "https://example.com",
       apiKeyUrl: "https://example.com/key",
       icon: "server",
-      iconColor: "#123456",
-      preferredModel: "team-model"
+      iconColor: "#123456"
     }, { dshHome });
 
     await saveDshProvider({
@@ -642,8 +641,7 @@ describe("DSH provider settings", () => {
       websiteUrl: "",
       apiKeyUrl: "",
       icon: "",
-      iconColor: "",
-      preferredModel: ""
+      iconColor: ""
     }, { dshHome });
 
     const provider = (await listDshProviders({ dshHome })).providers.find(item => item.id === "team-gateway");
@@ -652,10 +650,9 @@ describe("DSH provider settings", () => {
     expect(provider).not.toHaveProperty("apiKeyUrl");
     expect(provider).not.toHaveProperty("icon");
     expect(provider).not.toHaveProperty("iconColor");
-    expect(provider).not.toHaveProperty("preferredModel");
   });
 
-  it("keeps the current DSH model when switching to an inherited catalog route", async () => {
+  it("uses the target provider's first model when switching to an inherited catalog route", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
       "agent-default-model:",
@@ -670,14 +667,42 @@ describe("DSH provider settings", () => {
       runtimeUrl: "http://dsh.test",
       runtimeFetchImpl: runtimeFetch({
         "llm.providers": { providers: [{ provider: "openai", displayName: "OpenAI", active: true, declared: false }] },
-        "llm.models": { groups: [{ id: "openai", name: "OpenAI", models: [{ id: "first-runtime-model" }] }] }
+        "llm.models": { groups: [{
+          id: "openai",
+          name: "OpenAI",
+          models: [{ id: "first-runtime-model" }, { id: "second-runtime-model" }]
+        }] }
       })
     };
-    expect(await switchDshProvider("openai", undefined, runtimeOptions)).toEqual({
+    expect(await switchDshProvider("openai", runtimeOptions)).toEqual({
       ok: true,
       provider: "openai",
-      model: "current-unlisted-model"
+      model: "first-runtime-model"
     });
+  });
+
+  it("does not reuse another provider's model when the target has no models", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "agent-default-model:",
+      "  provider: deepseek-official",
+      "  model: deepseek-v4-flash",
+      "llm-pi-ai:",
+      "  providers:",
+      "    empty-route:",
+      "      displayName: Empty",
+      "      models: []",
+      ""
+    ].join("\n"));
+
+    expect(await switchDshProvider("empty-route", { dshHome })).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.stringContaining("no available models")
+    }));
+    expect(await listDshProviders({ dshHome })).toEqual(expect.objectContaining({
+      defaultProvider: "deepseek-official",
+      defaultModel: "deepseek-v4-flash"
+    }));
   });
 
   it("switches the DSH default selection and resets it when that route is deleted", async () => {
@@ -690,7 +715,7 @@ describe("DSH provider settings", () => {
       apiKey: "sk-private",
       models: [{ id: "deepseek-v4-pro" }]
     }, { dshHome });
-    expect(await switchDshProvider("team-gateway", "deepseek-v4-pro", { dshHome })).toEqual({
+    expect(await switchDshProvider("team-gateway", { dshHome })).toEqual({
       ok: true,
       provider: "team-gateway",
       model: "deepseek-v4-pro"
