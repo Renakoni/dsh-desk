@@ -22,9 +22,9 @@ import type {
   DshProviderProbeInput,
   DshProviderProbeResult,
   DshProviderProtocol,
-  DshProviderSaveInput
+  DshProviderSaveInput,
+  DshReasoningEfforts
 } from "../../../../shared/dshProviders";
-import { DEFAULT_DSH_REASONING_EFFORTS } from "../../../../shared/dshProviders";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { IconPicker } from "./IconPicker";
@@ -49,6 +49,14 @@ type ProviderEditPanelProps = {
 type ProviderEditContentProps = Omit<ProviderEditPanelProps, "open" | "prewarm" | "sessionKey"> & {
   provider: DshProviderSaveInput;
 };
+
+const COMMON_REASONING_EFFORTS = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max"
+} satisfies DshReasoningEfforts;
 
 function parsePositiveInteger(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -164,14 +172,8 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [inheritModels, setInheritModels] = useState(provider.inheritModels === true);
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
-  const [reasoningEnabled, setReasoningEnabled] = useState<boolean | undefined>(() => {
-    if (typeof provider.reasoningEnabled === "boolean") return provider.reasoningEnabled;
-    if (mode === "add") return true;
-    if (!provider.models?.some(model => model.reasoningEfforts !== undefined)) return undefined;
-    return !provider.models.every(model => model.reasoningEfforts === false);
-  });
-  const [reasoningTouched, setReasoningTouched] = useState(mode === "add");
-  const [preferredModel, setPreferredModel] = useState(provider.preferredModel ?? provider.models?.[0]?.id ?? "");
+  const [reasoningEnabled, setReasoningEnabled] = useState(() => provider.reasoningDefault !== undefined
+    || (provider.models ?? []).some(model => model.reasoningEfforts !== undefined && model.reasoningEfforts !== false));
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [probing, setProbing] = useState(false);
@@ -181,6 +183,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [hardError, setHardError] = useState("");
   const [softIssues, setSoftIssues] = useState<string[] | null>(null);
   const official = id === "deepseek-official";
+  const canConfigureReasoning = !official && !catalogProvider && !inheritModels;
   const formId = `dsh-provider-${mode}-${originalId || "new"}`;
 
   function applyPreset(preset: DshProviderPreset) {
@@ -192,9 +195,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(preset.inheritModels);
     setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
-    setReasoningEnabled(true);
-    setReasoningTouched(true);
-    setPreferredModel(preset.preferredModel ?? preset.models[0]?.id ?? "");
+    setReasoningEnabled(false);
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
     setWebsiteUrl(preset.websiteUrl ?? "");
@@ -214,9 +215,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(false);
     setModels([]);
     setCatalogModels([]);
-    setReasoningEnabled(true);
-    setReasoningTouched(true);
-    setPreferredModel("");
+    setReasoningEnabled(false);
     setBaseUrl("");
     setProtocol("openai-completions");
     setWebsiteUrl("");
@@ -250,7 +249,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       const discovered = result.models ?? [];
       setCatalogModels(discovered);
       if (!inheritModels && models.length === 0) setModels(discovered.map(model => ({ ...model })));
-      if (!preferredModel && discovered[0]) setPreferredModel(discovered[0].id);
     } catch (error) {
       setDiscoveryError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -263,21 +261,14 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   }
 
   function buildDraft(): DshProviderSaveInput {
-    const managesReasoning = !official
-      && !catalogProvider
-      && (protocol === "openai-completions" || protocol === "openai-responses");
-    const applyReasoningChoice = mode === "add" || reasoningTouched;
     const normalizedModels = models.map(model => {
-      const normalized = { ...model, id: model.id.trim() };
-      if (!managesReasoning || !applyReasoningChoice) return normalized;
-      if (reasoningEnabled === false) return { ...normalized, reasoningEfforts: false as const };
-      return reasoningEnabled === true && (normalized.reasoningEfforts === undefined || normalized.reasoningEfforts === false)
-        ? { ...normalized, reasoningEfforts: { ...DEFAULT_DSH_REASONING_EFFORTS } }
-        : normalized;
+      const { reasoning: _runtimeReasoning, ...configuredModel } = model;
+      if (!canConfigureReasoning) return { ...configuredModel, id: model.id.trim() };
+      const { reasoningEfforts: _configuredEfforts, ...plainModel } = configuredModel;
+      return reasoningEnabled
+        ? { ...plainModel, id: model.id.trim(), reasoningEfforts: { ...COMMON_REASONING_EFFORTS } }
+        : { ...plainModel, id: model.id.trim() };
     }).filter(model => model.id);
-    const normalizedPreferredModel = inheritModels
-      ? preferredModel
-      : normalizedModels.some(model => model.id === preferredModel) ? preferredModel : normalizedModels[0]?.id;
     return {
       id: id.trim() || undefined,
       name: name.trim(),
@@ -287,7 +278,9 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       inheritModels,
       catalogProvider,
       enabled: provider.enabled !== false,
-      ...(managesReasoning && applyReasoningChoice && reasoningEnabled !== undefined ? { reasoningEnabled } : {}),
+      reasoningDefault: canConfigureReasoning
+        ? reasoningEnabled ? "medium" : undefined
+        : provider.reasoningDefault,
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
@@ -296,8 +289,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       icon,
       iconColor: iconColor || undefined,
       createdAt: provider.createdAt,
-      sortIndex: provider.sortIndex,
-      preferredModel: normalizedPreferredModel || undefined
+      sortIndex: provider.sortIndex
     };
   }
 
@@ -442,10 +434,12 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                 <div className="ccs-model-mapping">
                   <div className="ccs-model-mapping-head">
                     <div>
-                      <span className="ccs-field-label">{t("dshProviders.models", "模型目录")}</span>
+                      <span className="ccs-field-label">{t("dshProviders.models", "模型列表")}</span>
                       <small className="ccs-field-hint">{inheritModels
-                        ? t("dshProviders.catalogInherited", "由 DSH 内置目录提供，不写入模型映射")
-                        : t("dshProviders.catalogExplicit", "只在需要覆盖 DSH 目录时显式填写")}</small>
+                        ? t("dshProviders.catalogInherited", "自动使用 DSH 已知的模型和能力，不写入 models 配置")
+                        : catalogProvider
+                          ? t("dshProviders.catalogExplicit", "只保存下面列出的模型；未声明的能力继续使用 DSH 目录")
+                          : t("dshProviders.manualModelsHint", "为当前接口填写模型")}</small>
                     </div>
                     <div className="ccs-model-mapping-actions">
                       <button type="button" className="ccs-model-quickset" disabled={discovering || (!id && !baseUrl)} onClick={() => void discoverModels()}>
@@ -457,35 +451,62 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                   </div>
 
                   {catalogProvider ? (
-                    <label className="ccs-inline-check-row">
-                      <input type="checkbox" checked={inheritModels} onChange={event => {
-                        const inherit = event.target.checked;
-                        setInheritModels(inherit);
-                        if (!inherit && models.length === 0) setModels(catalogModels.map(model => ({ ...model })));
-                      }} />
-                      <span>{t("dshProviders.useCatalog", "使用 DSH 内置模型目录")}</span>
-                    </label>
+                    <div className="dsh-model-source" role="radiogroup" aria-label={t("dshProviders.modelSource", "模型来源")}>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={inheritModels}
+                        className={inheritModels ? "active" : ""}
+                        onClick={() => setInheritModels(true)}
+                      >{t("dshProviders.builtInModels", "DSH 内置模型")}</button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={!inheritModels}
+                        className={!inheritModels ? "active" : ""}
+                        onClick={() => {
+                          setInheritModels(false);
+                          if (models.length === 0) setModels(catalogModels.map(model => ({ ...model })));
+                        }}
+                      >{t("dshProviders.customModels", "自定义模型列表")}</button>
+                    </div>
                   ) : null}
 
-                  {!official && !catalogProvider && !inheritModels && protocol !== "anthropic-messages" ? (
-                    <label className="ccs-inline-check-row">
-                      <input
-                        type="checkbox"
-                        checked={reasoningEnabled === true}
-                        onChange={event => {
-                          setReasoningEnabled(event.target.checked);
-                          setReasoningTouched(true);
-                        }}
-                      />
-                      <span>{t("dshProviders.reasoningEfforts", "启用思考强度")}</span>
-                    </label>
+                  {canConfigureReasoning ? (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={reasoningEnabled}
+                      aria-label={t("dshProviders.enableReasoning", "启用推理强度选择")}
+                      className="dsh-reasoning-switch"
+                      onClick={() => setReasoningEnabled(enabled => !enabled)}
+                    >
+                      <span className="dsh-reasoning-switch-copy">
+                        <strong>{t("dshProviders.enableReasoning", "启用推理强度选择")}</strong>
+                        <small>{t("dshProviders.enableReasoningHint", "为全部模型提供 Low、Medium、High、XHigh 和 Max，初始为 Medium。")}</small>
+                      </span>
+                      <span className="dsh-reasoning-switch-track" aria-hidden="true" />
+                    </button>
                   ) : null}
 
                   {discoveryError ? <small className="ccs-field-error">{discoveryError}</small> : null}
                   {inheritModels ? (
                     catalogModels.length > 0 ? (
                       <div className="dsh-catalog-preview">
-                        {catalogModels.map(model => <span key={model.id}>{model.name || model.id}</span>)}
+                        {catalogModels.map(model => {
+                          const runtimeReasoning = model.reasoning;
+                          const defaultName = runtimeReasoning?.efforts.find(effort => effort.id === runtimeReasoning.defaultEffort)?.name
+                            ?? runtimeReasoning?.defaultEffort;
+                          return (
+                            <div className="dsh-catalog-model" key={model.id}>
+                              <strong title={model.id}>{model.name || model.id}</strong>
+                              <span>{runtimeReasoning
+                                ? runtimeReasoning.efforts.map(effort => effort.name).join(" · ")
+                                : t("dshProviders.noReasoning", "无推理档位")}</span>
+                              {defaultName ? <em>{t("dshProviders.reasoningDefault", "默认：{level}").replace("{level}", defaultName)}</em> : null}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : <small className="ccs-field-hint">{t("dshProviders.catalogLoadHint", "保存后 DSH 会解析该供应商目录，也可以先点击获取模型目录。")}</small>
                   ) : (

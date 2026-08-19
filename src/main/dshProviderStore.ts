@@ -3,7 +3,6 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { basename, dirname, join } from "node:path";
 import { Document, parseDocument } from "yaml";
 import {
-  DEFAULT_DSH_REASONING_EFFORTS,
   DSH_PROVIDER_PROTOCOLS,
   DSH_REASONING_EFFORTS,
   type DshCatalogProvider,
@@ -14,6 +13,7 @@ import {
   type DshProviderProbeInput,
   type DshProviderProbeResult,
   type DshProviderProtocol,
+  type DshReasoningEffort,
   type DshProviderSaveInput,
   type DshProviderSwitchResult,
   type DshProviderUiMeta
@@ -260,15 +260,41 @@ function modelList(value: unknown, fallback: DshProviderModel[] = []): DshProvid
             : [];
         }))
         : undefined;
+    const runtimeReasoningValue = isObject(item.reasoning) ? item.reasoning : undefined;
+    const runtimeEfforts = Array.isArray(runtimeReasoningValue?.efforts)
+      ? runtimeReasoningValue.efforts.flatMap(effort => isObject(effort)
+        && typeof effort.id === "string"
+        && effort.id
+        ? [{
+            id: effort.id,
+            name: typeof effort.name === "string" && effort.name ? effort.name : effort.id
+          }]
+        : [])
+      : [];
+    const reasoning = runtimeEfforts.length > 0
+      ? {
+          efforts: runtimeEfforts,
+          ...(typeof runtimeReasoningValue?.defaultEffort === "string"
+            ? { defaultEffort: runtimeReasoningValue.defaultEffort }
+            : {})
+        }
+      : undefined;
     models.push({
       id: item.id.trim(),
       ...(typeof item.name === "string" && item.name.trim() ? { name: item.name.trim() } : {}),
       ...(typeof item.contextWindow === "number" && Number.isSafeInteger(item.contextWindow) && item.contextWindow > 0 ? { contextWindow: item.contextWindow } : {}),
       ...(typeof item.maxTokens === "number" && Number.isSafeInteger(item.maxTokens) && item.maxTokens > 0 ? { maxTokens: item.maxTokens } : {}),
-      ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {})
+      ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {}),
+      ...(reasoning ? { reasoning } : {})
     });
   }
   return models;
+}
+
+function configuredReasoningEffort(value: unknown): DshReasoningEffort | undefined {
+  return typeof value === "string" && DSH_REASONING_EFFORTS.includes(value as DshReasoningEffort)
+    ? value as DshReasoningEffort
+    : undefined;
 }
 
 function credentialMap(root: JsonObject, filePath: string) {
@@ -292,7 +318,12 @@ function runtimeUrl(options?: DshProviderStoreOptions) {
   return configured.replace(/\/+$/, "");
 }
 
-async function runtimeRpc(method: string, payload: JsonObject, options?: DshProviderStoreOptions): Promise<JsonObject> {
+async function runtimeRpc(
+  method: string,
+  payload: JsonObject,
+  options?: DshProviderStoreOptions,
+  timeoutMs = 3_000
+): Promise<JsonObject> {
   if (!runtimeEnabled(options)) throw new Error("DSH runtime discovery is disabled");
   const base = runtimeUrl(options);
   const rpcId = `dsh-desk-${randomUUID()}`;
@@ -304,7 +335,7 @@ async function runtimeRpc(method: string, payload: JsonObject, options?: DshProv
       referer: `${base}/`
     },
     body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
-    signal: AbortSignal.timeout(3_000)
+    signal: AbortSignal.timeout(timeoutMs)
   });
   if (!response.ok) throw new Error(`DSH runtime returned HTTP ${response.status}`);
   const envelope = await response.json() as unknown;
@@ -351,6 +382,91 @@ async function runtimeSnapshot(options?: DshProviderStoreOptions): Promise<Runti
   }
 }
 
+type DshModelSelection = {
+  provider: string;
+  model: string;
+  reasoningEffort?: string;
+};
+
+function selectionMatches(value: unknown, expected: DshModelSelection, requireReasoningEffortCleared: boolean) {
+  const selected = asObject(asObject(value).selected);
+  const actualReasoningEffort = typeof selected.reasoningEffort === "string"
+    ? selected.reasoningEffort
+    : undefined;
+  const reasoningEffortMatches = expected.reasoningEffort !== undefined
+    ? actualReasoningEffort === expected.reasoningEffort
+    : !requireReasoningEffortCleared || actualReasoningEffort === undefined;
+  return selected.provider === expected.provider
+    && selected.model === expected.model
+    && reasoningEffortMatches;
+}
+
+async function selectBlankSessionModel(
+  sessionId: string,
+  selection: DshModelSelection,
+  options?: DshProviderStoreOptions,
+  requireReasoningEffortCleared = false
+) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const value = await runtimeRpc("session.selectModel", {
+        sessionId,
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {})
+      }, options, 500);
+      if (selectionMatches(value, selection, requireReasoningEffortCleared)) return true;
+    } catch {
+      // DSH may still be reloading the provider patch after Desk wrote it.
+    }
+    if (attempt < 9) await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return false;
+}
+
+async function syncBlankSessionModels(
+  selection: DshModelSelection,
+  options?: DshProviderStoreOptions,
+  requireReasoningEffortCleared = false
+) {
+  try {
+    const value = await runtimeRpc("session.list", {}, options);
+    const sessions = Array.isArray(value.items) ? value.items : [];
+    const blankSessionIds = sessions.flatMap(item => isObject(item)
+      && item.blank === true
+      && typeof item.sessionId === "string"
+      ? [item.sessionId]
+      : []);
+    const results = await Promise.all(blankSessionIds.map(sessionId => selectBlankSessionModel(
+      sessionId,
+      selection,
+      options,
+      requireReasoningEffortCleared
+    )));
+    return results.every(Boolean);
+  } catch {
+    return false;
+  }
+}
+
+async function readDefaultSelection(options?: DshProviderStoreOptions): Promise<DshModelSelection> {
+  const { root } = await readOptional(settingsPath(options)).then(text => parseYaml(text, settingsPath(options)));
+  const selection = asObject(root["agent-default-model"]);
+  const reasoningEffort = typeof selection.reasoningEffort === "string" && selection.reasoningEffort.trim()
+    ? selection.reasoningEffort
+    : undefined;
+  return {
+    provider: typeof selection.provider === "string" ? selection.provider : OFFICIAL_PROVIDER,
+    model: typeof selection.model === "string" ? selection.model : DEFAULT_MODELS[0].id,
+    ...(reasoningEffort ? { reasoningEffort } : {})
+  };
+}
+
+async function syncSavedDefaultSelection(options?: DshProviderStoreOptions) {
+  const selection = await readDefaultSelection(options);
+  return syncBlankSessionModels(selection, options, selection.provider !== OFFICIAL_PROVIDER);
+}
+
 export function deriveDshCredentialRef(providerId: string) {
   return `CHARA_DSH_${providerId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
@@ -374,6 +490,7 @@ function providerFromProfile(
   const apiKey = credentialRef ? process.env[credentialRef] || credentials.get(credentialRef) : undefined;
   const modelsInherited = !Array.isArray(profile.models);
   const configuredModels = modelList(profile.models);
+  const reasoningDefault = configuredReasoningEffort(profile.reasoning);
   return {
     ...meta,
     id,
@@ -390,7 +507,8 @@ function providerFromProfile(
     hasCredential: !!apiKey,
     isOfficial: false,
     isDefault: defaultProvider === id,
-    ...(defaultProvider === id ? { defaultModel } : {})
+    ...(defaultProvider === id ? { defaultModel } : {}),
+    ...(reasoningDefault ? { reasoningDefault } : {})
   };
 }
 
@@ -416,6 +534,10 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
     const officialRef = typeof deepseek.apiKeyEnv === "string" ? deepseek.apiKeyEnv : OFFICIAL_CREDENTIAL;
     const officialApiKey = process.env[officialRef] || credentials.get(officialRef);
     const officialGroup = groupById.get(OFFICIAL_PROVIDER);
+    const officialModels = Array.isArray(deepseek.models)
+      ? modelList(deepseek.models)
+      : officialGroup?.models ?? DEFAULT_MODELS;
+    const officialReasoningDefault = configuredReasoningEffort(deepseek.reasoningEffort);
     const officialMeta = deskState.providers[OFFICIAL_PROVIDER] ?? {};
     const officialEnabled = officialProviderEnabled(patchDocument.root);
     const providers: DshProvider[] = [{
@@ -424,7 +546,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       name: "DeepSeek",
       baseUrl: typeof deepseek.baseURL === "string" ? deepseek.baseURL : OFFICIAL_BASE_URL,
       protocol: "deepseek-chat-completions",
-      models: Array.isArray(deepseek.models) ? modelList(deepseek.models) : officialGroup?.models ?? DEFAULT_MODELS,
+      models: officialModels,
       modelsInherited: !Array.isArray(deepseek.models),
       catalogProvider: true,
       enabled: officialEnabled,
@@ -436,6 +558,7 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
       icon: "deepseek",
       iconColor: "#4D6BFE",
       isDefault: defaultProvider === OFFICIAL_PROVIDER,
+      ...(officialReasoningDefault ? { reasoningDefault: officialReasoningDefault } : {}),
       ...(defaultProvider === OFFICIAL_PROVIDER ? { defaultModel } : {})
     }];
     const piProviders = asObject(asObject(root["llm-pi-ai"]).providers);
@@ -532,8 +655,12 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   if (id !== OFFICIAL_PROVIDER && protocol !== undefined && !DSH_PROVIDER_PROTOCOLS.includes(protocol as DshProviderProtocol)) {
     throw new Error("Unsupported DeepSeek Harness provider protocol");
   }
-  const models = catalogProvider ? [] : modelList(input.models);
+  const models = modelList(input.models);
   if (new Set(models.map(model => model.id)).size !== models.length) throw new Error("Model IDs must be unique");
+  const inheritModels = input.inheritModels === true || input.models === undefined;
+  const reasoningDefault = id !== OFFICIAL_PROVIDER && !catalogProvider && !inheritModels && input.reasoningDefault
+    ? "medium"
+    : input.reasoningDefault;
   const apiKey = input.apiKey?.trim();
   if (apiKey && (!/^[\x21-\x7E]+$/.test(apiKey) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(apiKey))) {
     throw new Error("API key must be a printable value, not an environment assignment");
@@ -547,26 +674,24 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   if (hasOwn(input, "iconColor")) meta.iconColor = input.iconColor?.trim() || undefined;
   if (typeof input.createdAt === "number") meta.createdAt = input.createdAt;
   if (typeof input.sortIndex === "number") meta.sortIndex = input.sortIndex;
-  if (hasOwn(input, "preferredModel")) meta.preferredModel = input.preferredModel?.trim() || undefined;
   return {
     id,
     name,
     baseUrl,
     protocol,
     models,
-    inheritModels: catalogProvider || input.inheritModels === true || input.models === undefined,
+    inheritModels,
     catalogProvider,
     enabled: input.enabled !== false,
-    reasoningEnabled: input.reasoningEnabled,
+    reasoningDefault,
     apiKey,
     meta
   };
 }
 
-function serializeModels(models: DshProviderModel[], addDefaultReasoningEfforts = false) {
+function serializeModels(models: DshProviderModel[]) {
   return models.map(model => {
-    const reasoningEfforts = model.reasoningEfforts
-      ?? (addDefaultReasoningEfforts ? DEFAULT_DSH_REASONING_EFFORTS : undefined);
+    const reasoningEfforts = model.reasoningEfforts;
     return {
       id: model.id,
       ...(model.name ? { name: model.name } : {}),
@@ -584,10 +709,6 @@ function piProviderProfile(
   normalized: ReturnType<typeof normalizeSaveInput>,
   credentialRef: string | undefined
 ) {
-  const managesReasoning = !normalized.catalogProvider
-    && (normalized.protocol === "openai-completions" || normalized.protocol === "openai-responses");
-  const reasoningEnabled = normalized.reasoningEnabled
-    ?? (Object.keys(current).length === 0 ? true : undefined);
   const next: JsonObject = {
     ...current,
     displayName: normalized.name,
@@ -598,13 +719,10 @@ function piProviderProfile(
   else delete next.api;
   if (normalized.baseUrl) next.baseURL = normalized.baseUrl;
   else delete next.baseURL;
-  if (managesReasoning && reasoningEnabled === true && next.reasoning === undefined) next.reasoning = "high";
-  else if (managesReasoning && reasoningEnabled === false) delete next.reasoning;
+  if (normalized.reasoningDefault) next.reasoning = normalized.reasoningDefault;
+  else delete next.reasoning;
   if (normalized.inheritModels) delete next.models;
-  else next.models = serializeModels(
-    normalized.models,
-    managesReasoning && reasoningEnabled === true
-  );
+  else next.models = serializeModels(normalized.models);
   return next;
 }
 
@@ -618,11 +736,27 @@ function updateDeskProviderMeta(state: DshDeskState, id: string, meta: DshProvid
   if (!state.order.includes(id)) state.order.push(id);
 }
 
+function providerSelection(provider: DshProvider): DshModelSelection | undefined {
+  const model = provider.models[0]?.id;
+  if (!model) return undefined;
+  const configuredEfforts = provider.models[0]?.reasoningEfforts;
+  const reasoningEffort = provider.reasoningDefault
+    && configuredEfforts
+    && hasOwn(configuredEfforts, provider.reasoningDefault)
+    ? provider.reasoningDefault
+    : undefined;
+  return {
+    provider: provider.id,
+    model,
+    ...(reasoningEffort ? { reasoningEffort } : {})
+  };
+}
+
 function fallbackSelection(providers: DshProvider[], excludingId: string) {
   for (const provider of providers) {
     if (provider.id === excludingId || !provider.enabled) continue;
-    const model = provider.preferredModel || provider.defaultModel || provider.models[0]?.id;
-    if (model) return { provider: provider.id, model };
+    const selection = providerSelection(provider);
+    if (selection) return selection;
   }
   return undefined;
 }
@@ -644,6 +778,8 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
     const existing = normalized.id === OFFICIAL_PROVIDER
       ? asObject(root["llm-deepseek"])
       : Object.keys(configured).length > 0 ? configured : disabled?.profile ?? {};
+    const configuredDefaultProvider = asObject(root["agent-default-model"]).provider;
+    const defaultProvider = typeof configuredDefaultProvider === "string" ? configuredDefaultProvider : OFFICIAL_PROVIDER;
     const existingRef = typeof existing.apiKeyEnv === "string" && existing.apiKeyEnv ? existing.apiKeyEnv : undefined;
     const credentialRef = existingRef
       ?? (normalized.id === OFFICIAL_PROVIDER ? OFFICIAL_CREDENTIAL : normalized.apiKey ? deriveDshCredentialRef(normalized.id) : undefined);
@@ -669,7 +805,19 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
       const next = piProviderProfile(existing, normalized, credentialRef);
       const catalogProvider = normalized.catalogProvider || disabled?.catalogProvider === true;
       if (normalized.enabled) {
-        await mutateYaml(settingsFile, document => document.setIn(["llm-pi-ai", "providers", normalized.id], next));
+        await mutateYaml(settingsFile, document => {
+          document.setIn(["llm-pi-ai", "providers", normalized.id], next);
+          if (normalized.catalogProvider || normalized.inheritModels) return;
+          const selection = asObject(asObject(document.toJS())["agent-default-model"]);
+          if (selection.provider !== normalized.id) return;
+          if (!normalized.reasoningDefault) {
+            document.deleteIn(["agent-default-model", "reasoningEffort"]);
+            return;
+          }
+          if (typeof selection.reasoningEffort !== "string" || !selection.reasoningEffort.trim()) {
+            document.setIn(["agent-default-model", "reasoningEffort"], "medium");
+          }
+        });
         await mutateDeskState(options, state => {
           updateDeskProviderMeta(state, normalized.id, normalized.meta);
           delete state.disabledProviders[normalized.id];
@@ -693,7 +841,11 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
     }
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === normalized.id);
-    return provider ? { ok: true, provider } : { ok: false, error: listing.error ?? "Provider was saved but could not be reloaded" };
+    if (!provider) return { ok: false, error: listing.error ?? "Provider was saved but could not be reloaded" };
+    const sessionSyncFailed = defaultProvider === normalized.id && listing.runtimeAvailable
+      ? !await syncSavedDefaultSelection(options)
+      : false;
+    return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -719,7 +871,11 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
       });
       const updated = await listDshProviders(options);
       const provider = updated.providers.find(item => item.id === id);
-      return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
+      if (!provider) return { ok: false, error: "Provider state changed but could not be reloaded" };
+      const sessionSyncFailed = fallback && updated.runtimeAvailable
+        ? !await syncBlankSessionModels(fallback, options)
+        : false;
+      return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
     }
     const [{ root }, deskState] = await Promise.all([
       readOptional(settingsFile).then(text => parseYaml(text, settingsFile)),
@@ -746,7 +902,11 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
     }
     const updated = await listDshProviders(options);
     const provider = updated.providers.find(item => item.id === id);
-    return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
+    if (!provider) return { ok: false, error: "Provider state changed but could not be reloaded" };
+    const sessionSyncFailed = fallback && updated.runtimeAvailable
+      ? !await syncBlankSessionModels(fallback, options)
+      : false;
+    return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -778,7 +938,10 @@ export async function deleteDshProvider(id: string, options?: DshProviderStoreOp
       delete state.disabledProviders[id];
       state.order = state.order.filter(providerId => providerId !== id);
     });
-    return { ok: true };
+    const sessionSyncFailed = fallback && listing.runtimeAvailable
+      ? !await syncBlankSessionModels(fallback, options)
+      : false;
+    return { ok: true, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -865,24 +1028,26 @@ export async function reorderDshProviders(ids: string[], options?: DshProviderSt
   }
 }
 
-export async function switchDshProvider(id: string, model?: string, options?: DshProviderStoreOptions): Promise<DshProviderSwitchResult> {
+export async function switchDshProvider(id: string, options?: DshProviderStoreOptions): Promise<DshProviderSwitchResult> {
   try {
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === id);
     if (!provider) throw new Error("Provider not found");
     if (!provider.enabled) throw new Error("Provider is disabled");
-    const selectedModel = model?.trim()
-      || (provider.modelsInherited
-        ? listing.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
-        : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing.defaultModel);
-    if (!selectedModel) throw new Error("No model is selected. Enter a model ID or choose one from the DSH catalog first");
+    const selection = providerSelection(provider);
+    if (!selection) throw new Error("This provider has no available models. Start DSH to load its catalog or configure a model first");
     await mutateYaml(settingsPath(options), document => {
-      document.setIn(["agent-default-model"], { provider: id, model: selectedModel });
+      document.setIn(["agent-default-model"], selection);
     });
-    await mutateDeskState(options, state => {
-      state.providers[id] = { ...(state.providers[id] ?? {}), preferredModel: selectedModel };
-    });
-    return { ok: true, provider: id, model: selectedModel };
+    const sessionSyncFailed = listing.runtimeAvailable
+      ? !await syncBlankSessionModels(selection, options)
+      : false;
+    return {
+      ok: true,
+      provider: id,
+      model: selection.model,
+      ...(sessionSyncFailed ? { sessionSyncFailed: true } : {})
+    };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }

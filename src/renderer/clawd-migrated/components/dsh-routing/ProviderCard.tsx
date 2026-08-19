@@ -59,6 +59,13 @@ function DshProviderActions({
 } & ProviderActionHandlers) {
   const { t } = useI18n();
   const canTest = Boolean(provider.baseUrl);
+  const hasModel = provider.models.length > 0;
+  const defaultLabel = t("dshProviders.defaultNamed", "默认 {name}").replace("{name}", provider.name);
+  const switchLabel = isCurrent
+    ? defaultLabel
+    : hasModel
+      ? t("dshProviders.makeDefault", "设为默认供应商")
+      : t("dshProviders.noModelForDefault", "暂无可用模型，无法设为默认");
 
   return (
     <div className="ccs-provider-actions-inner">
@@ -79,9 +86,9 @@ function DshProviderActions({
       <div className="ccs-provider-icon-actions">
         <button
           onClick={() => onSwitch(provider)}
-          disabled={!provider.enabled || isCurrent}
-          title={isCurrent ? t("dshProviders.defaultProvider", "默认供应商") : t("dshProviders.makeDefault", "设为默认供应商")}
-          aria-label={isCurrent ? t("dshProviders.defaultProvider", "默认供应商") : t("dshProviders.makeDefault", "设为默认供应商")}
+          disabled={!provider.enabled || !hasModel || isCurrent}
+          title={switchLabel}
+          aria-label={switchLabel}
         >{isCurrent ? <Check size={16} /> : <Play size={16} />}</button>
         <button onClick={() => onEdit(provider)} title={t("common.edit", "编辑")} aria-label={t("common.edit", "编辑")}><Pencil size={16} /></button>
         <button onClick={() => onDuplicate(provider)} disabled={provider.isOfficial} title={t("routing.duplicate", "复制")} aria-label={t("routing.duplicate", "复制")}><Copy size={16} /></button>

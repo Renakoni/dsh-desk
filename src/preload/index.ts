@@ -107,7 +107,7 @@ contextBridge.exposeInMainWorld("companion", {
   duplicateDshProvider: (id: string) => ipcRenderer.invoke("companion:dsh-providers-duplicate", id),
   reorderDshProviders: (ids: string[]) => ipcRenderer.invoke("companion:dsh-providers-reorder", ids),
   setDshProviderEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke("companion:dsh-providers-enabled", id, enabled),
-  switchDshProvider: (id: string, model?: string) => ipcRenderer.invoke("companion:dsh-providers-switch", id, model),
+  switchDshProvider: (id: string) => ipcRenderer.invoke("companion:dsh-providers-switch", id),
   probeDshProvider: (payload: { id?: string; baseUrl?: string; protocol?: string; apiKey?: string; mode?: "connectivity" | "models" }) => ipcRenderer.invoke("companion:dsh-providers-probe", payload),
   onCcSwitchChanged: (callback: (payload: unknown) => void) => onChannel("companion:ccswitch-changed", callback),
   getUpdateStatus: () => ipcRenderer.invoke("companion:get-update-status"),

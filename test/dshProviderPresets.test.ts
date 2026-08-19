@@ -19,7 +19,6 @@ describe("DSH provider preset adapter", () => {
       protocol: "anthropic-messages",
       catalogProvider: false,
       inheritModels: false,
-      preferredModel: "anthropic/claude-sonnet-4.6",
       models: [
         { id: "anthropic/claude-sonnet-4.6" },
         { id: "anthropic/claude-opus-4.8" },
@@ -45,6 +44,5 @@ describe("DSH provider preset adapter", () => {
     }));
     expect(preset).not.toHaveProperty("baseUrl");
     expect(preset).not.toHaveProperty("protocol");
-    expect(preset).not.toHaveProperty("preferredModel");
   });
 });

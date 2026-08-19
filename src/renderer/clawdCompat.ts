@@ -185,7 +185,7 @@ type CompanionApi = {
   duplicateDshProvider: (id: string) => Promise<DshProviderMutationResult>;
   reorderDshProviders: (ids: string[]) => Promise<DshProviderMutationResult>;
   setDshProviderEnabled: (id: string, enabled: boolean) => Promise<DshProviderMutationResult>;
-  switchDshProvider: (id: string, model?: string) => Promise<DshProviderSwitchResult>;
+  switchDshProvider: (id: string) => Promise<DshProviderSwitchResult>;
   probeDshProvider: (payload: { id?: string; baseUrl?: string; protocol?: DshProviderProtocol | "deepseek-chat-completions"; apiKey?: string; mode?: "connectivity" | "models" }) => Promise<DshProviderProbeResult>;
   openClaudeProviderTerminal: (providerId: string, cwd: string) => Promise<{ ok: boolean; command: string; error?: string }>;
   pickTerminalDirectory: () => Promise<string | null>;
@@ -1128,10 +1128,11 @@ export function installClawdCompat() {
       }
       return { ok: true, provider };
     },
-    switchDshProvider: async (id, model) => {
+    switchDshProvider: async id => {
       const provider = mockDshProviders.find(item => item.id === id);
       if (!provider || !provider.enabled) return { ok: false, error: "Provider not found or disabled" };
-      const selectedModel = model || provider.models[0]?.id;
+      const selectedModel = provider.models[0]?.id;
+      if (!selectedModel) return { ok: false, error: "No model is available" };
       mockDshProviders.forEach(item => { item.isDefault = item.id === id; item.defaultModel = item.id === id ? selectedModel : undefined; });
       return { ok: true, provider: id, model: selectedModel };
     },

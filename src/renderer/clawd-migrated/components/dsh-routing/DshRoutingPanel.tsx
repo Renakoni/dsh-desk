@@ -97,10 +97,11 @@ function editDraft(provider: DshProvider): DshProviderSaveInput {
     name: provider.name,
     baseUrl: provider.baseUrl,
     protocol: provider.protocol,
-    ...(provider.modelsInherited ? {} : { models: provider.models.map(model => ({ ...model })) }),
+    models: provider.models.map(model => ({ ...model })),
     inheritModels: provider.modelsInherited,
     catalogProvider: provider.catalogProvider,
     enabled: provider.enabled,
+    reasoningDefault: provider.reasoningDefault,
     apiKey: provider.apiKey,
     websiteUrl: provider.websiteUrl,
     apiKeyUrl: provider.apiKeyUrl,
@@ -109,8 +110,7 @@ function editDraft(provider: DshProvider): DshProviderSaveInput {
     icon: provider.icon,
     iconColor: provider.iconColor,
     createdAt: provider.createdAt,
-    sortIndex: provider.sortIndex,
-    preferredModel: provider.preferredModel ?? provider.defaultModel ?? provider.models[0]?.id
+    sortIndex: provider.sortIndex
   };
 }
 
@@ -159,10 +159,9 @@ export function DshRoutingPanel() {
     return ordered;
   }, [orderOverride, providers]);
   const currentProvider = providers.find(provider => provider.id === currentId) ?? sortedProviders[0];
-  const currentModel = listing?.defaultModel || currentProvider?.defaultModel || currentProvider?.preferredModel || currentProvider?.models[0]?.id || "";
   const enabledCount = providers.filter(provider => provider.enabled).length;
   const providerSummary = currentProvider
-    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: `${currentProvider.name}${currentModel ? ` · ${currentModel}` : ""}` })
+    ? formatI18n(t("dshProviders.providerSummary", "{count} 个供应商 · {enabled} 个已启用 · 默认 {name}"), { count: sortedProviders.length, enabled: enabledCount, name: currentProvider.name })
     : formatI18n(t("routing.providerCount", "{count} 个供应商"), { count: sortedProviders.length });
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -196,7 +195,11 @@ export function DshRoutingPanel() {
       toast.error(result.error ?? t("routing.saveFailed", "保存失败"));
       return;
     }
-    toast.success(originalId ? t("routing.providerUpdated", "供应商已更新") : t("routing.providerAdded", "供应商已添加"));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(originalId ? t("routing.providerUpdated", "供应商已更新") : t("routing.providerAdded", "供应商已添加"));
+    }
     if (originalId) closeEditEditor();
     else closeAddEditor();
     await refresh();
@@ -205,7 +208,8 @@ export function DshRoutingPanel() {
   async function confirmDelete() {
     if (!pendingDelete) return;
     const result = await companion.deleteDshProvider(pendingDelete.id);
-    if (result.ok) toast.success(t("routing.providerDeleted", "供应商已删除"));
+    if (result.ok && result.sessionSyncFailed) toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    else if (result.ok) toast.success(t("routing.providerDeleted", "供应商已删除"));
     else toast.error(result.error ?? t("routing.deleteFailed", "删除失败"));
     setPendingDelete(null);
     await refresh();
@@ -225,24 +229,29 @@ export function DshRoutingPanel() {
       toast.error(result.error ?? t("dshProviders.toggleFailed", "供应商状态更新失败"));
       return;
     }
-    toast.success(enabled
-      ? t("dshProviders.providerEnabled", "供应商已启用")
-      : t("dshProviders.providerDisabled", "供应商已停用"));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(enabled
+        ? t("dshProviders.providerEnabled", "供应商已启用")
+        : t("dshProviders.providerDisabled", "供应商已停用"));
+    }
     await refresh();
   }, [companion, refresh, t]);
 
   const handleSwitch = useCallback(async (provider: DshProvider) => {
-    const model = provider.modelsInherited
-      ? listing?.defaultModel || provider.preferredModel || provider.defaultModel || provider.models[0]?.id
-      : provider.preferredModel || provider.defaultModel || provider.models[0]?.id || listing?.defaultModel;
-    const result = await companion.switchDshProvider(provider.id, model);
+    const result = await companion.switchDshProvider(provider.id);
     if (!result.ok) {
       toast.error(result.error ?? t("routing.applyFailed", "切换失败"));
       return;
     }
-    toast.success(formatI18n(t("dshProviders.switchedTo", "已切换到 {name} · {model}"), { name: provider.name, model: result.model ?? model ?? "" }));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(formatI18n(t("dshProviders.switchedToProvider", "默认供应商已切换为 {name}"), { name: provider.name }));
+    }
     await refresh();
-  }, [companion, listing?.defaultModel, refresh, t]);
+  }, [companion, refresh, t]);
 
   const handleTest = useCallback(async (provider: DshProvider) => {
     setTestingId(provider.id);

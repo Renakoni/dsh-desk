@@ -14,7 +14,6 @@ export type DshProviderPreset = {
   icon?: string;
   iconColor?: string;
   models: DshProviderModel[];
-  preferredModel?: string;
   catalogProvider: boolean;
   inheritModels: boolean;
 };
@@ -87,7 +86,6 @@ export function dshProviderPresets(catalog: DshCatalogProvider[]): DshProviderPr
       baseUrl: preset.settingsConfig.env?.ANTHROPIC_BASE_URL,
       protocol,
       models,
-      preferredModel: models[0]?.id,
       catalogProvider: false,
       inheritModels: false
     }];

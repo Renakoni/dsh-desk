@@ -72,7 +72,7 @@ describe("DSH model routing placement", () => {
       "DSH model routing",
       "DeepSeek Harness connection"
     ]);
-    expect(await screen.findByText("1 providers · 1 enabled · Default DeepSeek · deepseek-v4-flash")).toBeTruthy();
+    expect(await screen.findByText("1 providers · 1 enabled · Default DeepSeek")).toBeTruthy();
     expect(view.container.querySelector(".ccs-brand-icon:not(.ccs-brand-icon-fallback)")).toBeTruthy();
     expect(screen.getByText("DSH plugin status")).toBeTruthy();
     expect(screen.getByRole("button", { name: "One-click install" })).toBeTruthy();
@@ -122,10 +122,10 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByText("Default model")).toBeNull();
     expect(screen.queryByText("Upstream protocol")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
-    expect((screen.getByRole("checkbox", { name: "Enable reasoning levels" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole("switch", { name: "Enable reasoning effort selection" }).getAttribute("aria-checked")).toBe("false");
   });
 
-  it("preserves mixed model reasoning declarations on a no-op edit", () => {
+  it("enables the common reasoning efforts for every model on a manual route", () => {
     const onSave = vi.fn();
     render(
       <I18nProvider initialLocale="en">
@@ -133,12 +133,12 @@ describe("DSH model routing placement", () => {
           open
           mode="edit"
           provider={{
-            id: "mixed-gateway",
-            name: "Mixed Gateway",
+            id: "manual-gateway",
+            name: "Manual Gateway",
             baseUrl: "https://gateway.example/v1",
             protocol: "openai-completions",
             models: [
-              { id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } },
+              { id: "reasoning-model" },
               { id: "plain-model" }
             ],
             inheritModels: false,
@@ -153,15 +153,142 @@ describe("DSH model routing placement", () => {
       </I18nProvider>
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
+    const reasoningSwitch = screen.getByRole("switch", { name: "Enable reasoning effort selection" });
+    expect(reasoningSwitch.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(reasoningSwitch);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      reasoningDefault: "medium",
+      models: [
+        expect.objectContaining({
+          id: "reasoning-model",
+          reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }
+        }),
+        expect.objectContaining({
+          id: "plain-model",
+          reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }
+        })
+      ]
+    }), "manual-gateway");
+  });
+
+  it("removes reasoning metadata from every model when the route switch is disabled", () => {
+    const onSave = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <ProviderEditPanel
+          open
+          mode="edit"
+          provider={{
+            id: "manual-gateway",
+            name: "Manual Gateway",
+            baseUrl: "https://gateway.example/v1",
+            protocol: "openai-responses",
+            models: [
+              { id: "gpt-5.6", reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } },
+              { id: "gpt-5.5", reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } }
+            ],
+            inheritModels: false,
+            catalogProvider: false,
+            enabled: true,
+            reasoningDefault: "medium"
+          }}
+          catalogProviders={[]}
+          onSave={onSave}
+          onClose={vi.fn()}
+          onProbe={vi.fn(async () => ({ ok: true }))}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
+    const reasoningSwitch = screen.getByRole("switch", { name: "Enable reasoning effort selection" });
+    expect(reasoningSwitch.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(reasoningSwitch);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
     const draft = onSave.mock.calls[0][0];
-    expect(draft.reasoningEnabled).toBeUndefined();
+    expect(draft.reasoningDefault).toBeUndefined();
     expect(draft.models).toEqual([
-      expect.objectContaining({ id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } }),
+      expect.not.objectContaining({ reasoningEfforts: expect.anything() }),
       expect.not.objectContaining({ reasoningEfforts: expect.anything() })
     ]);
+  });
+
+  it("shows runtime reasoning levels for a built-in DSH catalog", () => {
+    const onSave = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <ProviderEditPanel
+          open
+          mode="edit"
+          provider={{
+            id: "openai",
+            name: "OpenAI",
+            models: [{
+              id: "gpt-5.6-sol",
+              name: "GPT-5.6 Sol",
+              reasoning: {
+                efforts: [
+                  { id: "off", name: "Off" },
+                  { id: "low", name: "Low" },
+                  { id: "high", name: "High" },
+                  { id: "max", name: "Max" }
+                ],
+                defaultEffort: "high"
+              }
+            }],
+            inheritModels: true,
+            catalogProvider: true,
+            enabled: true
+          }}
+          catalogProviders={[]}
+          onSave={onSave}
+          onClose={vi.fn()}
+          onProbe={vi.fn(async () => ({ ok: true }))}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
+    expect(screen.getByRole("radio", { name: "DSH built-in models" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("switch", { name: "Enable reasoning effort selection" })).toBeNull();
+    expect(screen.getByText("GPT-5.6 Sol")).toBeTruthy();
+    expect(screen.getByText("Off · Low · High · Max")).toBeTruthy();
+    expect(screen.getByText("Default: High")).toBeTruthy();
+  });
+
+  it("does not expose reasoning controls for the official DeepSeek adapter", () => {
+    const onSave = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <ProviderEditPanel
+          open
+          mode="edit"
+          provider={{
+            id: "deepseek-official",
+            name: "DeepSeek",
+            baseUrl: "https://api.deepseek.com",
+            protocol: "deepseek-chat-completions",
+            models: [{ id: "deepseek-v4-flash" }],
+            inheritModels: true,
+            catalogProvider: true,
+            enabled: true
+          }}
+          catalogProviders={[]}
+          onSave={onSave}
+          onClose={vi.fn()}
+          onProbe={vi.fn(async () => ({ ok: true }))}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
+    expect(screen.queryByRole("switch", { name: "Enable reasoning effort selection" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Default reasoning effort" })).toBeNull();
+    expect(screen.getByText("No reasoning levels")).toBeTruthy();
   });
 
   it("reveals the stored key and classifies connection feedback", async () => {
@@ -251,7 +378,7 @@ describe("DSH model routing placement", () => {
       </I18nProvider>
     );
 
-    expect(await screen.findByText("2 providers · 1 enabled · Default DeepSeek · deepseek-v4-flash")).toBeTruthy();
+    expect(await screen.findByText("2 providers · 1 enabled · Default DeepSeek")).toBeTruthy();
     const enableButton = screen.getByRole("button", { name: "Enable" });
     fireEvent.click(enableButton);
     await waitFor(() => expect(setEnabled).toHaveBeenCalledWith("team-gateway", true));
