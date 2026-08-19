@@ -99,7 +99,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
         <button type="button" className="dsh-theme-icon-button" onClick={onBack} aria-label={t("common.back", "返回")}><ArrowLeft size={17} /></button>
         <div><h2>{t("dshThemes.marketTitle", "主题市场")}</h2><p>{snapshot ? t("dshThemes.marketSummary", "{count} 个主题", { count: snapshot.skins.length }) : t("dshThemes.loading", "正在加载主题…")}</p></div>
         <div className="dsh-theme-header-actions">
-          <button type="button" className="dsh-theme-icon-button" onClick={() => void window.companion.openExternal("https://github.com/Renakoni/dsh-appearance-catalog")} title={t("dshThemes.openOnlineMarket", "打开主题目录仓库")} aria-label={t("dshThemes.openOnlineMarket", "打开主题目录仓库")}><ExternalLink size={17} /></button>
+          <button type="button" className="dsh-theme-icon-button" onClick={() => void window.companion.openExternal("https://github.com/Renakoni/awesome-dsh-themes")} title={t("dshThemes.openOnlineMarket", "打开主题目录仓库")} aria-label={t("dshThemes.openOnlineMarket", "打开主题目录仓库")}><ExternalLink size={17} /></button>
           <button type="button" className="dsh-theme-icon-button" onClick={() => void refresh(true)} disabled={loading} title={t("dshThemes.refresh", "刷新")} aria-label={t("dshThemes.refresh", "刷新")}><RefreshCw size={17} className={loading ? "spinning" : undefined} /></button>
         </div>
       </header>
