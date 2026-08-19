@@ -10,6 +10,8 @@ interface SpritesheetSpriteProps {
   /** Playable frames in that row (1..columns). */
   frameCount: number;
   frameDurationMs: number;
+  /** Render one exact cell instead of playing the row. */
+  fixedFrame?: number;
   width: number;
   height: number;
   alt: string;
@@ -67,7 +69,7 @@ function useSheetLoadState(sheetUrl: string): SheetLoadState {
  * 0, mirroring how the clip <img> path restarts previews. Reduced-motion
  * users see the first frame as a still image.
  */
-export function SpritesheetSprite({ sheetUrl, columns, rows, row, frameCount, frameDurationMs, width, height, alt, errorFallbackUrl }: SpritesheetSpriteProps) {
+export function SpritesheetSprite({ sheetUrl, columns, rows, row, frameCount, frameDurationMs, fixedFrame, width, height, alt, errorFallbackUrl }: SpritesheetSpriteProps) {
   const [frame, setFrame] = useState(0);
   const reducedMotion = usePrefersReducedMotion();
   const sheetState = useSheetLoadState(sheetUrl);
@@ -76,12 +78,12 @@ export function SpritesheetSprite({ sheetUrl, columns, rows, row, frameCount, fr
     setFrame(0);
     // No interval for stills, reduced motion, or after a load failure — the
     // static fallback is showing and frame updates would be wasted work.
-    if (reducedMotion || frameCount <= 1 || sheetState === "error") return;
+    if (fixedFrame !== undefined || reducedMotion || frameCount <= 1 || sheetState === "error") return;
     const timer = setInterval(() => {
       setFrame(current => nextSpriteFrame(current, frameCount));
     }, Math.max(16, frameDurationMs));
     return () => clearInterval(timer);
-  }, [sheetUrl, row, frameCount, frameDurationMs, reducedMotion, sheetState]);
+  }, [sheetUrl, row, frameCount, frameDurationMs, fixedFrame, reducedMotion, sheetState]);
 
   // The layout box keeps its dimensions in every state so the pet window
   // math never shifts while the sheet loads or after a failure.
@@ -97,7 +99,9 @@ export function SpritesheetSprite({ sheetUrl, columns, rows, row, frameCount, fr
     );
   }
 
-  const column = Math.min(frame, Math.max(frameCount - 1, 0));
+  const column = fixedFrame === undefined
+    ? Math.min(frame, Math.max(frameCount - 1, 0))
+    : Math.max(0, Math.min(columns - 1, Math.trunc(fixedFrame)));
   const position = spriteFramePosition(column, row, columns, rows);
 
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spritesheetAssetsFromPack } from "../src/shared/petPackAssets";
-import { makePackManifest } from "./helpers/packFixtures";
+import { makePackManifest, makeV2PackManifest } from "./helpers/packFixtures";
 
 describe("spritesheetAssetsFromPack", () => {
   it("builds the pet-asset URL and the by-key animation lookup", () => {
@@ -19,5 +19,12 @@ describe("spritesheetAssetsFromPack", () => {
   it("only exposes rows the pack provides", () => {
     const assets = spritesheetAssetsFromPack(makePackManifest([4, 0, 0, 5, 0, 0, 0, 0, 0]));
     expect(Object.keys(assets.animations).sort()).toEqual(["idle", "waving"]);
+  });
+
+  it("exposes v2 look capability separately from action animations", () => {
+    const assets = spritesheetAssetsFromPack(makeV2PackManifest());
+    expect(assets.rows).toBe(11);
+    expect(assets.look).toMatchObject({ directions: 16, startRow: 9, columns: 8 });
+    expect(Object.keys(assets.animations)).not.toContain("look");
   });
 });

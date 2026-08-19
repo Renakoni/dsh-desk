@@ -24,6 +24,7 @@ graphify-out/
 # Local app/runtime data
 .claude/
 sources/
+AGENTS.md
 HANDOFF.md
 PRODUCT.md
 DESIGN.md

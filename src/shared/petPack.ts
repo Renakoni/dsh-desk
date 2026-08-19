@@ -2,11 +2,9 @@
  * Codex-pet package domain model.
  *
  * A codex-pet package (`<id>.codex-pet.zip`) contains a minimal `pet.json`
- * and one spritesheet image on a fixed 8-column x 9-row grid: one animation
- * state per row, frames left-to-right, unused trailing cells fully
- * transparent. The row order is the official Codex app contract
- * (openai/skills, hatch-pet). Sheet sizes vary in the wild, so cell size is
- * always derived from the image dimensions, never assumed.
+ * and one spritesheet image. v1 uses an 8x9 grid; v2 keeps those nine action
+ * rows and adds two rows for 16 clockwise pointer-look directions. Sheet
+ * sizes vary in the wild, so cell size is derived from image dimensions.
  *
  * This module is the pure domain layer: manifest parsing, sheet geometry,
  * vocabulary translation, and construction of the app's internal
@@ -15,8 +13,16 @@
  */
 
 import type { PetAnimationKey } from "./petAnimationKeys";
+import type { PetPackScanResult } from "./petPackScan";
 
 export const CODEX_PET_COLUMNS = 8;
+export const CODEX_PET_STANDARD_ROWS = 9;
+export const CODEX_PET_V2_ROWS = 11;
+export const CODEX_PET_LOOK_START_ROW = 9;
+export const CODEX_PET_LOOK_DIRECTIONS = 16;
+export const CODEX_PET_IDLE_FRAMES = 6;
+
+export type CodexPetSpriteVersion = 1 | 2;
 
 /** Official row order of the v1 spritesheet contract, top to bottom. */
 export const CODEX_PET_ROWS = [
@@ -30,6 +36,11 @@ export const CODEX_PET_ROWS = [
   "running",
   "review"
 ] as const;
+
+const CODEX_PET_ROW_COUNT: Record<CodexPetSpriteVersion, number> = {
+  1: CODEX_PET_STANDARD_ROWS,
+  2: CODEX_PET_V2_ROWS
+};
 
 export type CodexPetRow = (typeof CODEX_PET_ROWS)[number];
 
@@ -120,6 +131,15 @@ export interface CodexPetManifest {
   displayName: string;
   description: string;
   spritesheetPath: string;
+  spriteVersionNumber: CodexPetSpriteVersion;
+}
+
+export interface PetLookCapability {
+  directions: typeof CODEX_PET_LOOK_DIRECTIONS;
+  startRow: typeof CODEX_PET_LOOK_START_ROW;
+  columns: typeof CODEX_PET_COLUMNS;
+  /** v2's centered pointer state, kept out of the idle animation loop. */
+  neutralFrame: { row: 0; column: typeof CODEX_PET_IDLE_FRAMES };
 }
 
 export interface SheetGeometry {
@@ -146,7 +166,8 @@ export interface PetPackAnimation {
  */
 export interface PetPackManifest {
   formatVersion: 1;
-  sourceFormat: "codex-pet-v1";
+  sourceFormat: "codex-pet-v1" | "codex-pet-v2";
+  spriteVersionNumber: CodexPetSpriteVersion;
   id: string;
   displayName: string;
   description: string;
@@ -155,6 +176,7 @@ export interface PetPackManifest {
   /** Only rows with at least one visible frame. */
   animations: PetPackAnimation[];
   roleDefaults: PetPackRoleDefaults;
+  look?: PetLookCapability;
 }
 
 export type PetPackResult<T> =
@@ -254,15 +276,24 @@ export function parseCodexPetManifest(value: unknown): PetPackResult<CodexPetMan
     }
   }
 
+  let spriteVersionNumber: CodexPetSpriteVersion = 1;
+  if (value.spriteVersionNumber !== undefined) {
+    if (value.spriteVersionNumber !== 1 && value.spriteVersionNumber !== 2) {
+      problems.push({ field: "spriteVersionNumber", message: "spriteVersionNumber must be 1 or 2" });
+    } else {
+      spriteVersionNumber = value.spriteVersionNumber;
+    }
+  }
+
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: { id, displayName, description, spritesheetPath } };
+  return { ok: true, value: { id, displayName, description, spritesheetPath, spriteVersionNumber } };
 }
 
 /**
  * Derive the cell grid from the sheet's pixel dimensions. The v1 grid is
  * fixed at 8x9; dimensions must divide exactly so frames never drift.
  */
-export function deriveSheetGeometry(width: number, height: number): PetPackResult<SheetGeometry> {
+export function deriveSheetGeometry(width: number, height: number, spriteVersionNumber: CodexPetSpriteVersion = 1): PetPackResult<SheetGeometry> {
   const problems: PetPackProblem[] = [];
   if (!Number.isInteger(width) || width <= 0) {
     problems.push({ field: "width", message: "sheet width must be a positive integer" });
@@ -275,13 +306,14 @@ export function deriveSheetGeometry(width: number, height: number): PetPackResul
   if (width % CODEX_PET_COLUMNS !== 0) {
     problems.push({ field: "width", message: `sheet width must be divisible by ${CODEX_PET_COLUMNS} columns` });
   }
-  if (height % CODEX_PET_ROWS.length !== 0) {
-    problems.push({ field: "height", message: `sheet height must be divisible by ${CODEX_PET_ROWS.length} rows` });
+  const rows = CODEX_PET_ROW_COUNT[spriteVersionNumber];
+  if (height % rows !== 0) {
+    problems.push({ field: "height", message: `sheet height must be divisible by ${rows} rows` });
   }
   if (problems.length > 0) return { ok: false, problems };
 
   const cellWidth = width / CODEX_PET_COLUMNS;
-  const cellHeight = height / CODEX_PET_ROWS.length;
+  const cellHeight = height / rows;
   if (cellWidth < MIN_CELL_PX || cellHeight < MIN_CELL_PX) {
     problems.push({ field: "size", message: `cells must be at least ${MIN_CELL_PX}px on each side` });
   }
@@ -295,7 +327,7 @@ export function deriveSheetGeometry(width: number, height: number): PetPackResul
 
   return {
     ok: true,
-    value: { width, height, columns: CODEX_PET_COLUMNS, rows: CODEX_PET_ROWS.length, cellWidth, cellHeight }
+    value: { width, height, columns: CODEX_PET_COLUMNS, rows, cellWidth, cellHeight }
   };
 }
 
@@ -313,30 +345,63 @@ function resolveRole(role: keyof PetPackRoleDefaults, available: ReadonlySet<Pet
 export function buildPetPackManifest(input: {
   manifest: CodexPetManifest;
   geometry: SheetGeometry;
-  rowFrameCounts: number[];
+  rowFrameCounts: number[] | PetPackScanResult;
 }): PetPackResult<PetPackManifest> {
-  const { manifest, geometry, rowFrameCounts } = input;
+  const { manifest, geometry } = input;
+  const scanInput = input.rowFrameCounts;
+  const rowFrameCounts = Array.isArray(scanInput)
+    ? scanInput
+    : scanInput && typeof scanInput === "object" && Array.isArray(scanInput.rowFrameCounts)
+      ? scanInput.rowFrameCounts
+      : [];
+  const visibleCellMasks = !Array.isArray(scanInput) && scanInput && typeof scanInput === "object" && Array.isArray(scanInput.visibleCellMasks)
+    ? scanInput.visibleCellMasks
+    : undefined;
   const problems: PetPackProblem[] = [];
 
-  if (rowFrameCounts.length !== CODEX_PET_ROWS.length) {
+  if (geometry.rows !== CODEX_PET_ROW_COUNT[manifest.spriteVersionNumber]) {
+    return { ok: false, problems: [{ field: "geometry", message: `geometry does not match spriteVersionNumber ${manifest.spriteVersionNumber}` }] };
+  }
+  if (rowFrameCounts.length !== geometry.rows) {
     return {
       ok: false,
-      problems: [{ field: "rowFrameCounts", message: `expected ${CODEX_PET_ROWS.length} row frame counts, got ${rowFrameCounts.length}` }]
+      problems: [{ field: "rowFrameCounts", message: `expected ${geometry.rows} row frame counts, got ${rowFrameCounts.length}` }]
     };
   }
   // Index-based loop on purpose: forEach would skip sparse-array holes and
   // let an undefined frame count slip through validation.
-  for (let row = 0; row < CODEX_PET_ROWS.length; row++) {
+  for (let row = 0; row < geometry.rows; row++) {
     const count = rowFrameCounts[row];
     if (!Number.isInteger(count) || count < 0 || count > geometry.columns) {
       problems.push({ field: `rowFrameCounts[${row}]`, message: `frame count must be an integer between 0 and ${geometry.columns}` });
+    }
+  }
+  if (manifest.spriteVersionNumber === 2) {
+    if (!visibleCellMasks || visibleCellMasks.length !== geometry.rows) {
+      return { ok: false, problems: [{ field: "visibleCellMasks", message: "v2 requires visibility for every spritesheet cell" }] };
+    }
+    for (let row = 0; row < geometry.rows; row++) {
+      const mask = visibleCellMasks[row];
+      if (!Number.isInteger(mask) || mask < 0 || mask >= (1 << geometry.columns)) {
+        problems.push({ field: `visibleCellMasks[${row}]`, message: "cell visibility mask is invalid" });
+      }
+    }
+    for (let row = CODEX_PET_LOOK_START_ROW; row < CODEX_PET_V2_ROWS; row++) {
+      if (visibleCellMasks[row] !== (1 << CODEX_PET_COLUMNS) - 1) {
+        problems.push({ field: `visibleCellMasks[${row}]`, message: "all 16 v2 look cells must contain visible pixels" });
+      }
+    }
+    if ((visibleCellMasks[0] & (1 << CODEX_PET_IDLE_FRAMES)) === 0) {
+      problems.push({ field: "visibleCellMasks[0]", message: "v2 idle row must include its neutral look frame" });
     }
   }
   if (problems.length > 0) return { ok: false, problems };
 
   const animations: PetPackAnimation[] = [];
   CODEX_PET_ROWS.forEach((rowName, row) => {
-    const frameCount = rowFrameCounts[row];
+    const frameCount = manifest.spriteVersionNumber === 2 && row === 0
+      ? Math.min(rowFrameCounts[row], CODEX_PET_IDLE_FRAMES)
+      : rowFrameCounts[row];
     if (frameCount < 1) return;
     animations.push({
       key: CODEX_ROW_TO_ANIMATION_KEY[rowName],
@@ -355,7 +420,8 @@ export function buildPetPackManifest(input: {
     ok: true,
     value: {
       formatVersion: 1,
-      sourceFormat: "codex-pet-v1",
+      sourceFormat: manifest.spriteVersionNumber === 2 ? "codex-pet-v2" : "codex-pet-v1",
+      spriteVersionNumber: manifest.spriteVersionNumber,
       id: manifest.id,
       displayName: manifest.displayName,
       description: manifest.description,
@@ -368,7 +434,15 @@ export function buildPetPackManifest(input: {
         waiting_permission: resolveRole("waiting_permission", available),
         done: resolveRole("done", available),
         error: resolveRole("error", available)
-      }
+      },
+      ...(manifest.spriteVersionNumber === 2 ? {
+        look: {
+          directions: CODEX_PET_LOOK_DIRECTIONS,
+          startRow: CODEX_PET_LOOK_START_ROW,
+          columns: CODEX_PET_COLUMNS,
+          neutralFrame: { row: 0 as const, column: CODEX_PET_IDLE_FRAMES }
+        }
+      } : {})
     }
   };
 }

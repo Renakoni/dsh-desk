@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useI18n } from "../../useI18n";
 import { SpritesheetSprite } from "../../../components/SpritesheetSprite";
-import { scanRowFrameCounts } from "../../../../shared/petPackScan";
-import type { PetPackProblem } from "../../../../shared/petPack";
+import { scanPetPackSheet, type PetPackScanResult } from "../../../../shared/petPackScan";
+import { buildPetPackManifest, type PetPackProblem } from "../../../../shared/petPack";
 import type { StagedPetPack } from "../../../../shared/petPackTransport";
 import { petPackThemeId } from "../../../../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../../../../shared/spriteFrame";
@@ -13,8 +13,8 @@ type ImportPhase = "inspecting" | "scanning" | "ready" | "installing" | "failed"
 
 const PREVIEW_WIDTH = 128;
 
-const MANIFEST_PROBLEM_FIELDS = new Set(["pet.json", "id", "displayName", "description", "spritesheetPath"]);
-const SHEET_PROBLEM_FIELDS = new Set(["spritesheet", "width", "height", "size"]);
+const MANIFEST_PROBLEM_FIELDS = new Set(["pet.json", "id", "displayName", "description", "spritesheetPath", "spriteVersionNumber"]);
+const SHEET_PROBLEM_FIELDS = new Set(["spritesheet", "width", "height", "size", "geometry", "visibleCellMasks"]);
 
 // Package problems arrive with stable field names from the main process; the
 // user-facing headline is localized per field group, and the raw English
@@ -23,7 +23,7 @@ function problemHeadline(t: (key: string, fallback?: string) => string, problems
   const field = problems[0]?.field ?? "";
   if (field === "zip") return t("petImport.problemZip", "宠物包无法读取或超出大小限制");
   if (MANIFEST_PROBLEM_FIELDS.has(field)) return t("petImport.problemManifest", "pet.json 清单无效");
-  if (SHEET_PROBLEM_FIELDS.has(field)) return t("petImport.problemSheet", "精灵图不符合 codex-pet 规格");
+  if (SHEET_PROBLEM_FIELDS.has(field) || field.startsWith("visibleCellMasks[")) return t("petImport.problemSheet", "精灵图不符合 codex-pet 规格");
   if (field === "package") return t("petImport.problemChanged", "宠物包在检查后被修改，请重新导入");
   return t("petImport.invalidPackage", "无法导入该宠物包");
 }
@@ -47,7 +47,7 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
   const { t } = useI18n();
   const [phase, setPhase] = useState<ImportPhase>("inspecting");
   const [staged, setStaged] = useState<StagedPetPack | null>(null);
-  const [rowFrameCounts, setRowFrameCounts] = useState<number[] | null>(null);
+  const [scanResult, setScanResult] = useState<PetPackScanResult | null>(null);
   const [headline, setHeadline] = useState<string | null>(null);
   const [details, setDetails] = useState<string[]>([]);
   const [needsOverwrite, setNeedsOverwrite] = useState(false);
@@ -71,7 +71,7 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
     let cancelled = false;
     setPhase("inspecting");
     setStaged(null);
-    setRowFrameCounts(null);
+    setScanResult(null);
     setHeadline(null);
     setDetails([]);
     setNeedsOverwrite(false);
@@ -103,9 +103,13 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
           if (!context) throw new Error("no 2d context");
           context.drawImage(image, 0, 0);
           const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-          const counts = scanRowFrameCounts(pixels, result.staged.geometry);
-          if (counts[0] < 1) throw new Error("idle row is empty");
-          setRowFrameCounts(counts);
+          const scanned = scanPetPackSheet(pixels, result.staged.geometry);
+          const validation = buildPetPackManifest({ manifest: result.staged.manifest, geometry: result.staged.geometry, rowFrameCounts: scanned });
+          if (!validation.ok) {
+            failWith(problemHeadline(t, validation.problems), validation.problems.map(problem => problem.message));
+            return;
+          }
+          setScanResult(scanned);
           setPhase("ready");
         } catch {
           failWith(t("petImport.decodeFailed", "精灵图无法解析，无法导入"));
@@ -119,10 +123,10 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
   }, [zipPath, t]);
 
   async function install(overwrite: boolean) {
-    if (!staged || !rowFrameCounts) return;
+    if (!staged || !scanResult) return;
     setPhase("installing");
     try {
-      const result = await window.companion.installPetPack(zipPath, rowFrameCounts, staged.packageSha256, overwrite);
+      const result = await window.companion.installPetPack(zipPath, scanResult, staged.packageSha256, overwrite);
       if (!mountedRef.current) return;
       if (result.ok) {
         onInstalled(petPackThemeId(result.pack.id), result.warning);
@@ -176,7 +180,7 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
   }
 
   const previewHeight = staged ? displayedSpriteHeight(staged.geometry.cellWidth, staged.geometry.cellHeight, PREVIEW_WIDTH) : PREVIEW_WIDTH;
-  const canInstall = phase === "ready" && staged !== null && rowFrameCounts !== null;
+  const canInstall = phase === "ready" && staged !== null && scanResult !== null;
 
   const statusText = phase === "inspecting" ? t("petImport.inspecting", "读取宠物包…")
     : phase === "scanning" ? t("petImport.scanning", "扫描动画帧…")
@@ -208,13 +212,13 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
         ) : (
           <div className="pet-import-body">
             <div className="pet-import-preview" style={{ width: PREVIEW_WIDTH, height: previewHeight }}>
-              {staged && rowFrameCounts ? (
+              {staged && scanResult ? (
                 <SpritesheetSprite
                   sheetUrl={staged.sheetDataUrl}
                   columns={staged.geometry.columns}
                   rows={staged.geometry.rows}
                   row={0}
-                  frameCount={rowFrameCounts[0]}
+                  frameCount={Math.min(scanResult.rowFrameCounts[0], staged.manifest.spriteVersionNumber === 2 ? 6 : staged.geometry.columns)}
                   frameDurationMs={160}
                   width={PREVIEW_WIDTH}
                   height={previewHeight}
@@ -230,8 +234,8 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
               <strong>{staged?.manifest.displayName ?? "…"}</strong>
               <code>{staged?.manifest.id ?? ""}</code>
               {staged?.manifest.description ? <p>{staged.manifest.description}</p> : null}
-              {rowFrameCounts ? (
-                <small>{t("petImport.animationsFound", "识别动画：")} {rowFrameCounts.filter(count => count > 0).length}</small>
+              {scanResult ? (
+                <small>{t("petImport.animationsFound", "识别动画：")} {scanResult.rowFrameCounts.slice(0, 9).filter(count => count > 0).length}</small>
               ) : null}
               {creator ? <small className="pet-import-creator">{t("petImport.byCreator", "作者：")}{creator}</small> : null}
               {galleryUrl ? (

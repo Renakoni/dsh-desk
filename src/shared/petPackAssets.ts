@@ -6,7 +6,7 @@
  */
 
 import type { PetAnimationKey } from "./petAnimationKeys";
-import type { PetPackAnimation, PetPackManifest } from "./petPack";
+import type { PetLookCapability, PetPackAnimation, PetPackManifest } from "./petPack";
 
 export interface SpritesheetAssets {
   kind: "spritesheet";
@@ -16,6 +16,7 @@ export interface SpritesheetAssets {
   cellWidth: number;
   cellHeight: number;
   animations: Partial<Record<PetAnimationKey, PetPackAnimation>>;
+  look?: PetLookCapability;
 }
 
 export function spritesheetAssetsFromPack(pack: PetPackManifest): SpritesheetAssets {
@@ -26,6 +27,7 @@ export function spritesheetAssetsFromPack(pack: PetPackManifest): SpritesheetAss
     rows: pack.sheet.rows,
     cellWidth: pack.sheet.cellWidth,
     cellHeight: pack.sheet.cellHeight,
-    animations: Object.fromEntries(pack.animations.map(animation => [animation.key, animation]))
+    animations: Object.fromEntries(pack.animations.map(animation => [animation.key, animation])),
+    ...(pack.look ? { look: pack.look } : {})
   };
 }

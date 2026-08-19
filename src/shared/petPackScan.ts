@@ -4,8 +4,8 @@
  * The format's convention is "used cells are non-empty and unused cells are
  * fully transparent", with variable frame counts per row. This scan runs on
  * decoded RGBA pixels (the renderer decodes with Chromium — the same decoder
- * that will display the pet) and reports, for every row, how many leading
- * cells the animation should play.
+ * that will display the pet) and reports row playback counts plus exact cell
+ * visibility for v2's 16-direction look grid.
  */
 
 import type { SheetGeometry } from "./petPack";
@@ -22,6 +22,12 @@ export interface RgbaImageLike {
  * near-transparent residue in "empty" cells does not extend an animation.
  */
 export const VISIBLE_ALPHA_THRESHOLD = 8;
+
+export interface PetPackScanResult {
+  rowFrameCounts: number[];
+  /** Bit mask of visible cells, least-significant bit is column 0. */
+  visibleCellMasks: number[];
+}
 
 function cellHasVisiblePixel(image: RgbaImageLike, geometry: SheetGeometry, row: number, column: number): boolean {
   const startX = column * geometry.cellWidth;
@@ -42,6 +48,11 @@ function cellHasVisiblePixel(image: RgbaImageLike, geometry: SheetGeometry, row:
  * derive from the same file, so a mismatch is a caller bug.
  */
 export function scanRowFrameCounts(image: RgbaImageLike, geometry: SheetGeometry): number[] {
+  return scanPetPackSheet(image, geometry).rowFrameCounts;
+}
+
+/** Scan row counts and the per-cell visibility needed by v2's look grid. */
+export function scanPetPackSheet(image: RgbaImageLike, geometry: SheetGeometry): PetPackScanResult {
   if (image.width !== geometry.width || image.height !== geometry.height) {
     throw new Error(`spritesheet pixels are ${image.width}x${image.height} but geometry says ${geometry.width}x${geometry.height}`);
   }
@@ -50,15 +61,18 @@ export function scanRowFrameCounts(image: RgbaImageLike, geometry: SheetGeometry
   }
 
   const counts: number[] = [];
+  const visibleCellMasks: number[] = [];
   for (let row = 0; row < geometry.rows; row++) {
     let lastVisible = -1;
-    for (let column = geometry.columns - 1; column >= 0; column--) {
+    let mask = 0;
+    for (let column = 0; column < geometry.columns; column++) {
       if (cellHasVisiblePixel(image, geometry, row, column)) {
+        mask |= 1 << column;
         lastVisible = column;
-        break;
       }
     }
     counts.push(lastVisible + 1);
+    visibleCellMasks.push(mask);
   }
-  return counts;
+  return { rowFrameCounts: counts, visibleCellMasks };
 }

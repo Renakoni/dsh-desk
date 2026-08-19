@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import { defaultSettings } from "../src/renderer/shared/events";
 import { petPackThemeId } from "../src/shared/petThemeCatalog";
-import { makePackManifest } from "./helpers/packFixtures";
+import { makePackManifest, makeV2PackManifest } from "./helpers/packFixtures";
 
 afterEach(() => {
   cleanup();
@@ -100,6 +100,27 @@ describe("floating pet initial state", () => {
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("running_right");
 
     act(() => { dragListener?.(null); });
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
+  });
+
+  it("keeps v2 pointer look dormant in the floating runtime", () => {
+    const pack = makeV2PackManifest();
+    const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { enabled: true, selectedSprites: ["waving"], intervalMin: 1, intervalMax: 1 } };
+    const setPetLookTracking = vi.fn();
+    const onPetLookPoint = vi.fn(() => vi.fn());
+    Reflect.set(window, "companion", {
+      initialState: { settings, petPacks: [pack] },
+      getSettings: () => new Promise(() => {}),
+      onSettings: vi.fn(() => vi.fn()),
+      onPreviewPetAnimation: vi.fn(() => vi.fn()),
+      onPetDragDirection: vi.fn(() => vi.fn()),
+      setPetLookTracking,
+      onPetLookPoint
+    });
+
+    render(<App />);
+    expect(setPetLookTracking).not.toHaveBeenCalled();
+    expect(onPetLookPoint).not.toHaveBeenCalled();
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
   });
 });

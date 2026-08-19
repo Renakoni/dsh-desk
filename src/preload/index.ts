@@ -12,6 +12,7 @@ import type {
 import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
 import type { DshPluginComponentStateInput, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
 import type { DshSkinMutationInput } from "../shared/dshSkins";
+import type { PetPackInstallScan } from "../shared/petPackTransport";
 
 export interface PetSnapshot {
   state: PetState;
@@ -71,6 +72,8 @@ contextBridge.exposeInMainWorld("companion", {
   setPetInteractive: (interactive: boolean) => ipcRenderer.invoke("companion:set-pet-interactive", interactive),
   updatePermissionCardRect: (rect: unknown) => ipcRenderer.invoke("companion:update-permission-card-rect", rect),
   onPetDragDirection: (callback: (direction: "left" | "right" | null) => void) => onChannel("companion:pet-drag-direction", callback),
+  setPetLookTracking: (enabled: boolean) => ipcRenderer.send("companion:set-pet-look-tracking", enabled),
+  onPetLookPoint: (callback: (point: { x: number; y: number } | null) => void) => onChannel("companion:pet-look-point", callback),
   onPetDoubleClickProbe: (callback: (point: { x: number; y: number }) => void) => onChannel("companion:pet-doubleclick-probe", callback),
   onTrayMenuState: (callback: (state: unknown) => void) => onChannel("companion:tray-menu-state", callback),
   trayMenuReady: () => ipcRenderer.invoke("companion:tray-menu-ready"),
@@ -85,7 +88,7 @@ contextBridge.exposeInMainWorld("companion", {
   pickTerminalDirectory: () => ipcRenderer.invoke("companion:pick-terminal-directory"),
   pickPetPackFile: () => ipcRenderer.invoke("companion:pet-pack-pick-file"),
   inspectPetPack: (zipPath: string) => ipcRenderer.invoke("companion:pet-pack-inspect", zipPath),
-  installPetPack: (zipPath: string, rowFrameCounts: number[], packageSha256: string, overwrite?: boolean) => ipcRenderer.invoke("companion:pet-pack-install", zipPath, rowFrameCounts, packageSha256, overwrite),
+  installPetPack: (zipPath: string, scan: PetPackInstallScan, packageSha256: string, overwrite?: boolean) => ipcRenderer.invoke("companion:pet-pack-install", zipPath, scan, packageSha256, overwrite),
   listPetPacks: () => ipcRenderer.invoke("companion:pet-pack-list"),
   removePetPack: (id: string) => ipcRenderer.invoke("companion:pet-pack-remove", id),
   onPetPacksChanged: (callback: (payload: unknown) => void) => onChannel("companion:pet-packs-changed", callback),

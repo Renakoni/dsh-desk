@@ -13,7 +13,7 @@ import {
 } from "../shared/claudeProfiles";
 import type { HookStatus, HookOperationResult } from "../shared/hooks";
 import type { PetPackManifest } from "../shared/petPack";
-import type { PetPackDownloadProgress, PetPackDownloadResult, PetPackInspectResult, PetPackInstallResult, PetPackRemoveResult } from "../shared/petPackTransport";
+import type { PetPackDownloadProgress, PetPackDownloadResult, PetPackInspectResult, PetPackInstallResult, PetPackInstallScan, PetPackRemoveResult } from "../shared/petPackTransport";
 import type { DshProvider, DshProviderListResult, DshProviderMutationResult, DshProviderProbeResult, DshProviderProtocol, DshProviderSaveInput, DshProviderSwitchResult } from "../shared/dshProviders";
 import type { DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type {
@@ -90,6 +90,8 @@ type CompanionApi = {
   setPetInteractive: (interactive: boolean) => Promise<void>;
   updatePermissionCardRect: (rect: unknown) => Promise<void>;
   onPetDragDirection: (callback: Listener<"left" | "right" | null>) => Unsubscribe;
+  setPetLookTracking: (enabled: boolean) => void;
+  onPetLookPoint: (callback: Listener<{ x: number; y: number } | null>) => Unsubscribe;
   onTrayMenuState: (callback: Listener<unknown>) => Unsubscribe;
   trayMenuReady: () => Promise<unknown>;
   trayMenuRendered: () => Promise<void>;
@@ -192,7 +194,7 @@ type CompanionApi = {
   onCcSwitchChanged: (callback: Listener<unknown>) => Unsubscribe;
   pickPetPackFile: () => Promise<string | null>;
   inspectPetPack: (zipPath: string) => Promise<PetPackInspectResult>;
-  installPetPack: (zipPath: string, rowFrameCounts: number[], packageSha256: string, overwrite?: boolean) => Promise<PetPackInstallResult>;
+  installPetPack: (zipPath: string, scan: PetPackInstallScan, packageSha256: string, overwrite?: boolean) => Promise<PetPackInstallResult>;
   listPetPacks: () => Promise<PetPackManifest[]>;
   removePetPack: (id: string) => Promise<PetPackRemoveResult>;
   onPetPacksChanged: (callback: Listener<unknown>) => Unsubscribe;
@@ -725,6 +727,8 @@ export function installClawdCompat() {
     setPetInteractive: async () => undefined,
     updatePermissionCardRect: async () => undefined,
     onPetDragDirection: () => () => undefined,
+    setPetLookTracking: () => undefined,
+    onPetLookPoint: () => () => undefined,
     onTrayMenuState: () => () => undefined,
     trayMenuReady: async () => null,
     trayMenuRendered: async () => undefined,

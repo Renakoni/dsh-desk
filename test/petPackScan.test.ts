@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SheetGeometry } from "../src/shared/petPack";
-import { VISIBLE_ALPHA_THRESHOLD, scanRowFrameCounts, type RgbaImageLike } from "../src/shared/petPackScan";
+import { VISIBLE_ALPHA_THRESHOLD, scanPetPackSheet, scanRowFrameCounts, type RgbaImageLike } from "../src/shared/petPackScan";
 
 // Small synthetic sheet: 8x9 grid of 4x4 cells (32x36 pixels). Geometry is
 // built literally — the scanner trusts the shape, not the size bounds.
@@ -42,6 +42,7 @@ describe("scanRowFrameCounts", () => {
     paintCell(image, 2, 0, 255);
     paintCell(image, 2, 4, 255); // gap at 1..3
     expect(scanRowFrameCounts(image, GEOMETRY)[2]).toBe(5);
+    expect(scanPetPackSheet(image, GEOMETRY).visibleCellMasks[2]).toBe((1 << 0) | (1 << 4));
   });
 
   it("detects visibility from a single pixel at exactly the alpha threshold", () => {

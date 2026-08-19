@@ -53,6 +53,7 @@ import { PermissionBroker, type PendingPermission, type PermissionPollResult } f
 import { inspectPetPackZip, installPetPack, listPetPacks, readPetPack, removePetPack, resolvePetAssetPath } from "./petPackStore";
 import { cleanupPetDownloads, discardDownloadedPetPack, downloadPetPack } from "./petPackDownload";
 import { createPetDragWatcher, type PetDragWatcher } from "./petDragWatcher";
+import { createPetLookWatcher, type PetLookWatcher } from "./petLookWatcher";
 import { createDoubleClickDetector, installPetParentNotifyWatcher, readSystemDoubleClickMetrics, type DoubleClickMetrics } from "./petDoubleClick";
 import { pointInBounds, trayMenuLayout, type TrayMenuMetrics, type TraySubmenuSide } from "./trayMenuPosition";
 import { createTrayMenuController } from "./trayMenuController";
@@ -152,6 +153,7 @@ const appStartedAt = Date.now();
 const singleInstanceLock = app.requestSingleInstanceLock();
 let petWindow: BrowserWindow | null = null;
 let petDragWatcher: PetDragWatcher | null = null;
+let petLookWatcher: PetLookWatcher | null = null;
 let panelWindow: BrowserWindow | null = null;
 let trayMenuWindow: BrowserWindow | null = null;
 // The transparent pet window grows upward for larger pets and permission
@@ -369,6 +371,17 @@ function createPetWindow() {
   });
   petWindow.on("moved", () => petDragWatcher?.onMoveEnd());
 
+  petLookWatcher?.dispose();
+  petLookWatcher = createPetLookWatcher({
+    readCursor: () => screen.getCursorScreenPoint(),
+    readWindowBounds: () => petWindow && !petWindow.isDestroyed() && petWindow.isVisible() ? petWindow.getBounds() : null,
+    onPoint: point => {
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.webContents.send("companion:pet-look-point", point);
+      }
+    }
+  });
+
   // Double-click the pet to summon the panel. Electron delivers the pet's
   // drag-region clicks to Chromium's child window, so the outer window only sees
   // WM_PARENTNOTIFY — reconstruct the double-click from two of those (system timing
@@ -403,6 +416,8 @@ function createPetWindow() {
   petWindow.on("closed", () => {
     petDragWatcher?.dispose();
     petDragWatcher = null;
+    petLookWatcher?.dispose();
+    petLookWatcher = null;
     petWindow = null;
   });
 }
@@ -4107,6 +4122,10 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.handle("companion:set-pet-interactive", (_, interactive: boolean) => petWindow?.setIgnoreMouseEvents(!interactive, { forward: true }));
+  ipcMain.on("companion:set-pet-look-tracking", (event, enabled: boolean) => {
+    if (!petWindow || petWindow.isDestroyed() || event.sender !== petWindow.webContents) return;
+    petLookWatcher?.setEnabled(enabled === true);
+  });
   ipcMain.handle("companion:update-permission-card-rect", () => undefined);
   ipcMain.handle("companion:respond-permission", (_, response: { id: string; decision?: string; reason?: string }) => {
     if (response.decision !== "allow" && response.decision !== "deny") return { ok: false };
@@ -4230,8 +4249,11 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
   ipcMain.handle("companion:pet-pack-inspect", (_, zipPath: string) => inspectPetPackZip(String(zipPath)));
-  ipcMain.handle("companion:pet-pack-install", (_, zipPath: string, rowFrameCounts: number[], packageSha256: string, overwrite?: boolean) => {
-    const result = installPetPack(String(zipPath), Array.isArray(rowFrameCounts) ? rowFrameCounts.map(Number) : [], String(packageSha256 ?? ""), petPacksDir(), { overwrite: Boolean(overwrite) });
+  ipcMain.handle("companion:pet-pack-install", (_, zipPath: string, scan: unknown, packageSha256: string, overwrite?: boolean) => {
+    const normalizedScan = Array.isArray(scan)
+      ? scan.map(Number)
+      : scan;
+    const result = installPetPack(String(zipPath), normalizedScan as Parameters<typeof installPetPack>[1], String(packageSha256 ?? ""), petPacksDir(), { overwrite: Boolean(overwrite) });
     if (result.ok) broadcastPetPacksChanged();
     return result;
   });

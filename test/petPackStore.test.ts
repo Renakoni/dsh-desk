@@ -50,6 +50,13 @@ function sampleWebpZip(overrides: Partial<typeof SAMPLE_MANIFEST> = {}): string 
   });
 }
 
+function v2WebpZip(): string {
+  return writeZip("dpsk-girl.codex-pet.zip", {
+    "pet.json": strToU8(JSON.stringify({ ...SAMPLE_MANIFEST, id: "dpsk-girl", displayName: "DPSK Girl", spriteVersionNumber: 2 })),
+    "spritesheet.webp": makeVp8lHeader(1536, 2288)
+  });
+}
+
 /** Genuinely decodable PNG pack for install flows. */
 function bobaPngZip(displayName = "Boba", alpha = 255): string {
   return writeZip("boba.codex-pet.zip", {
@@ -74,6 +81,14 @@ describe("inspectPetPackZip", () => {
     expect(result.staged.sheetMime).toBe("image/webp");
     expect(result.staged.packageSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(result.staged.sheetDataUrl.startsWith("data:image/webp;base64,")).toBe(true);
+  });
+
+  it("stages a declared v2 package as an 8x11 sheet", () => {
+    const result = inspectPetPackZip(v2WebpZip());
+    expect(result.ok, !result.ok ? JSON.stringify(result.problems) : "").toBe(true);
+    if (!result.ok) return;
+    expect(result.staged.manifest.spriteVersionNumber).toBe(2);
+    expect(result.staged.geometry).toMatchObject({ columns: 8, rows: 11, cellWidth: 192, cellHeight: 208 });
   });
 
   it("accepts packages nested one folder deep and PNG sheets", () => {
@@ -164,6 +179,18 @@ describe("inspectPetPackZip", () => {
 });
 
 describe("installPetPack", () => {
+  it("installs a v2 package only with a complete 16-direction scan", () => {
+    const zipPath = v2WebpZip();
+    const result = installPetPack(zipPath, {
+      rowFrameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8],
+      visibleCellMasks: [127, 255, 255, 15, 31, 255, 63, 63, 63, 255, 255]
+    }, inspectedDigest(zipPath), petsDir);
+    expect(result.ok, !result.ok ? JSON.stringify(result.problems) : "").toBe(true);
+    if (!result.ok) return;
+    expect(result.pack.sourceFormat).toBe("codex-pet-v2");
+    expect(readPetPack(petsDir, "dpsk-girl")?.look?.directions).toBe(16);
+  });
+
   it("persists the pack directory with the genuine sheet bytes and the app manifest", () => {
     const zipPath = bobaPngZip();
     const result = installPetPack(zipPath, FULL_COUNTS, inspectedDigest(zipPath), petsDir);
@@ -280,8 +307,8 @@ describe("listPetPacks manifest hardening", () => {
     ["fractional cellHeight", (m: Record<string, unknown>) => { (m.sheet as Record<string, unknown>).cellHeight = 207.5; }],
     ["incoherent grid", (m: Record<string, unknown>) => { (m.sheet as Record<string, unknown>).width = 1544; }],
     ["sheet not an object", (m: Record<string, unknown>) => { m.sheet = "1536x1872"; }],
-    // Internally coherent grids that violate the codex-pet v1 domain
-    // contract (fixed 8x9, 16..1024px cells, derived-from-dimensions cells).
+    // Internally coherent grids that violate the declared codex-pet domain
+    // contract (fixed columns/rows, size bounds, derived cell dimensions).
     ["coherent but non-8x9 grid", (m: Record<string, unknown>) => {
       m.sheet = { width: 1000, height: 1800, columns: 4, rows: 9, cellWidth: 250, cellHeight: 200 };
     }],
@@ -359,6 +386,15 @@ describe("readPetPack", () => {
     expect(readPetPack(petsDir, "boba")?.id).toBe("boba");
     expect(readPetPack(petsDir, "missing")).toBeUndefined();
     expect(readPetPack(petsDir, "../boba")).toBeUndefined();
+  });
+
+  it("loads v1 manifests installed before spriteVersionNumber was persisted", () => {
+    const manifest = JSON.parse(JSON.stringify(makePackManifest(FULL_COUNTS, "boba"))) as Record<string, unknown>;
+    delete manifest.spriteVersionNumber;
+    mkdirSync(join(petsDir, "boba"), { recursive: true });
+    writeFileSync(join(petsDir, "boba", PACK_MANIFEST_FILE), JSON.stringify(manifest));
+
+    expect(readPetPack(petsDir, "boba")?.spriteVersionNumber).toBe(1);
   });
 });
 

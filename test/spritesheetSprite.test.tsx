@@ -109,6 +109,14 @@ describe("SpritesheetSprite", () => {
     expect(spriteStyle().backgroundPosition).toBe(expectedPosition(0, 3));
   });
 
+  it("renders an exact fixed cell without starting playback", () => {
+    render(<SpritesheetSprite {...SHEET} rows={11} row={10} frameCount={1} fixedFrame={5} frameDurationMs={160} alt="look" />);
+    const position = spriteFramePosition(5, 10, 8, 11);
+    expect(spriteStyle().backgroundPosition).toBe(`${position.xPercent}% ${position.yPercent}%`);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(spriteStyle().backgroundPosition).toBe(`${position.xPercent}% ${position.yPercent}%`);
+  });
+
   it("restarts from frame 0 when the animation row changes", () => {
     const { rerender } = render(<SpritesheetSprite {...SHEET} row={0} frameCount={6} frameDurationMs={160} alt="idle" />);
     act(() => vi.advanceTimersByTime(320));

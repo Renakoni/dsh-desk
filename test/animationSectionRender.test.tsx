@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnimationSection } from "../src/renderer/clawd-migrated/features/animation/AnimationSection";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 import { defaultSettings } from "../src/renderer/shared/events";
+import { spritesheetAssetsFromPack } from "../src/shared/petPackAssets";
 import { catalogFromPetPack } from "../src/shared/petThemeCatalog";
-import { makePackManifest } from "./helpers/packFixtures";
+import { makePackManifest, makeV2PackManifest } from "./helpers/packFixtures";
 
 const packCatalog = catalogFromPetPack(makePackManifest());
 
@@ -98,5 +99,17 @@ describe("imported-theme Animation page localization", () => {
     expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-width"))).toBeCloseTo(13.913, 3);
     expect(Array.from(inputs, input => input.step)).toEqual(["1", "1"]);
     expect(intervalTrack.querySelector(".range-fill-boundary > .range-fill")).toBeTruthy();
+  });
+
+  it("keeps legacy v2 pointer look out of the Animation page", () => {
+    const pack = makeV2PackManifest();
+    const view = render(
+      <I18nProvider initialLocale="en">
+        <AnimationSection active settings={settings} updateSettings={vi.fn()} catalog={catalogFromPetPack(pack)} spritesheet={spritesheetAssetsFromPack(pack)} />
+      </I18nProvider>
+    );
+
+    expect(view.container.querySelector(".pet-look-stage")).toBeNull();
+    expect(screen.queryByText("Pointer look")).toBeNull();
   });
 });
