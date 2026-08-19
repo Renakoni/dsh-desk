@@ -120,9 +120,15 @@ function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage) 
   const knownPackages = new Set(Array.isArray(catalog)
     ? catalog.flatMap(skin => typeof skin?.packageName === 'string' ? [skin.packageName] : [])
     : [])
+  // dsh.client marks every Web extension, so only persisted appearance
+  // ownership may classify a package outside the catalog as a theme.
+  const managedPackages = new Set(Object.values(readState(profileDir).skins).flatMap(value => {
+    const skin = objectValue(value)
+    return typeof skin?.packageName === 'string' ? [skin.packageName] : []
+  }))
   const entries = [...loader.entries()]
   return Object.keys(dependencies(profileDir)).flatMap(packageName => {
-    if (packageName === selectedPackage || knownPackages.has(packageName) || packageName === 'dsh-desk-plugin' || packageName === 'dsh-skin-market' || packageName.startsWith('@deepseek-ai/')) return []
+    if (packageName === selectedPackage || knownPackages.has(packageName) || !managedPackages.has(packageName)) return []
     const manifest = packageManifest(profileDir, packageName)
     if (objectValue(manifest?.dsh)?.client === undefined) return []
     const rowIds = bundleRowIds(profileDir, packageName)

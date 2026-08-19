@@ -363,17 +363,24 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
-  it('disables an installed uncatalogued client theme when activating a catalog theme', async () => {
+  it('disables a managed local theme without touching an ordinary client plugin', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-mutual-exclusion-'))
     temporaryDirectories.add(root)
     const profile = join(root, 'web')
     const localPackage = join(profile, 'node_modules', 'local-theme')
     const catalogPackage = join(profile, 'node_modules', 'catalog-theme')
+    const featurePackage = join(profile, 'node_modules', 'dsh-file-upload')
     mkdirSync(localPackage, { recursive: true })
     mkdirSync(catalogPackage, { recursive: true })
+    mkdirSync(featurePackage, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
     writeFileSync(join(profile, 'package.json'), JSON.stringify({
-      dependencies: { 'local-theme': 'github:demo/local-theme', 'catalog-theme': 'github:demo/catalog-theme' },
-      dsh: { profile: { bundles: ['local-theme', 'catalog-theme'] } },
+      dependencies: { 'local-theme': 'github:demo/local-theme', 'catalog-theme': 'github:demo/catalog-theme', 'dsh-file-upload': '1.0.0' },
+      dsh: { profile: { bundles: ['local-theme', 'catalog-theme', 'dsh-file-upload'] } },
+    }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'local:local-theme': { active: true, packageName: 'local-theme', version: '1.0.0' } },
     }))
     writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
     writeFileSync(join(localPackage, 'package.json'), JSON.stringify({
@@ -384,10 +391,15 @@ describe('DSH Loader inventory bridge', () => {
       name: 'catalog-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
     }))
     writeFileSync(join(catalogPackage, 'cordis.patch.yml'), '- insert:\n    - id: catalog-theme\n      name: catalog-theme\n')
+    writeFileSync(join(featurePackage, 'package.json'), JSON.stringify({
+      name: 'dsh-file-upload', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(featurePackage, 'cordis.patch.yml'), '- insert:\n    - id: dsh-file-upload\n      name: dsh-file-upload\n')
     const updates = []
     const fixture = loaderFixture([
       { options: { id: 'local-theme', name: 'local-theme' }, update: async patch => { updates.push(['local-theme', patch]); } },
       { options: { id: 'catalog-theme', name: 'catalog-theme' } },
+      { options: { id: 'dsh-file-upload', name: 'dsh-file-upload' }, update: async patch => { updates.push(['dsh-file-upload', patch]); } },
     ])
     fixture.include.options.config.path = join(profile, 'cordis.patch.yml')
     const routes = []
@@ -403,7 +415,9 @@ describe('DSH Loader inventory bridge', () => {
     assert.equal(started.status, 202)
     for (let attempt = 0; attempt < 20 && updates.length === 0; attempt += 1) await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(updates, [['local-theme', { disabled: true }]])
-    assert.match(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), /id: local-theme[\s\S]*disabled: true/)
+    const disabledPatch = readFileSync(join(profile, 'cordis.patch.yml'), 'utf8')
+    assert.match(disabledPatch, /id: local-theme[\s\S]*disabled: true/)
+    assert.doesNotMatch(disabledPatch, /id: dsh-file-upload/)
 
     const operations = routes.find(route => route.kind === 'prefix')
     for (let attempt = 0; attempt < 20; attempt += 1) {

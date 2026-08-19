@@ -58,7 +58,7 @@ type WebProfileManifest = {
 
 type PersistedSkinState = {
   activeSkinId?: unknown;
-  skins?: Record<string, { active?: unknown }>;
+  skins?: Record<string, { active?: unknown; packageName?: unknown }>;
 };
 
 export type DshSkinMarketplaceOptions = {
@@ -407,9 +407,12 @@ export class DshSkinMarketplace {
     const manifest = readJsonFile<WebProfileManifest>(join(this.options.webProfileDir, "package.json"), {});
     const dependencies = manifest.dependencies ?? {};
     const known = new Set((this.catalog?.skins ?? []).map(skin => skin.packageName));
+    const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-appearance-manager", "state.json"), {});
+    // dsh.client is shared by themes and ordinary Web features. Only Desk's
+    // appearance state proves that an uncatalogued package is a local theme.
+    const managed = new Set(Object.values(state.skins ?? {}).flatMap(skin => typeof skin.packageName === "string" ? [skin.packageName] : []));
     return Object.keys(dependencies).filter(packageName => !known.has(packageName)
-      && packageName !== "dsh-desk-plugin"
-      && !packageName.startsWith("@deepseek-ai/")).flatMap(packageName => {
+      && managed.has(packageName)).flatMap(packageName => {
       const packagePath = join(this.options.webProfileDir, "node_modules", ...packageName.split("/"), "package.json");
       const packageManifest = readJsonFile<Record<string, unknown> | null>(packagePath, null);
       const dsh = objectValue(packageManifest?.dsh);

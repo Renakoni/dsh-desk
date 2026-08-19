@@ -134,13 +134,25 @@ describe("DshSkinMarketplace", () => {
     const webProfileDir = join(root, "web");
     const packageDir = join(webProfileDir, "node_modules", "demo-skin");
     const localPackageDir = join(webProfileDir, "node_modules", "local-skin");
+    const featurePackageDir = join(webProfileDir, "node_modules", "dsh-file-upload");
     mkdirSync(packageDir, { recursive: true });
     mkdirSync(localPackageDir, { recursive: true });
+    mkdirSync(featurePackageDir, { recursive: true });
     mkdirSync(join(webProfileDir, ".dsh-skin-market"), { recursive: true });
-    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: { "demo-skin": "github:demo/skin#1234567890123456789012345678901234567890", "local-skin": "file:local-skin" } }));
+    mkdirSync(join(webProfileDir, ".dsh-appearance-manager"), { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: {
+      "demo-skin": "github:demo/skin#1234567890123456789012345678901234567890",
+      "local-skin": "file:local-skin",
+      "dsh-file-upload": "1.0.0"
+    } }));
     writeFileSync(join(packageDir, "package.json"), JSON.stringify({ version: "1.0.0", dsh: { client: {} } }));
     writeFileSync(join(localPackageDir, "package.json"), JSON.stringify({ name: "local-skin", version: "2.0.0", description: "Local only", dsh: { client: {} } }));
+    writeFileSync(join(featurePackageDir, "package.json"), JSON.stringify({ name: "dsh-file-upload", version: "1.0.0", dsh: { client: {} } }));
     writeFileSync(join(webProfileDir, ".dsh-skin-market", "state.json"), JSON.stringify({ version: 1, activeSkinId: "demo.skin", disabledSkinIds: [] }));
+    writeFileSync(join(webProfileDir, ".dsh-appearance-manager", "state.json"), JSON.stringify({ version: 1, skins: {
+      "demo.skin": { active: true, packageName: "demo-skin", version: "1.0.0" },
+      "local:local-skin": { active: false, packageName: "local-skin", version: "2.0.0" }
+    } }));
     const market = new DshSkinMarketplace({
       cachePath: join(root, "catalog.json"),
       webProfileDir,
@@ -151,6 +163,7 @@ describe("DshSkinMarketplace", () => {
     const snapshot = await market.snapshot();
     expect(snapshot.host).toMatchObject({ connected: false, marketInstalled: false, skins: [{ skinId: "demo.skin", installation: "installed", activation: "active" }] });
     expect(snapshot.localSkins).toMatchObject([{ id: "local:local-skin", packageName: "local-skin", version: "2.0.0" }]);
+    expect(snapshot.localSkins?.some(skin => skin.packageName === "dsh-file-upload")).toBe(false);
   });
 
   it("preserves an unstarred bundled catalog entry as null", async () => {
@@ -186,9 +199,13 @@ describe("DshSkinMarketplace", () => {
     const webProfileDir = join(root, "web");
     const localPackageDir = join(webProfileDir, "node_modules", "local-skin");
     mkdirSync(localPackageDir, { recursive: true });
+    mkdirSync(join(webProfileDir, ".dsh-appearance-manager"), { recursive: true });
     writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: { "local-skin": "file:local-skin" } }));
     writeFileSync(join(webProfileDir, "cordis.patch.yml"), "- insert:\n    - id: local-skin-row\n      name: local-skin\n");
     writeFileSync(join(localPackageDir, "package.json"), JSON.stringify({ name: "local-skin", version: "2.0.0", dsh: { client: {} } }));
+    writeFileSync(join(webProfileDir, ".dsh-appearance-manager", "state.json"), JSON.stringify({ version: 1, skins: {
+      "local:local-skin": { active: true, packageName: "local-skin", version: "2.0.0" }
+    } }));
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
       if (url.endsWith("/deactivate")) {
