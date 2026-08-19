@@ -122,11 +122,10 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByText("Default model")).toBeNull();
     expect(screen.queryByText("Upstream protocol")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
-    expect(screen.queryByRole("checkbox", { name: "Enable reasoning levels" })).toBeNull();
-    expect(screen.getByText("Configure reasoning capability separately for each model.")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Enable reasoning effort selection" }).getAttribute("aria-checked")).toBe("false");
   });
 
-  it("preserves mixed model reasoning declarations on a no-op edit", () => {
+  it("enables the common reasoning efforts for every model on a manual route", () => {
     const onSave = vi.fn();
     render(
       <I18nProvider initialLocale="en">
@@ -134,12 +133,12 @@ describe("DSH model routing placement", () => {
           open
           mode="edit"
           provider={{
-            id: "mixed-gateway",
-            name: "Mixed Gateway",
+            id: "manual-gateway",
+            name: "Manual Gateway",
             baseUrl: "https://gateway.example/v1",
             protocol: "openai-completions",
             models: [
-              { id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } },
+              { id: "reasoning-model" },
               { id: "plain-model" }
             ],
             inheritModels: false,
@@ -154,17 +153,28 @@ describe("DSH model routing placement", () => {
       </I18nProvider>
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
+    const reasoningSwitch = screen.getByRole("switch", { name: "Enable reasoning effort selection" });
+    expect(reasoningSwitch.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(reasoningSwitch);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(onSave).toHaveBeenCalledOnce();
-    const draft = onSave.mock.calls[0][0];
-    expect(draft.models).toEqual([
-      expect.objectContaining({ id: "reasoning-model", reasoningEfforts: { low: "low", high: "high" } }),
-      expect.not.objectContaining({ reasoningEfforts: expect.anything() })
-    ]);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      reasoningDefault: "medium",
+      models: [
+        expect.objectContaining({
+          id: "reasoning-model",
+          reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }
+        }),
+        expect.objectContaining({
+          id: "plain-model",
+          reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }
+        })
+      ]
+    }), "manual-gateway");
   });
 
-  it("configures reasoning levels and wire values per manual model", () => {
+  it("removes reasoning metadata from every model when the route switch is disabled", () => {
     const onSave = vi.fn();
     render(
       <I18nProvider initialLocale="en">
@@ -176,10 +186,14 @@ describe("DSH model routing placement", () => {
             name: "Manual Gateway",
             baseUrl: "https://gateway.example/v1",
             protocol: "openai-responses",
-            models: [{ id: "gpt-5.6" }],
+            models: [
+              { id: "gpt-5.6", reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } },
+              { id: "gpt-5.5", reasoningEfforts: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } }
+            ],
             inheritModels: false,
             catalogProvider: false,
-            enabled: true
+            enabled: true,
+            reasoningDefault: "medium"
           }}
           catalogProviders={[]}
           onSave={onSave}
@@ -190,19 +204,17 @@ describe("DSH model routing placement", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
-    const capability = screen.getByRole("combobox", { name: "Reasoning capability for gpt-5.6" });
-    expect((capability as HTMLSelectElement).value).toBe("none");
-    fireEvent.change(capability, { target: { value: "custom" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Max for gpt-5.6" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Wire value for Max on gpt-5.6" }), { target: { value: "ultimate" } });
+    const reasoningSwitch = screen.getByRole("switch", { name: "Enable reasoning effort selection" });
+    expect(reasoningSwitch.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(reasoningSwitch);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      models: [expect.objectContaining({
-        id: "gpt-5.6",
-        reasoningEfforts: { high: "high", max: "ultimate" }
-      })]
-    }), "manual-gateway");
+    const draft = onSave.mock.calls[0][0];
+    expect(draft.reasoningDefault).toBeUndefined();
+    expect(draft.models).toEqual([
+      expect.not.objectContaining({ reasoningEfforts: expect.anything() }),
+      expect.not.objectContaining({ reasoningEfforts: expect.anything() })
+    ]);
   });
 
   it("shows runtime reasoning levels for a built-in DSH catalog", () => {
@@ -242,12 +254,13 @@ describe("DSH model routing placement", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
     expect(screen.getByRole("radio", { name: "DSH built-in models" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("switch", { name: "Enable reasoning effort selection" })).toBeNull();
     expect(screen.getByText("GPT-5.6 Sol")).toBeTruthy();
     expect(screen.getByText("Off · Low · High · Max")).toBeTruthy();
     expect(screen.getByText("Default: High")).toBeTruthy();
   });
 
-  it("uses an explicit effort selector for the official DeepSeek adapter", () => {
+  it("does not expose reasoning controls for the official DeepSeek adapter", () => {
     const onSave = vi.fn();
     render(
       <I18nProvider initialLocale="en">
@@ -259,17 +272,7 @@ describe("DSH model routing placement", () => {
             name: "DeepSeek",
             baseUrl: "https://api.deepseek.com",
             protocol: "deepseek-chat-completions",
-            models: [{
-              id: "deepseek-v4-flash",
-              reasoning: {
-                efforts: [
-                  { id: "off", name: "Off" },
-                  { id: "high", name: "High" },
-                  { id: "max", name: "Max" }
-                ],
-                defaultEffort: "high"
-              }
-            }],
+            models: [{ id: "deepseek-v4-flash" }],
             inheritModels: true,
             catalogProvider: true,
             enabled: true
@@ -283,13 +286,9 @@ describe("DSH model routing placement", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Options" }));
-    const effort = screen.getByRole("combobox", { name: "Default reasoning effort" });
-    expect((effort as HTMLSelectElement).value).toBe("");
-    expect(screen.getByRole("option", { name: "DSH default (High)" })).toBeTruthy();
-    fireEvent.change(effort, { target: { value: "off" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ reasoningDefault: "off" }), "deepseek-official");
+    expect(screen.queryByRole("switch", { name: "Enable reasoning effort selection" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Default reasoning effort" })).toBeNull();
+    expect(screen.getByText("No reasoning levels")).toBeTruthy();
   });
 
   it("reveals the stored key and classifies connection feedback", async () => {

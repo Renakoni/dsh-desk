@@ -23,10 +23,8 @@ import type {
   DshProviderProbeResult,
   DshProviderProtocol,
   DshProviderSaveInput,
-  DshReasoningEffort,
   DshReasoningEfforts
 } from "../../../../shared/dshProviders";
-import { DSH_REASONING_EFFORTS } from "../../../../shared/dshProviders";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { IconPicker } from "./IconPicker";
@@ -52,17 +50,13 @@ type ProviderEditContentProps = Omit<ProviderEditPanelProps, "open" | "prewarm" 
   provider: DshProviderSaveInput;
 };
 
-type ReasoningMode = "inherit" | "none" | "custom";
-
-function reasoningMode(model: DshProviderModel, catalogProvider: boolean): ReasoningMode {
-  if (model.reasoningEfforts === false) return "none";
-  if (model.reasoningEfforts !== undefined) return "custom";
-  return catalogProvider ? "inherit" : "none";
-}
-
-function reasoningEffortLabel(effort: string) {
-  return effort === "xhigh" ? "XHigh" : effort.charAt(0).toUpperCase() + effort.slice(1);
-}
+const COMMON_REASONING_EFFORTS = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max"
+} satisfies DshReasoningEfforts;
 
 function parsePositiveInteger(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -178,7 +172,8 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [inheritModels, setInheritModels] = useState(provider.inheritModels === true);
   const [models, setModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
   const [catalogModels, setCatalogModels] = useState<DshProviderModel[]>(() => (provider.models ?? []).map(model => ({ ...model })));
-  const [reasoningDefault, setReasoningDefault] = useState<DshReasoningEffort | undefined>(provider.reasoningDefault);
+  const [reasoningEnabled, setReasoningEnabled] = useState(() => provider.reasoningDefault !== undefined
+    || (provider.models ?? []).some(model => model.reasoningEfforts !== undefined && model.reasoningEfforts !== false));
   const [activePreset, setActivePreset] = useState(mode === "add" && provider.catalogProvider ? provider.id ?? "custom" : "custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [probing, setProbing] = useState(false);
@@ -188,14 +183,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
   const [hardError, setHardError] = useState("");
   const [softIssues, setSoftIssues] = useState<string[] | null>(null);
   const official = id === "deepseek-official";
-  const canConfigureModelReasoning = !official && (catalogProvider
-    || protocol === "openai-completions"
-    || protocol === "openai-responses");
-  const officialReasoning = (inheritModels ? catalogModels : models).find(model => model.reasoning)?.reasoning;
-  const officialReasoningLevels = officialReasoning?.efforts.filter(effort => DSH_REASONING_EFFORTS.includes(effort.id as DshReasoningEffort)) ?? [];
-  const officialEffectiveDefault = officialReasoning?.efforts.find(effort => effort.id === officialReasoning.defaultEffort)?.name
-    ?? officialReasoning?.defaultEffort
-    ?? "High";
+  const canConfigureReasoning = !official && !catalogProvider && !inheritModels;
   const formId = `dsh-provider-${mode}-${originalId || "new"}`;
 
   function applyPreset(preset: DshProviderPreset) {
@@ -207,7 +195,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(preset.inheritModels);
     setModels(preset.models.map(model => ({ ...model })));
     setCatalogModels([]);
-    setReasoningDefault(undefined);
+    setReasoningEnabled(false);
     setBaseUrl(preset.baseUrl ?? "");
     setProtocol(preset.protocol);
     setWebsiteUrl(preset.websiteUrl ?? "");
@@ -227,7 +215,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setInheritModels(false);
     setModels([]);
     setCatalogModels([]);
-    setReasoningDefault(undefined);
+    setReasoningEnabled(false);
     setBaseUrl("");
     setProtocol("openai-completions");
     setWebsiteUrl("");
@@ -272,48 +260,14 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
     setModels(current => current.map((model, at) => at === index ? { ...model, ...patch } : model));
   }
 
-  function setModelReasoningMode(index: number, nextMode: ReasoningMode) {
-    setModels(current => current.map((model, at) => {
-      if (at !== index) return model;
-      const { reasoningEfforts: _currentEfforts, ...withoutEfforts } = model;
-      if (nextMode === "inherit") return withoutEfforts;
-      if (nextMode === "none") return { ...withoutEfforts, reasoningEfforts: false };
-      return {
-        ...withoutEfforts,
-        reasoningEfforts: model.reasoningEfforts !== undefined && model.reasoningEfforts !== false
-          ? model.reasoningEfforts
-          : { high: "high" }
-      };
-    }));
-  }
-
-  function toggleModelReasoningEffort(index: number, effort: DshReasoningEffort, checked: boolean) {
-    setModels(current => current.map((model, at) => {
-      if (at !== index || model.reasoningEfforts === undefined || model.reasoningEfforts === false) return model;
-      const next: DshReasoningEfforts = { ...model.reasoningEfforts };
-      if (checked) next[effort] = effort === "off" ? null : effort;
-      else delete next[effort];
-      return { ...model, reasoningEfforts: next };
-    }));
-  }
-
-  function updateModelReasoningWireValue(index: number, effort: DshReasoningEffort, value: string) {
-    setModels(current => current.map((model, at) => {
-      if (at !== index || model.reasoningEfforts === undefined || model.reasoningEfforts === false) return model;
-      return {
-        ...model,
-        reasoningEfforts: {
-          ...model.reasoningEfforts,
-          [effort]: effort === "off" && !value ? null : value
-        }
-      };
-    }));
-  }
-
   function buildDraft(): DshProviderSaveInput {
     const normalizedModels = models.map(model => {
       const { reasoning: _runtimeReasoning, ...configuredModel } = model;
-      return { ...configuredModel, id: model.id.trim() };
+      if (!canConfigureReasoning) return { ...configuredModel, id: model.id.trim() };
+      const { reasoningEfforts: _configuredEfforts, ...plainModel } = configuredModel;
+      return reasoningEnabled
+        ? { ...plainModel, id: model.id.trim(), reasoningEfforts: { ...COMMON_REASONING_EFFORTS } }
+        : { ...plainModel, id: model.id.trim() };
     }).filter(model => model.id);
     return {
       id: id.trim() || undefined,
@@ -324,7 +278,9 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
       inheritModels,
       catalogProvider,
       enabled: provider.enabled !== false,
-      reasoningDefault,
+      reasoningDefault: canConfigureReasoning
+        ? reasoningEnabled ? "medium" : undefined
+        : provider.reasoningDefault,
       apiKey,
       notes: notes.trim() || undefined,
       websiteUrl: websiteUrl.trim() || undefined,
@@ -351,17 +307,6 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
         setHardError(t("routing.endpointInvalid", "请求地址必须是有效的 HTTP(S) URL"));
         return;
       }
-    }
-    const invalidReasoningModel = models.find(model => {
-      if (model.reasoningEfforts === undefined || model.reasoningEfforts === false) return false;
-      const entries = Object.entries(model.reasoningEfforts);
-      return !entries.some(([effort]) => effort !== "off")
-        || entries.some(([effort, wireValue]) => effort !== "off" && (typeof wireValue !== "string" || !wireValue.trim()));
-    });
-    if (invalidReasoningModel) {
-      setHardError(t("dshProviders.reasoningInvalid", "请为 {model} 至少选择一个非关闭档位，并填写协议值")
-        .replace("{model}", invalidReasoningModel.name || invalidReasoningModel.id || t("dshProviders.unnamedModel", "未命名模型")));
-      return;
     }
     const issues: string[] = [];
     if (!official && !catalogProvider && !baseUrl.trim()) issues.push(t("dshProviders.customNeedsEndpoint", "手工声明的路由通常需要请求地址"));
@@ -494,7 +439,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                         ? t("dshProviders.catalogInherited", "自动使用 DSH 已知的模型和能力，不写入 models 配置")
                         : catalogProvider
                           ? t("dshProviders.catalogExplicit", "只保存下面列出的模型；未声明的能力继续使用 DSH 目录")
-                          : t("dshProviders.manualModelsHint", "为当前接口逐个填写模型；推理能力也按模型配置")}</small>
+                          : t("dshProviders.manualModelsHint", "为当前接口填写模型")}</small>
                     </div>
                     <div className="ccs-model-mapping-actions">
                       <button type="button" className="ccs-model-quickset" disabled={discovering || (!id && !baseUrl)} onClick={() => void discoverModels()}>
@@ -527,23 +472,21 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                     </div>
                   ) : null}
 
-                  {official && officialReasoningLevels.length > 0 ? (
-                    <label className="dsh-reasoning-default">
-                      <span>{t("dshProviders.requestReasoningDefault", "请求默认强度")}</span>
-                      <select
-                        value={reasoningDefault ?? ""}
-                        aria-label={t("dshProviders.requestReasoningDefault", "请求默认强度")}
-                        onChange={event => setReasoningDefault((event.target.value || undefined) as DshReasoningEffort | undefined)}
-                      >
-                        <option value="">{t("dshProviders.useDshDefault", "DSH 默认（{level}）").replace("{level}", officialEffectiveDefault)}</option>
-                        {officialReasoningLevels.map(effort => <option key={effort.id} value={effort.id}>{effort.name}</option>)}
-                      </select>
-                      <small>{t("dshProviders.requestReasoningHint", "只设置新请求的默认档位，不改变模型支持的档位。")}</small>
-                    </label>
-                  ) : null}
-
-                  {!inheritModels && canConfigureModelReasoning ? (
-                    <small className="ccs-field-hint">{t("dshProviders.reasoningPerModel", "每个模型分别配置推理能力。")}</small>
+                  {canConfigureReasoning ? (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={reasoningEnabled}
+                      aria-label={t("dshProviders.enableReasoning", "启用推理强度选择")}
+                      className="dsh-reasoning-switch"
+                      onClick={() => setReasoningEnabled(enabled => !enabled)}
+                    >
+                      <span className="dsh-reasoning-switch-copy">
+                        <strong>{t("dshProviders.enableReasoning", "启用推理强度选择")}</strong>
+                        <small>{t("dshProviders.enableReasoningHint", "为全部模型提供 Low、Medium、High、XHigh 和 Max，初始为 Medium。")}</small>
+                      </span>
+                      <span className="dsh-reasoning-switch-track" aria-hidden="true" />
+                    </button>
                   ) : null}
 
                   {discoveryError ? <small className="ccs-field-error">{discoveryError}</small> : null}
@@ -551,14 +494,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                     catalogModels.length > 0 ? (
                       <div className="dsh-catalog-preview">
                         {catalogModels.map(model => {
-                          const runtimeReasoning = model.reasoning ?? (official ? {
-                            efforts: [
-                              { id: "off", name: "Off" },
-                              { id: "high", name: "High" },
-                              { id: "max", name: "Max" }
-                            ],
-                            defaultEffort: "high"
-                          } : undefined);
+                          const runtimeReasoning = model.reasoning;
                           const defaultName = runtimeReasoning?.efforts.find(effort => effort.id === runtimeReasoning.defaultEffort)?.name
                             ?? runtimeReasoning?.defaultEffort;
                           return (
@@ -575,83 +511,22 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                     ) : <small className="ccs-field-hint">{t("dshProviders.catalogLoadHint", "保存后 DSH 会解析该供应商目录，也可以先点击获取模型目录。")}</small>
                   ) : (
                     <div className="ccs-model-table dsh-model-table">
-                      <div className={`ccs-model-row ccs-model-row-head ${canConfigureModelReasoning ? "with-reasoning" : ""}`} aria-hidden="true">
+                      <div className="ccs-model-row ccs-model-row-head" aria-hidden="true">
                         <span>Model ID</span>
                         <span>{t("dshProviders.displayName", "显示名称")}</span>
                         <span>{t("dshProviders.context", "上下文")}</span>
                         <span>{t("dshProviders.output", "最大输出")}</span>
-                        {canConfigureModelReasoning ? <span>{t("dshProviders.reasoningCapability", "推理能力")}</span> : null}
                         <span />
                       </div>
-                      {models.map((model, index) => {
-                        const modelLabel = model.name || model.id || t("dshProviders.unnamedModel", "未命名模型");
-                        const modelReasoningMode = reasoningMode(model, catalogProvider);
-                        const configuredEfforts = model.reasoningEfforts !== undefined && model.reasoningEfforts !== false
-                          ? model.reasoningEfforts
-                          : undefined;
-                        return (
-                          <div className="dsh-model-entry" key={`${index}:${model.id}`}>
-                            <div className={`ccs-model-row ${canConfigureModelReasoning ? "with-reasoning" : ""}`}>
-                              <input value={model.id} onChange={event => updateModel(index, { id: event.target.value })} placeholder="model-id" spellCheck={false} />
-                              <input value={model.name ?? ""} onChange={event => updateModel(index, { name: event.target.value || undefined })} placeholder={t("dshProviders.displayName", "显示名称")} />
-                              <input value={compactInteger(model.contextWindow)} onChange={event => updateModel(index, { contextWindow: parsePositiveInteger(event.target.value) })} placeholder="128K" />
-                              <input value={compactInteger(model.maxTokens)} onChange={event => updateModel(index, { maxTokens: parsePositiveInteger(event.target.value) })} placeholder="32K" />
-                              {canConfigureModelReasoning ? (
-                                <select
-                                  value={modelReasoningMode}
-                                  aria-label={t("dshProviders.reasoningForModel", "{model} 的推理能力").replace("{model}", modelLabel)}
-                                  onChange={event => setModelReasoningMode(index, event.target.value as ReasoningMode)}
-                                >
-                                  {catalogProvider ? <option value="inherit">{t("dshProviders.reasoningInherit", "跟随 DSH 目录")}</option> : null}
-                                  <option value="none">{t("dshProviders.reasoningNone", "不支持")}</option>
-                                  <option value="custom">{t("dshProviders.reasoningCustom", "自定义档位")}</option>
-                                </select>
-                              ) : null}
-                              <button type="button" className="dsh-model-delete" onClick={() => setModels(current => current.filter((_, at) => at !== index))} aria-label={t("common.delete", "删除")}><Trash2 size={14} /></button>
-                            </div>
-                            {canConfigureModelReasoning && modelReasoningMode === "custom" && configuredEfforts ? (
-                              <div className="dsh-reasoning-editor" role="group" aria-label={t("dshProviders.reasoningForModel", "{model} 的推理能力").replace("{model}", modelLabel)}>
-                                <div className="dsh-reasoning-editor-head">
-                                  <span>{t("dshProviders.reasoningLevels", "可用档位")}</span>
-                                  <span>{t("dshProviders.wireValue", "协议值")}</span>
-                                </div>
-                                <div className="dsh-reasoning-grid">
-                                  {DSH_REASONING_EFFORTS.map(effort => {
-                                    const selected = Object.prototype.hasOwnProperty.call(configuredEfforts, effort);
-                                    const label = reasoningEffortLabel(effort);
-                                    const wireValue = selected ? configuredEfforts[effort] : undefined;
-                                    return (
-                                      <div className="dsh-reasoning-effort" key={effort}>
-                                        <label className="dsh-reasoning-toggle">
-                                          <input
-                                            type="checkbox"
-                                            checked={selected}
-                                            aria-label={t("dshProviders.effortForModel", "{level}（{model}）")
-                                              .replace("{level}", label)
-                                              .replace("{model}", modelLabel)}
-                                            onChange={event => toggleModelReasoningEffort(index, effort, event.target.checked)}
-                                          />
-                                          <span>{label}</span>
-                                        </label>
-                                        <input
-                                          value={wireValue ?? ""}
-                                          disabled={!selected}
-                                          aria-label={t("dshProviders.wireForModel", "{model} 的 {level} 协议值")
-                                            .replace("{model}", modelLabel)
-                                            .replace("{level}", label)}
-                                          placeholder={effort === "off" ? t("dshProviders.noWireValue", "不发送") : effort}
-                                          onChange={event => updateModelReasoningWireValue(index, effort, event.target.value)}
-                                          spellCheck={false}
-                                        />
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
+                      {models.map((model, index) => (
+                        <div className="ccs-model-row" key={`${index}:${model.id}`}>
+                          <input value={model.id} onChange={event => updateModel(index, { id: event.target.value })} placeholder="model-id" spellCheck={false} />
+                          <input value={model.name ?? ""} onChange={event => updateModel(index, { name: event.target.value || undefined })} placeholder={t("dshProviders.displayName", "显示名称")} />
+                          <input value={compactInteger(model.contextWindow)} onChange={event => updateModel(index, { contextWindow: parsePositiveInteger(event.target.value) })} placeholder="128K" />
+                          <input value={compactInteger(model.maxTokens)} onChange={event => updateModel(index, { maxTokens: parsePositiveInteger(event.target.value) })} placeholder="32K" />
+                          <button type="button" className="dsh-model-delete" onClick={() => setModels(current => current.filter((_, at) => at !== index))} aria-label={t("common.delete", "删除")}><Trash2 size={14} /></button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

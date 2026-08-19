@@ -297,20 +297,6 @@ function configuredReasoningEffort(value: unknown): DshReasoningEffort | undefin
     : undefined;
 }
 
-function officialReasoning(profile: JsonObject) {
-  if (profile.thinking === "disabled") {
-    return { efforts: [{ id: "off", name: "Off" }], defaultEffort: "off" };
-  }
-  return {
-    efforts: [
-      { id: "off", name: "Off" },
-      { id: "high", name: "High" },
-      { id: "max", name: "Max" }
-    ],
-    defaultEffort: configuredReasoningEffort(profile.reasoningEffort) ?? "high"
-  };
-}
-
 function credentialMap(root: JsonObject, filePath: string) {
   const values = new Map<string, string>();
   for (const [key, value] of Object.entries(root)) {
@@ -391,7 +377,12 @@ async function runtimeSnapshot(options?: DshProviderStoreOptions): Promise<Runti
   }
 }
 
-async function syncBlankSessionModels(provider: string, model: string, options?: DshProviderStoreOptions) {
+async function syncBlankSessionModels(
+  provider: string,
+  model: string,
+  reasoningEffort: DshReasoningEffort | undefined,
+  options?: DshProviderStoreOptions
+) {
   try {
     const value = await runtimeRpc("session.list", {}, options);
     const sessions = Array.isArray(value.items) ? value.items : [];
@@ -399,7 +390,12 @@ async function syncBlankSessionModels(provider: string, model: string, options?:
     for (const item of sessions) {
       if (!isObject(item) || item.blank !== true || typeof item.sessionId !== "string") continue;
       try {
-        await runtimeRpc("session.selectModel", { sessionId: item.sessionId, provider, model }, options);
+        await runtimeRpc("session.selectModel", {
+          sessionId: item.sessionId,
+          provider,
+          model,
+          ...(reasoningEffort ? { reasoningEffort } : {})
+        }, options);
       } catch {
         synced = false;
       }
@@ -477,10 +473,9 @@ export async function listDshProviders(options?: DshProviderStoreOptions): Promi
     const officialRef = typeof deepseek.apiKeyEnv === "string" ? deepseek.apiKeyEnv : OFFICIAL_CREDENTIAL;
     const officialApiKey = process.env[officialRef] || credentials.get(officialRef);
     const officialGroup = groupById.get(OFFICIAL_PROVIDER);
-    const officialModels = (Array.isArray(deepseek.models)
+    const officialModels = Array.isArray(deepseek.models)
       ? modelList(deepseek.models)
-      : officialGroup?.models ?? DEFAULT_MODELS)
-      .map(model => model.reasoning ? model : { ...model, reasoning: officialReasoning(deepseek) });
+      : officialGroup?.models ?? DEFAULT_MODELS;
     const officialReasoningDefault = configuredReasoningEffort(deepseek.reasoningEffort);
     const officialMeta = deskState.providers[OFFICIAL_PROVIDER] ?? {};
     const officialEnabled = officialProviderEnabled(patchDocument.root);
@@ -601,6 +596,10 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
   }
   const models = modelList(input.models);
   if (new Set(models.map(model => model.id)).size !== models.length) throw new Error("Model IDs must be unique");
+  const inheritModels = input.inheritModels === true || input.models === undefined;
+  const reasoningDefault = id !== OFFICIAL_PROVIDER && !catalogProvider && !inheritModels && input.reasoningDefault
+    ? "medium"
+    : input.reasoningDefault;
   const apiKey = input.apiKey?.trim();
   if (apiKey && (!/^[\x21-\x7E]+$/.test(apiKey) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(apiKey))) {
     throw new Error("API key must be a printable value, not an environment assignment");
@@ -620,10 +619,10 @@ function normalizeSaveInput(input: DshProviderSaveInput) {
     baseUrl,
     protocol,
     models,
-    inheritModels: input.inheritModels === true || input.models === undefined,
+    inheritModels,
     catalogProvider,
     enabled: input.enabled !== false,
-    reasoningDefault: input.reasoningDefault,
+    reasoningDefault,
     apiKey,
     meta
   };
@@ -717,8 +716,6 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
         };
         if (normalized.inheritModels) delete next.models;
         else next.models = serializeModels(normalized.models);
-        if (normalized.reasoningDefault) next.reasoningEffort = normalized.reasoningDefault;
-        else delete next.reasoningEffort;
         document.setIn(["llm-deepseek"], next);
       });
       await mutateDeskState(options, state => {
@@ -729,7 +726,19 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
       const next = piProviderProfile(existing, normalized, credentialRef);
       const catalogProvider = normalized.catalogProvider || disabled?.catalogProvider === true;
       if (normalized.enabled) {
-        await mutateYaml(settingsFile, document => document.setIn(["llm-pi-ai", "providers", normalized.id], next));
+        await mutateYaml(settingsFile, document => {
+          document.setIn(["llm-pi-ai", "providers", normalized.id], next);
+          if (normalized.catalogProvider || normalized.inheritModels) return;
+          const selection = asObject(asObject(document.toJS())["agent-default-model"]);
+          if (selection.provider !== normalized.id) return;
+          if (!normalized.reasoningDefault) {
+            document.deleteIn(["agent-default-model", "reasoningEffort"]);
+            return;
+          }
+          if (typeof selection.reasoningEffort !== "string" || !selection.reasoningEffort.trim()) {
+            document.setIn(["agent-default-model", "reasoningEffort"], "medium");
+          }
+        });
         await mutateDeskState(options, state => {
           updateDeskProviderMeta(state, normalized.id, normalized.meta);
           delete state.disabledProviders[normalized.id];
@@ -933,11 +942,21 @@ export async function switchDshProvider(id: string, options?: DshProviderStoreOp
     if (!provider.enabled) throw new Error("Provider is disabled");
     const selectedModel = provider.models[0]?.id;
     if (!selectedModel) throw new Error("This provider has no available models. Start DSH to load its catalog or configure a model first");
+    const configuredEfforts = provider.models[0]?.reasoningEfforts;
+    const reasoningEffort = provider.reasoningDefault
+      && configuredEfforts
+      && hasOwn(configuredEfforts, provider.reasoningDefault)
+      ? provider.reasoningDefault
+      : undefined;
     await mutateYaml(settingsPath(options), document => {
-      document.setIn(["agent-default-model"], { provider: id, model: selectedModel });
+      document.setIn(["agent-default-model"], {
+        provider: id,
+        model: selectedModel,
+        ...(reasoningEffort ? { reasoningEffort } : {})
+      });
     });
     const sessionSyncFailed = listing.runtimeAvailable
-      ? !await syncBlankSessionModels(id, selectedModel, options)
+      ? !await syncBlankSessionModels(id, selectedModel, reasoningEffort, options)
       : false;
     return {
       ok: true,
