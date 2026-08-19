@@ -318,7 +318,12 @@ function runtimeUrl(options?: DshProviderStoreOptions) {
   return configured.replace(/\/+$/, "");
 }
 
-async function runtimeRpc(method: string, payload: JsonObject, options?: DshProviderStoreOptions): Promise<JsonObject> {
+async function runtimeRpc(
+  method: string,
+  payload: JsonObject,
+  options?: DshProviderStoreOptions,
+  timeoutMs = 3_000
+): Promise<JsonObject> {
   if (!runtimeEnabled(options)) throw new Error("DSH runtime discovery is disabled");
   const base = runtimeUrl(options);
   const rpcId = `dsh-desk-${randomUUID()}`;
@@ -330,7 +335,7 @@ async function runtimeRpc(method: string, payload: JsonObject, options?: DshProv
       referer: `${base}/`
     },
     body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
-    signal: AbortSignal.timeout(3_000)
+    signal: AbortSignal.timeout(timeoutMs)
   });
   if (!response.ok) throw new Error(`DSH runtime returned HTTP ${response.status}`);
   const envelope = await response.json() as unknown;
@@ -377,33 +382,75 @@ async function runtimeSnapshot(options?: DshProviderStoreOptions): Promise<Runti
   }
 }
 
-async function syncBlankSessionModels(
-  provider: string,
-  model: string,
-  reasoningEffort: DshReasoningEffort | undefined,
+type DshModelSelection = {
+  provider: string;
+  model: string;
+  reasoningEffort?: string;
+};
+
+function selectionMatches(value: unknown, expected: DshModelSelection) {
+  const selected = asObject(asObject(value).selected);
+  const actualReasoningEffort = typeof selected.reasoningEffort === "string"
+    ? selected.reasoningEffort
+    : undefined;
+  return selected.provider === expected.provider
+    && selected.model === expected.model
+    && actualReasoningEffort === expected.reasoningEffort;
+}
+
+async function selectBlankSessionModel(
+  sessionId: string,
+  selection: DshModelSelection,
   options?: DshProviderStoreOptions
 ) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const value = await runtimeRpc("session.selectModel", {
+        sessionId,
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {})
+      }, options, 500);
+      if (selectionMatches(value, selection)) return true;
+    } catch {
+      // DSH may still be reloading the provider patch after Desk wrote it.
+    }
+    if (attempt < 9) await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return false;
+}
+
+async function syncBlankSessionModels(selection: DshModelSelection, options?: DshProviderStoreOptions) {
   try {
     const value = await runtimeRpc("session.list", {}, options);
     const sessions = Array.isArray(value.items) ? value.items : [];
-    let synced = true;
-    for (const item of sessions) {
-      if (!isObject(item) || item.blank !== true || typeof item.sessionId !== "string") continue;
-      try {
-        await runtimeRpc("session.selectModel", {
-          sessionId: item.sessionId,
-          provider,
-          model,
-          ...(reasoningEffort ? { reasoningEffort } : {})
-        }, options);
-      } catch {
-        synced = false;
-      }
-    }
-    return synced;
+    const blankSessionIds = sessions.flatMap(item => isObject(item)
+      && item.blank === true
+      && typeof item.sessionId === "string"
+      ? [item.sessionId]
+      : []);
+    const results = await Promise.all(blankSessionIds.map(sessionId => selectBlankSessionModel(sessionId, selection, options)));
+    return results.every(Boolean);
   } catch {
     return false;
   }
+}
+
+async function readDefaultSelection(options?: DshProviderStoreOptions): Promise<DshModelSelection> {
+  const { root } = await readOptional(settingsPath(options)).then(text => parseYaml(text, settingsPath(options)));
+  const selection = asObject(root["agent-default-model"]);
+  const reasoningEffort = typeof selection.reasoningEffort === "string" && selection.reasoningEffort.trim()
+    ? selection.reasoningEffort
+    : undefined;
+  return {
+    provider: typeof selection.provider === "string" ? selection.provider : OFFICIAL_PROVIDER,
+    model: typeof selection.model === "string" ? selection.model : DEFAULT_MODELS[0].id,
+    ...(reasoningEffort ? { reasoningEffort } : {})
+  };
+}
+
+async function syncSavedDefaultSelection(options?: DshProviderStoreOptions) {
+  return syncBlankSessionModels(await readDefaultSelection(options), options);
 }
 
 export function deriveDshCredentialRef(providerId: string) {
@@ -675,11 +722,27 @@ function updateDeskProviderMeta(state: DshDeskState, id: string, meta: DshProvid
   if (!state.order.includes(id)) state.order.push(id);
 }
 
+function providerSelection(provider: DshProvider): DshModelSelection | undefined {
+  const model = provider.models[0]?.id;
+  if (!model) return undefined;
+  const configuredEfforts = provider.models[0]?.reasoningEfforts;
+  const reasoningEffort = provider.reasoningDefault
+    && configuredEfforts
+    && hasOwn(configuredEfforts, provider.reasoningDefault)
+    ? provider.reasoningDefault
+    : undefined;
+  return {
+    provider: provider.id,
+    model,
+    ...(reasoningEffort ? { reasoningEffort } : {})
+  };
+}
+
 function fallbackSelection(providers: DshProvider[], excludingId: string) {
   for (const provider of providers) {
     if (provider.id === excludingId || !provider.enabled) continue;
-    const model = provider.models[0]?.id;
-    if (model) return { provider: provider.id, model };
+    const selection = providerSelection(provider);
+    if (selection) return selection;
   }
   return undefined;
 }
@@ -701,6 +764,8 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
     const existing = normalized.id === OFFICIAL_PROVIDER
       ? asObject(root["llm-deepseek"])
       : Object.keys(configured).length > 0 ? configured : disabled?.profile ?? {};
+    const configuredDefaultProvider = asObject(root["agent-default-model"]).provider;
+    const defaultProvider = typeof configuredDefaultProvider === "string" ? configuredDefaultProvider : OFFICIAL_PROVIDER;
     const existingRef = typeof existing.apiKeyEnv === "string" && existing.apiKeyEnv ? existing.apiKeyEnv : undefined;
     const credentialRef = existingRef
       ?? (normalized.id === OFFICIAL_PROVIDER ? OFFICIAL_CREDENTIAL : normalized.apiKey ? deriveDshCredentialRef(normalized.id) : undefined);
@@ -762,7 +827,11 @@ export async function saveDshProvider(input: DshProviderSaveInput, options?: Dsh
     }
     const listing = await listDshProviders(options);
     const provider = listing.providers.find(item => item.id === normalized.id);
-    return provider ? { ok: true, provider } : { ok: false, error: listing.error ?? "Provider was saved but could not be reloaded" };
+    if (!provider) return { ok: false, error: listing.error ?? "Provider was saved but could not be reloaded" };
+    const sessionSyncFailed = defaultProvider === normalized.id && listing.runtimeAvailable
+      ? !await syncSavedDefaultSelection(options)
+      : false;
+    return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -788,7 +857,11 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
       });
       const updated = await listDshProviders(options);
       const provider = updated.providers.find(item => item.id === id);
-      return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
+      if (!provider) return { ok: false, error: "Provider state changed but could not be reloaded" };
+      const sessionSyncFailed = fallback && updated.runtimeAvailable
+        ? !await syncBlankSessionModels(fallback, options)
+        : false;
+      return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
     }
     const [{ root }, deskState] = await Promise.all([
       readOptional(settingsFile).then(text => parseYaml(text, settingsFile)),
@@ -815,7 +888,11 @@ export async function setDshProviderEnabled(id: string, enabled: boolean, option
     }
     const updated = await listDshProviders(options);
     const provider = updated.providers.find(item => item.id === id);
-    return provider ? { ok: true, provider } : { ok: false, error: "Provider state changed but could not be reloaded" };
+    if (!provider) return { ok: false, error: "Provider state changed but could not be reloaded" };
+    const sessionSyncFailed = fallback && updated.runtimeAvailable
+      ? !await syncBlankSessionModels(fallback, options)
+      : false;
+    return { ok: true, provider, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -847,7 +924,10 @@ export async function deleteDshProvider(id: string, options?: DshProviderStoreOp
       delete state.disabledProviders[id];
       state.order = state.order.filter(providerId => providerId !== id);
     });
-    return { ok: true };
+    const sessionSyncFailed = fallback && listing.runtimeAvailable
+      ? !await syncBlankSessionModels(fallback, options)
+      : false;
+    return { ok: true, ...(sessionSyncFailed ? { sessionSyncFailed: true } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -940,28 +1020,18 @@ export async function switchDshProvider(id: string, options?: DshProviderStoreOp
     const provider = listing.providers.find(item => item.id === id);
     if (!provider) throw new Error("Provider not found");
     if (!provider.enabled) throw new Error("Provider is disabled");
-    const selectedModel = provider.models[0]?.id;
-    if (!selectedModel) throw new Error("This provider has no available models. Start DSH to load its catalog or configure a model first");
-    const configuredEfforts = provider.models[0]?.reasoningEfforts;
-    const reasoningEffort = provider.reasoningDefault
-      && configuredEfforts
-      && hasOwn(configuredEfforts, provider.reasoningDefault)
-      ? provider.reasoningDefault
-      : undefined;
+    const selection = providerSelection(provider);
+    if (!selection) throw new Error("This provider has no available models. Start DSH to load its catalog or configure a model first");
     await mutateYaml(settingsPath(options), document => {
-      document.setIn(["agent-default-model"], {
-        provider: id,
-        model: selectedModel,
-        ...(reasoningEffort ? { reasoningEffort } : {})
-      });
+      document.setIn(["agent-default-model"], selection);
     });
     const sessionSyncFailed = listing.runtimeAvailable
-      ? !await syncBlankSessionModels(id, selectedModel, reasoningEffort, options)
+      ? !await syncBlankSessionModels(selection, options)
       : false;
     return {
       ok: true,
       provider: id,
-      model: selectedModel,
+      model: selection.model,
       ...(sessionSyncFailed ? { sessionSyncFailed: true } : {})
     };
   } catch (error) {

@@ -32,6 +32,39 @@ function runtimeFetch(values: Record<string, unknown>): typeof fetch {
   }) as typeof fetch;
 }
 
+function recordedRuntime({
+  providers,
+  groups,
+  sessions,
+  select
+}: {
+  providers: unknown[];
+  groups: unknown[];
+  sessions: unknown[];
+  select?: (payload: Record<string, unknown>, attempt: number) => Record<string, unknown>;
+}) {
+  const requests: Array<{ method: string; payload: Record<string, unknown> }> = [];
+  let selectAttempt = 0;
+  const runtimeFetchImpl = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const request = JSON.parse(String(init?.body)) as { rpcId: string; method: string; payload: Record<string, unknown> };
+    requests.push({ method: request.method, payload: request.payload });
+    const value = request.method === "llm.providers"
+      ? { providers }
+      : request.method === "llm.models"
+        ? { groups }
+        : request.method === "session.list"
+          ? { items: sessions }
+          : request.method === "session.selectModel"
+            ? select?.(request.payload, selectAttempt++) ?? { selected: request.payload }
+            : {};
+    return new Response(JSON.stringify({ rpcId: request.rpcId, result: { ok: true, value } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  }) as typeof fetch;
+  return { requests, runtimeFetchImpl };
+}
+
 afterEach(() => {
   for (const path of homes.splice(0)) rmSync(path, { recursive: true, force: true });
 });
@@ -305,6 +338,123 @@ describe("DSH provider settings", () => {
     expect(settings).not.toContain("reasoningEfforts:");
     expect(settings).not.toContain("reasoning:");
     expect(settings).not.toContain("reasoningEffort:");
+  });
+
+  it("clears stale reasoning from blank sessions after editing the current route", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "agent-default-model:",
+      "  provider: team-gateway",
+      "  model: team-model",
+      "  reasoningEffort: high",
+      "llm-pi-ai:",
+      "  providers:",
+      "    team-gateway:",
+      "      displayName: Team Gateway",
+      "      reasoning: medium",
+      "      models:",
+      "        - id: team-model",
+      "          reasoningEfforts:",
+      "            low: low",
+      "            medium: medium",
+      "            high: high",
+      "            xhigh: xhigh",
+      "            max: max",
+      ""
+    ].join("\n"));
+    const runtime = recordedRuntime({
+      providers: [{ provider: "team-gateway", displayName: "Team Gateway", active: true }],
+      groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }],
+      sessions: [
+        { sessionId: "blank-session", blank: true },
+        { sessionId: "completed-session", blank: false }
+      ],
+      select: (payload, attempt) => attempt === 0
+        ? { selected: { ...payload, reasoningEffort: "high" } }
+        : { selected: payload }
+    });
+
+    const result = await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome, runtimeUrl: "http://dsh.test", runtimeFetchImpl: runtime.runtimeFetchImpl });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }));
+    expect(result).not.toHaveProperty("sessionSyncFailed");
+    expect(runtime.requests.filter(request => request.method === "session.selectModel")).toEqual([
+      { method: "session.selectModel", payload: { sessionId: "blank-session", provider: "team-gateway", model: "team-model" } },
+      { method: "session.selectModel", payload: { sessionId: "blank-session", provider: "team-gateway", model: "team-model" } }
+    ]);
+  });
+
+  it("moves blank sessions to the fallback when disabling the current route", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    await switchDshProvider("team-gateway", { dshHome });
+    const runtime = recordedRuntime({
+      providers: [
+        { provider: "deepseek-official", displayName: "DeepSeek", active: true },
+        { provider: "team-gateway", displayName: "Team Gateway", active: true }
+      ],
+      groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }],
+      sessions: [
+        { sessionId: "blank-session", blank: true },
+        { sessionId: "completed-session", blank: false }
+      ]
+    });
+
+    const result = await setDshProviderEnabled("team-gateway", false, {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: runtime.runtimeFetchImpl
+    });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }));
+    expect(runtime.requests.filter(request => request.method === "session.selectModel")).toEqual([{
+      method: "session.selectModel",
+      payload: { sessionId: "blank-session", provider: "deepseek-official", model: "deepseek-v4-flash" }
+    }]);
+  });
+
+  it("moves blank sessions to the fallback when deleting the current route", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    await switchDshProvider("team-gateway", { dshHome });
+    const runtime = recordedRuntime({
+      providers: [
+        { provider: "deepseek-official", displayName: "DeepSeek", active: true },
+        { provider: "team-gateway", displayName: "Team Gateway", active: true }
+      ],
+      groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }],
+      sessions: [{ sessionId: "blank-session", blank: true }]
+    });
+
+    const result = await deleteDshProvider("team-gateway", {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: runtime.runtimeFetchImpl
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(runtime.requests.filter(request => request.method === "session.selectModel")).toEqual([{
+      method: "session.selectModel",
+      payload: { sessionId: "blank-session", provider: "deepseek-official", model: "deepseek-v4-flash" }
+    }]);
   });
 
   it("keeps disabled providers in DSH Desk while removing them from DSH", async () => {
@@ -752,7 +902,7 @@ describe("DSH provider settings", () => {
                 { sessionId: "blank-session", blank: true },
                 { sessionId: "completed-session", blank: false }
               ] }
-              : { selected: { provider: "team-gateway", model: "team-model" } };
+              : { selected: request.payload };
         return new Response(JSON.stringify({ rpcId: request.rpcId, result: { ok: true, value } }), { status: 200 });
       }) as typeof fetch
     };

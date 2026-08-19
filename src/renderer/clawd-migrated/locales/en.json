@@ -134,7 +134,7 @@
     "defaultNamed": "Default {name}",
     "noModelForDefault": "No model is available for this provider",
     "switchedToProvider": "Default provider changed to {name}",
-    "sessionSyncFailed": "The default provider was saved, but some blank sessions could not be updated. Restart DSH to apply it.",
+    "sessionSyncFailed": "The setting was saved, but some blank sessions could not be updated. Restart DSH to apply it.",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "enable": "Enable",

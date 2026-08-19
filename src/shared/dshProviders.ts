@@ -101,6 +101,7 @@ export type DshProviderSaveInput = DshProviderUiMeta & {
 export type DshProviderMutationResult = {
   ok: boolean;
   provider?: DshProvider;
+  sessionSyncFailed?: boolean;
   error?: string;
 };
 

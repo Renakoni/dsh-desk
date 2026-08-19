@@ -195,7 +195,11 @@ export function DshRoutingPanel() {
       toast.error(result.error ?? t("routing.saveFailed", "保存失败"));
       return;
     }
-    toast.success(originalId ? t("routing.providerUpdated", "供应商已更新") : t("routing.providerAdded", "供应商已添加"));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(originalId ? t("routing.providerUpdated", "供应商已更新") : t("routing.providerAdded", "供应商已添加"));
+    }
     if (originalId) closeEditEditor();
     else closeAddEditor();
     await refresh();
@@ -204,7 +208,8 @@ export function DshRoutingPanel() {
   async function confirmDelete() {
     if (!pendingDelete) return;
     const result = await companion.deleteDshProvider(pendingDelete.id);
-    if (result.ok) toast.success(t("routing.providerDeleted", "供应商已删除"));
+    if (result.ok && result.sessionSyncFailed) toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    else if (result.ok) toast.success(t("routing.providerDeleted", "供应商已删除"));
     else toast.error(result.error ?? t("routing.deleteFailed", "删除失败"));
     setPendingDelete(null);
     await refresh();
@@ -224,9 +229,13 @@ export function DshRoutingPanel() {
       toast.error(result.error ?? t("dshProviders.toggleFailed", "供应商状态更新失败"));
       return;
     }
-    toast.success(enabled
-      ? t("dshProviders.providerEnabled", "供应商已启用")
-      : t("dshProviders.providerDisabled", "供应商已停用"));
+    if (result.sessionSyncFailed) {
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+    } else {
+      toast.success(enabled
+        ? t("dshProviders.providerEnabled", "供应商已启用")
+        : t("dshProviders.providerDisabled", "供应商已停用"));
+    }
     await refresh();
   }, [companion, refresh, t]);
 
@@ -237,7 +246,7 @@ export function DshRoutingPanel() {
       return;
     }
     if (result.sessionSyncFailed) {
-      toast.warning(t("dshProviders.sessionSyncFailed", "默认供应商已保存，但部分空白会话未能同步；重启 DSH 后生效"));
+      toast.warning(t("dshProviders.sessionSyncFailed", "设置已保存，但部分空白会话未能同步；重启 DSH 后生效"));
     } else {
       toast.success(formatI18n(t("dshProviders.switchedToProvider", "默认供应商已切换为 {name}"), { name: provider.name }));
     }
