@@ -409,7 +409,8 @@ describe("DSH provider settings", () => {
       sessions: [
         { sessionId: "blank-session", blank: true },
         { sessionId: "completed-session", blank: false }
-      ]
+      ],
+      select: payload => ({ selected: { ...payload, reasoningEffort: "high" } })
     });
 
     const result = await setDshProviderEnabled("team-gateway", false, {
@@ -419,6 +420,7 @@ describe("DSH provider settings", () => {
     });
 
     expect(result).toEqual(expect.objectContaining({ ok: true }));
+    expect(result).not.toHaveProperty("sessionSyncFailed");
     expect(runtime.requests.filter(request => request.method === "session.selectModel")).toEqual([{
       method: "session.selectModel",
       payload: { sessionId: "blank-session", provider: "deepseek-official", model: "deepseek-v4-flash" }
@@ -917,6 +919,43 @@ describe("DSH provider settings", () => {
       payload: { sessionId: "blank-session", provider: "team-gateway", model: "team-model", reasoningEffort: "medium" }
     }]);
     expect(readFileSync(join(dshHome, "settings.yaml"), "utf8")).toContain("reasoningEffort: medium");
+  });
+
+  it("accepts the official adapter reasoning default when switching blank sessions", async () => {
+    const dshHome = home();
+    await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      models: [{ id: "team-model" }]
+    }, { dshHome });
+    await switchDshProvider("team-gateway", { dshHome });
+    const runtime = recordedRuntime({
+      providers: [
+        { provider: "deepseek-official", displayName: "DeepSeek", active: true },
+        { provider: "team-gateway", displayName: "Team Gateway", active: true }
+      ],
+      groups: [{ id: "team-gateway", name: "Team Gateway", models: [{ id: "team-model" }] }],
+      sessions: [{ sessionId: "blank-session", blank: true }],
+      select: payload => ({ selected: { ...payload, reasoningEffort: "high" } })
+    });
+
+    const result = await switchDshProvider("deepseek-official", {
+      dshHome,
+      runtimeUrl: "http://dsh.test",
+      runtimeFetchImpl: runtime.runtimeFetchImpl
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      provider: "deepseek-official",
+      model: "deepseek-v4-flash"
+    });
+    expect(runtime.requests.filter(request => request.method === "session.selectModel")).toEqual([{
+      method: "session.selectModel",
+      payload: { sessionId: "blank-session", provider: "deepseek-official", model: "deepseek-v4-flash" }
+    }]);
   });
 
   it("keeps the saved default when a blank session cannot be synchronized", async () => {

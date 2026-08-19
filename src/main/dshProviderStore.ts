@@ -388,20 +388,24 @@ type DshModelSelection = {
   reasoningEffort?: string;
 };
 
-function selectionMatches(value: unknown, expected: DshModelSelection) {
+function selectionMatches(value: unknown, expected: DshModelSelection, requireReasoningEffortCleared: boolean) {
   const selected = asObject(asObject(value).selected);
   const actualReasoningEffort = typeof selected.reasoningEffort === "string"
     ? selected.reasoningEffort
     : undefined;
+  const reasoningEffortMatches = expected.reasoningEffort !== undefined
+    ? actualReasoningEffort === expected.reasoningEffort
+    : !requireReasoningEffortCleared || actualReasoningEffort === undefined;
   return selected.provider === expected.provider
     && selected.model === expected.model
-    && actualReasoningEffort === expected.reasoningEffort;
+    && reasoningEffortMatches;
 }
 
 async function selectBlankSessionModel(
   sessionId: string,
   selection: DshModelSelection,
-  options?: DshProviderStoreOptions
+  options?: DshProviderStoreOptions,
+  requireReasoningEffortCleared = false
 ) {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
@@ -411,7 +415,7 @@ async function selectBlankSessionModel(
         model: selection.model,
         ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {})
       }, options, 500);
-      if (selectionMatches(value, selection)) return true;
+      if (selectionMatches(value, selection, requireReasoningEffortCleared)) return true;
     } catch {
       // DSH may still be reloading the provider patch after Desk wrote it.
     }
@@ -420,7 +424,11 @@ async function selectBlankSessionModel(
   return false;
 }
 
-async function syncBlankSessionModels(selection: DshModelSelection, options?: DshProviderStoreOptions) {
+async function syncBlankSessionModels(
+  selection: DshModelSelection,
+  options?: DshProviderStoreOptions,
+  requireReasoningEffortCleared = false
+) {
   try {
     const value = await runtimeRpc("session.list", {}, options);
     const sessions = Array.isArray(value.items) ? value.items : [];
@@ -429,7 +437,12 @@ async function syncBlankSessionModels(selection: DshModelSelection, options?: Ds
       && typeof item.sessionId === "string"
       ? [item.sessionId]
       : []);
-    const results = await Promise.all(blankSessionIds.map(sessionId => selectBlankSessionModel(sessionId, selection, options)));
+    const results = await Promise.all(blankSessionIds.map(sessionId => selectBlankSessionModel(
+      sessionId,
+      selection,
+      options,
+      requireReasoningEffortCleared
+    )));
     return results.every(Boolean);
   } catch {
     return false;
@@ -450,7 +463,8 @@ async function readDefaultSelection(options?: DshProviderStoreOptions): Promise<
 }
 
 async function syncSavedDefaultSelection(options?: DshProviderStoreOptions) {
-  return syncBlankSessionModels(await readDefaultSelection(options), options);
+  const selection = await readDefaultSelection(options);
+  return syncBlankSessionModels(selection, options, selection.provider !== OFFICIAL_PROVIDER);
 }
 
 export function deriveDshCredentialRef(providerId: string) {
