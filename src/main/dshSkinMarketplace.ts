@@ -14,7 +14,7 @@ import type {
 } from "../shared/dshSkins";
 import { writeTextFileAtomic } from "./filePersistence";
 
-export const DSH_SKIN_CATALOG_URL = "https://raw.githubusercontent.com/Renakoni/dsh-appearance-catalog/main/data/catalog.json";
+export const DSH_SKIN_CATALOG_URL = "https://raw.githubusercontent.com/Renakoni/awesome-dsh-themes/main/data/catalog.json";
 export const DSH_SKIN_MARKET_INSTALL_SPEC = "";
 export const DSH_SKIN_MARKET_PACKAGE = "dsh-desk-plugin";
 export const DSH_SKIN_MARKET_REFRESH_MS = 12 * 60 * 60 * 1000;
