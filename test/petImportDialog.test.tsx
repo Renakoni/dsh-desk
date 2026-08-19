@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PetImportDialog } from "../src/renderer/clawd-migrated/features/settings/PetImportDialog";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 import type { PetPackInspectResult, PetPackInstallResult } from "../src/shared/petPackTransport";
-import { FakeSheetImage, IMPORT_DIGEST as DIGEST, IMPORT_SHEET_COUNTS as SHEET_COUNTS, stagedFixture, stubSheetDecoding } from "./helpers/importStubs";
+import { FakeSheetImage, IMPORT_DIGEST as DIGEST, IMPORT_SHEET_COUNTS as SHEET_COUNTS, IMPORT_VISIBLE_MASKS as VISIBLE_MASKS, stagedFixture, stubSheetDecoding } from "./helpers/importStubs";
 
 const ZIP = "C:/qa/boba.codex-pet.zip";
 
@@ -95,7 +95,7 @@ describe("PetImportDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
     await waitFor(() => expect(onInstalled).toHaveBeenCalledWith("codex-pet:boba", undefined));
-    expect(companion.installPetPack).toHaveBeenCalledWith(ZIP, SHEET_COUNTS, DIGEST, false);
+    expect(companion.installPetPack).toHaveBeenCalledWith(ZIP, { rowFrameCounts: SHEET_COUNTS, visibleCellMasks: VISIBLE_MASKS }, DIGEST, false);
   });
 
   it("turns a duplicate id into an explicit overwrite step", async () => {
@@ -109,7 +109,7 @@ describe("PetImportDialog", () => {
     fireEvent.click(overwriteButton);
 
     await waitFor(() => expect(onInstalled).toHaveBeenCalledWith("codex-pet:boba", "leftover backup"));
-    expect(companion.installPetPack).toHaveBeenNthCalledWith(2, ZIP, SHEET_COUNTS, DIGEST, true);
+    expect(companion.installPetPack).toHaveBeenNthCalledWith(2, ZIP, { rowFrameCounts: SHEET_COUNTS, visibleCellMasks: VISIBLE_MASKS }, DIGEST, true);
   });
 
   it("recovers when the install IPC rejects", async () => {

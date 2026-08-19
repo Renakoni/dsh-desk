@@ -2,6 +2,7 @@ import { PetState } from "../../shared/events";
 import { PET_IMAGE_SIZE } from "../../shared/petDisplaySettings";
 import { displayedSpriteHeight } from "../../shared/spriteFrame";
 import type { SpritesheetAssets } from "../../shared/petPackAssets";
+import { lookFrameForTarget, type PetLookTarget } from "../../shared/petLook";
 import { MINATO_AQUA_CATALOG, type PetThemeCatalog } from "../../shared/petThemeCatalog";
 import { SpritesheetSprite } from "./SpritesheetSprite";
 import completedImage from "../assets/pet/completed.webp";
@@ -34,6 +35,8 @@ interface PetProps {
   previewAnimation?: { key: string; nonce: number } | null;
   /** Transient drag-direction locomotion; overrides every other resolution while set. */
   dragAnimation?: PetAnimationKey | null;
+  /** Pointer-driven v2 look cell; App only supplies it while truly idle. */
+  lookTarget?: PetLookTarget;
   scale?: number;
   opacity?: number;
   catalog?: PetThemeCatalog;
@@ -41,7 +44,7 @@ interface PetProps {
   spritesheet?: SpritesheetAssets | null;
 }
 
-export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, dragAnimation = null, scale = 1, opacity = 1, catalog = MINATO_AQUA_CATALOG, spritesheet = null }: PetProps) {
+export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, dragAnimation = null, lookTarget = null, scale = 1, opacity = 1, catalog = MINATO_AQUA_CATALOG, spritesheet = null }: PetProps) {
   const resolved = resolvePetAnimation(state, stateAnimations, previewAnimation, idleAnimation, catalog);
   // The drag transient only applies when the active sheet actually has the
   // locomotion row — the built-in clip theme has none, so dragging it never
@@ -49,6 +52,30 @@ export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, d
   const dragOverride = dragAnimation && spritesheet?.animations[dragAnimation] ? dragAnimation : null;
   const animationKey = dragOverride ?? resolved.animationKey;
   const imageKey = dragOverride ?? resolved.imageKey;
+
+  const lookFrame = state === "idle" && !dragOverride && !previewAnimation && spritesheet?.look
+    ? lookFrameForTarget(lookTarget, spritesheet.look.startRow, spritesheet.look.columns, spritesheet.look.neutralFrame)
+    : null;
+  if (spritesheet && lookFrame) {
+    const height = displayedSpriteHeight(spritesheet.cellWidth, spritesheet.cellHeight, PET_IMAGE_SIZE);
+    return (
+      <div className={`pet pet-${state}`} style={{ transform: `scale(${scale})`, opacity, height }}>
+        <SpritesheetSprite
+          sheetUrl={spritesheet.sheetUrl}
+          columns={spritesheet.columns}
+          rows={spritesheet.rows}
+          row={lookFrame.row}
+          frameCount={1}
+          frameDurationMs={160}
+          fixedFrame={lookFrame.column}
+          width={PET_IMAGE_SIZE}
+          height={height}
+          alt="pointer look"
+          errorFallbackUrl={idleImage}
+        />
+      </div>
+    );
+  }
 
   const spriteAnimation = spritesheet?.animations[animationKey];
   if (spritesheet && spriteAnimation) {

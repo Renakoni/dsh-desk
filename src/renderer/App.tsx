@@ -19,6 +19,7 @@ import { spritesheetAssetsFromPack } from "../shared/petPackAssets";
 import { packIdFromThemeId, resolveThemeCatalog } from "../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../shared/spriteFrame";
 import { dragAnimationForDirection, type DragDirection } from "../shared/petDrag";
+import { lookTargetForPointer, type PetLookTarget } from "../shared/petLook";
 import { keepIdleAnimationConfigReference, type IdleAnimationConfig, planIdleAnimation, startIdleAnimator } from "./state/petIdleAnimator";
 import { nextPetState } from "./state/petStateMachine";
 import { isPetElement } from "./petHitTest";
@@ -105,6 +106,7 @@ export default function App() {
   const [displayLanguage, setDisplayLanguage] = useState<"zh" | "en">(initialSettings.displayLanguage);
   const [previewAnimation, setPreviewAnimation] = useState<{ key: string; nonce: number } | null>(null);
   const [dragDirection, setDragDirection] = useState<DragDirection | null>(null);
+  const [lookTarget, setLookTarget] = useState<PetLookTarget>(null);
   const resetTimer = useRef<number | null>(null);
   const notificationTimer = useRef<number | null>(null);
   const stableEvent = useRef<PetEvent | null>(null);
@@ -301,11 +303,35 @@ export default function App() {
   const activePermission = permissions[0];
   const petState: PetState = activePermission ? "permission-prompt" : state;
 
+  // v2 pointer look is an idle-only interaction. Tracking against the real
+  // rendered pet bounds keeps direction math correct at every pet scale.
+  useEffect(() => {
+    if (!spritesheet?.look || petState !== "idle" || previewAnimation || dragDirection) {
+      setLookTarget(null);
+      return;
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const pet = document.querySelector<HTMLElement>(".pet");
+      if (!pet) return;
+      const next = lookTargetForPointer(event.clientX, event.clientY, pet.getBoundingClientRect());
+      setLookTarget(current => current === next ? current : next);
+    };
+    const clear = () => setLookTarget(null);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("blur", clear);
+    document.documentElement.addEventListener("pointerleave", clear);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("blur", clear);
+      document.documentElement.removeEventListener("pointerleave", clear);
+    };
+  }, [spritesheet?.look, petState, previewAnimation, dragDirection]);
+
   // Random idle rotation runs only while the pet is actually idling. Preview
   // and drag animations pause it so their end cannot reveal a rotation that
   // advanced while hidden; the selected action stays mounted until switching.
   useEffect(() => {
-    if (petState !== "idle" || previewAnimation || dragDirection) {
+    if (petState !== "idle" || previewAnimation || dragDirection || lookTarget !== null) {
       setIdleAnimation(null);
       return;
     }
@@ -315,7 +341,7 @@ export default function App() {
       return;
     }
     return startIdleAnimator(plan, setIdleAnimation);
-  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection]);
+  }, [petState, idleAnimConfig, themeCatalog, previewAnimation, dragDirection, lookTarget]);
 
   // Dragging is native OS window drag (-webkit-app-region: drag on the pet
   // element): the compositor moves the window at input rate — smoother than
@@ -363,6 +389,7 @@ export default function App() {
         idleAnimation={idleAnimation}
         previewAnimation={previewAnimation}
         dragAnimation={dragAnimationForDirection(themeCatalog, dragDirection)}
+        lookTarget={lookTarget}
         scale={petDisplay.scale}
         opacity={petDisplay.opacity}
         catalog={themeCatalog}

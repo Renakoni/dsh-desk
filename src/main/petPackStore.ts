@@ -18,10 +18,10 @@
  * Chromium in the renderer is this app's single image decoder (the same
  * decoder that will display the pet). Import is therefore two-phase:
  * inspect() stages the package and returns the SHA-256 of the ENTIRE raw
- * archive; the renderer decodes the sheet and alpha-scans the frame counts;
+ * archive; the renderer decodes the sheet and alpha-scans its cells;
  * install() requires that digest back and re-hashes the archive, so any
  * change to the package after inspection — sheet or manifest — is rejected,
- * and the submitted counts only ever apply to the bytes the user previewed.
+ * and the submitted scan only ever applies to the bytes the user previewed.
  * The digest does NOT itself prove that decoding succeeded: the import UI
  * must never call install after a failed decode/scan, and main refuses any
  * install without the digest of a completed inspection.
@@ -39,9 +39,11 @@ import {
   parseCodexPetManifest,
   sanitizePetPackId,
   type CodexPetManifest,
+  type CodexPetSpriteVersion,
   type PetPackManifest,
   type PetPackProblem
 } from "../shared/petPack";
+import type { PetPackScanResult } from "../shared/petPackScan";
 import { parseImageDimensions } from "../shared/imageDimensions";
 import type { PetPackInspectResult, PetPackInstallResult, PetPackRemoveResult, StagedPetPack } from "../shared/petPackTransport";
 
@@ -165,7 +167,7 @@ function stagePetPackZip(zipPath: string): { ok: true; value: StagedInternal } |
 
   const dimensions = parseImageDimensions(sheetBytes);
   if (!dimensions) return fail("spritesheet", "spritesheet is not a readable PNG or WebP image");
-  const geometry = deriveSheetGeometry(dimensions.width, dimensions.height);
+  const geometry = deriveSheetGeometry(dimensions.width, dimensions.height, manifest.spriteVersionNumber);
   if (!geometry.ok) return geometry;
 
   const sheetMime = dimensions.format === "png" ? "image/png" : "image/webp";
@@ -199,7 +201,7 @@ export function inspectPetPackZip(zipPath: string): PetPackInspectResult {
  */
 export function installPetPack(
   zipPath: string,
-  rowFrameCounts: number[],
+  rowFrameCounts: number[] | PetPackScanResult,
   expectedPackageSha256: string,
   petsDir: string,
   options: { overwrite?: boolean } = {}
@@ -219,7 +221,7 @@ export function installPetPack(
   const built = buildPetPackManifest({
     manifest,
     geometry,
-    rowFrameCounts: Array.isArray(rowFrameCounts) ? rowFrameCounts : []
+    rowFrameCounts
   });
   if (!built.ok) return built;
   const pack = built.value;
@@ -268,16 +270,16 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
-// Persisted geometry must satisfy the SAME codex-pet v1 contract the import
-// enforces — one source of truth, not a second looser one. Everything is
+// Persisted geometry must satisfy the same declared codex-pet version contract
+// the importer enforces — one source of truth, not a second looser one. Everything is
 // re-derived from width and height, so a manifest with a forged grid (wrong
 // column/row count, oversized cells, inconsistent cell dimensions) is
 // rejected even when it is internally coherent.
-function isValidPersistedSheet(value: unknown): boolean {
+function isValidPersistedSheet(value: unknown, spriteVersionNumber: CodexPetSpriteVersion = 1): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const sheet = value as Record<string, unknown>;
   if (!isPositiveInteger(sheet.width) || !isPositiveInteger(sheet.height)) return false;
-  const derived = deriveSheetGeometry(sheet.width, sheet.height);
+  const derived = deriveSheetGeometry(sheet.width, sheet.height, spriteVersionNumber);
   if (!derived.ok) return false;
   return sheet.columns === derived.value.columns
     && sheet.rows === derived.value.rows
@@ -298,13 +300,28 @@ const ROLE_NAMES = ["idle", "running", "waiting_permission", "done", "error"] as
 function isPetPackManifest(value: unknown): value is PetPackManifest {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  if (record.formatVersion !== 1 || record.sourceFormat !== "codex-pet-v1") return false;
+  if (record.formatVersion !== 1 || (record.sourceFormat !== "codex-pet-v1" && record.sourceFormat !== "codex-pet-v2")) return false;
+  const spriteVersionNumber = record.spriteVersionNumber === undefined
+    ? 1
+    : record.spriteVersionNumber;
+  if (spriteVersionNumber !== 1 && spriteVersionNumber !== 2) return false;
+  if (record.sourceFormat !== `codex-pet-v${spriteVersionNumber}`) return false;
   if (typeof record.id !== "string" || sanitizePetPackId(record.id) !== record.id) return false;
   if (typeof record.displayName !== "string" || record.displayName.trim() === "") return false;
   if (typeof record.description !== "string") return false;
   if (typeof record.spritesheetFile !== "string" || !isValidSpritesheetFileName(record.spritesheetFile)) return false;
-  if (!isValidPersistedSheet(record.sheet)) return false;
+  if (!isValidPersistedSheet(record.sheet, spriteVersionNumber)) return false;
   const sheet = record.sheet as { columns: number; rows: number };
+  if (spriteVersionNumber === 2) {
+    const look = record.look;
+    if (!look || typeof look !== "object" || Array.isArray(look)) return false;
+    const lookRecord = look as Record<string, unknown>;
+    const neutral = lookRecord.neutralFrame;
+    if (lookRecord.directions !== 16 || lookRecord.startRow !== 9 || lookRecord.columns !== 8
+      || !neutral || typeof neutral !== "object" || Array.isArray(neutral)
+      || (neutral as Record<string, unknown>).row !== 0
+      || (neutral as Record<string, unknown>).column !== 6) return false;
+  }
 
   if (!Array.isArray(record.animations) || record.animations.length === 0) return false;
   const seenKeys = new Set<string>();
@@ -314,7 +331,7 @@ function isPetPackManifest(value: unknown): value is PetPackManifest {
     if (typeof animation.key !== "string" || !PET_PACK_ANIMATION_KEYS.has(animation.key)) return false;
     if (seenKeys.has(animation.key)) return false;
     seenKeys.add(animation.key);
-    if (typeof animation.row !== "number" || !Number.isInteger(animation.row) || animation.row < 0 || animation.row >= sheet.rows) return false;
+    if (typeof animation.row !== "number" || !Number.isInteger(animation.row) || animation.row < 0 || animation.row >= 9) return false;
     if (!isPositiveInteger(animation.frameCount) || animation.frameCount > sheet.columns) return false;
     if (typeof animation.frameDurationMs !== "number" || !Number.isFinite(animation.frameDurationMs) || animation.frameDurationMs <= 0) return false;
   }
@@ -347,7 +364,10 @@ export function readPetPack(petsDir: string, id: string): PetPackManifest | unde
   if (sanitizePetPackId(id) !== id) return undefined;
   try {
     const parsed: unknown = JSON.parse(readFileSync(join(petsDir, id, PACK_MANIFEST_FILE), "utf8"));
-    return isPetPackManifest(parsed) && parsed.id === id ? parsed : undefined;
+    if (!isPetPackManifest(parsed) || parsed.id !== id) return undefined;
+    return parsed.spriteVersionNumber === undefined
+      ? { ...parsed, spriteVersionNumber: 1 }
+      : parsed;
   } catch {
     return undefined;
   }

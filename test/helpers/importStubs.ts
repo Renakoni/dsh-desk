@@ -7,11 +7,12 @@ import type { StagedPetPack } from "../../src/shared/petPackTransport";
 
 export const IMPORT_GEOMETRY = { width: 256, height: 288, columns: 8, rows: 9, cellWidth: 32, cellHeight: 32 };
 export const IMPORT_SHEET_COUNTS = [4, 0, 0, 3, 5, 8, 6, 6, 6];
+export const IMPORT_VISIBLE_MASKS = IMPORT_SHEET_COUNTS.map(count => (1 << count) - 1);
 export const IMPORT_DIGEST = "a".repeat(64);
 
 export function stagedFixture(): StagedPetPack {
   return {
-    manifest: { id: "boba", displayName: "Boba", description: "A QA pack.", spritesheetPath: "sheet.png" },
+    manifest: { id: "boba", displayName: "Boba", description: "A QA pack.", spritesheetPath: "sheet.png", spriteVersionNumber: 1 },
     geometry: IMPORT_GEOMETRY,
     sheetMime: "image/png",
     packageSha256: IMPORT_DIGEST,

@@ -4230,8 +4230,11 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
   ipcMain.handle("companion:pet-pack-inspect", (_, zipPath: string) => inspectPetPackZip(String(zipPath)));
-  ipcMain.handle("companion:pet-pack-install", (_, zipPath: string, rowFrameCounts: number[], packageSha256: string, overwrite?: boolean) => {
-    const result = installPetPack(String(zipPath), Array.isArray(rowFrameCounts) ? rowFrameCounts.map(Number) : [], String(packageSha256 ?? ""), petPacksDir(), { overwrite: Boolean(overwrite) });
+  ipcMain.handle("companion:pet-pack-install", (_, zipPath: string, scan: unknown, packageSha256: string, overwrite?: boolean) => {
+    const normalizedScan = Array.isArray(scan)
+      ? scan.map(Number)
+      : scan;
+    const result = installPetPack(String(zipPath), normalizedScan as Parameters<typeof installPetPack>[1], String(packageSha256 ?? ""), petPacksDir(), { overwrite: Boolean(overwrite) });
     if (result.ok) broadcastPetPacksChanged();
     return result;
   });

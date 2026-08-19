@@ -665,6 +665,50 @@
   opacity: 0.42;
 }
 
+.animation-page .pet-look-capability {
+  margin-top: 14px;
+}
+
+.animation-page .pet-look-stage {
+  position: relative;
+  isolation: isolate;
+  min-height: 156px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--anim-line);
+  border-radius: 7px;
+  background: var(--anim-cell);
+  cursor: crosshair;
+}
+
+.animation-page .pet-look-stage::before,
+.animation-page .pet-look-stage::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  background: var(--anim-line);
+  opacity: 0.72;
+}
+
+.animation-page .pet-look-stage::before {
+  width: 1px;
+  height: 100%;
+  left: 50%;
+}
+
+.animation-page .pet-look-stage::after {
+  width: 100%;
+  height: 1px;
+  top: 50%;
+}
+
+.animation-page .pet-look-stage .pet-sprite {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 8px 12px rgba(34, 38, 43, 0.12));
+}
+
 .animation-page .idle-sprite-preview.reset {
   grid-template-rows: 1fr;
 }

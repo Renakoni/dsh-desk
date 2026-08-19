@@ -8,8 +8,8 @@
  *   1. inspect(zipPath)  — main validates the package and returns the staged
  *      manifest, derived geometry, the sheet bytes as a data URL, and the
  *      SHA-256 of the entire archive;
- *   2. the renderer decodes the sheet and runs scanRowFrameCounts();
- *   3. install(zipPath, rowFrameCounts, packageSha256) — main revalidates
+ *   2. the renderer decodes the sheet and scans row counts + cell visibility;
+ *   3. install(zipPath, scan, packageSha256) — main revalidates
  *      the same zip, rejects it if the archive changed in any way since
  *      inspection (sheet OR manifest), and persists the pack under
  *      userData/pets/<id>/.
@@ -21,6 +21,7 @@
  */
 
 import type { CodexPetManifest, PetPackManifest, PetPackProblem, SheetGeometry } from "./petPack";
+import type { PetPackScanResult } from "./petPackScan";
 
 export interface StagedPetPack {
   manifest: CodexPetManifest;
@@ -39,6 +40,8 @@ export type PetPackInspectResult =
 export type PetPackInstallResult =
   | { ok: true; pack: PetPackManifest; warning?: string }
   | { ok: false; problems: PetPackProblem[] };
+
+export type PetPackInstallScan = number[] | PetPackScanResult;
 
 export interface PetPackRemoveResult {
   ok: boolean;

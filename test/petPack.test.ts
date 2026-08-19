@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODEX_PET_COLUMNS,
   CODEX_PET_FRAME_DURATION_MS,
+  CODEX_PET_LOOK_DIRECTIONS,
   CODEX_PET_ROWS,
   CODEX_ROW_TO_ANIMATION_KEY,
   buildPetPackManifest,
@@ -95,7 +96,8 @@ describe("parseCodexPetManifest", () => {
         id: "yuexinmiao",
         displayName: "月薪喵",
         description: "A small white office cat mascot adapted as a Codex pet.",
-        spritesheetPath: "spritesheet.webp"
+        spritesheetPath: "spritesheet.webp",
+        spriteVersionNumber: 1
       }
     });
   });
@@ -106,6 +108,15 @@ describe("parseCodexPetManifest", () => {
     if (!parsed.ok) return;
     expect(parsed.value.description).toBe("");
     expect(parsed.value.spritesheetPath).toBe("spritesheet.webp");
+    expect(parsed.value.spriteVersionNumber).toBe(1);
+  });
+
+  it("accepts v2 explicitly and rejects unknown sprite versions", () => {
+    const v2 = parseCodexPetManifest({ id: "dpsk-girl", displayName: "DPSK Girl", spriteVersionNumber: 2 });
+    expect(v2.ok && v2.value.spriteVersionNumber).toBe(2);
+    const unknown = parseCodexPetManifest({ id: "future", displayName: "Future", spriteVersionNumber: 3 });
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.problems[0].field).toBe("spriteVersionNumber");
   });
 
   it("sanitizes the id and accepts .png sheets", () => {
@@ -156,6 +167,15 @@ describe("deriveSheetGeometry", () => {
       ok: true,
       value: { width: 1536, height: 1872, columns: 8, rows: 9, cellWidth: 192, cellHeight: 208 }
     });
+  });
+
+  it("derives the v2 8x11 grid and rejects version/dimension mismatches", () => {
+    expect(deriveSheetGeometry(1536, 2288, 2)).toEqual({
+      ok: true,
+      value: { width: 1536, height: 2288, columns: 8, rows: 11, cellWidth: 192, cellHeight: 208 }
+    });
+    expect(deriveSheetGeometry(1536, 1872, 2).ok).toBe(false);
+    expect(deriveSheetGeometry(1536, 2288, 1).ok).toBe(false);
   });
 
   it("supports smaller sheets as long as the grid divides exactly", () => {
@@ -224,6 +244,51 @@ describe("buildPetPackManifest", () => {
       done: "jumping",
       error: "failed"
     });
+  });
+
+  it("builds a v2 pack with a complete look grid and keeps neutral out of idle", () => {
+    const manifest = parseCodexPetManifest({ id: "dpsk-girl", displayName: "DPSK Girl", spriteVersionNumber: 2 });
+    const geometry = deriveSheetGeometry(1536, 2288, 2);
+    if (!manifest.ok || !geometry.ok) throw new Error("v2 fixtures must parse");
+    const built = buildPetPackManifest({
+      manifest: manifest.value,
+      geometry: geometry.value,
+      rowFrameCounts: {
+        rowFrameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8],
+        visibleCellMasks: [127, 255, 255, 15, 31, 255, 63, 63, 63, 255, 255]
+      }
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(built.value.sourceFormat).toBe("codex-pet-v2");
+    expect(built.value.spriteVersionNumber).toBe(2);
+    expect(built.value.animations.find(animation => animation.key === "idle")?.frameCount).toBe(6);
+    expect(built.value.look).toEqual({
+      directions: CODEX_PET_LOOK_DIRECTIONS,
+      startRow: 9,
+      columns: 8,
+      neutralFrame: { row: 0, column: 6 }
+    });
+    expect(built.value.animations.every(animation => animation.row < 9)).toBe(true);
+  });
+
+  it("requires every v2 look cell and the neutral frame", () => {
+    const manifest = parseCodexPetManifest({ id: "v2", displayName: "V2", spriteVersionNumber: 2 });
+    const geometry = deriveSheetGeometry(1536, 2288, 2);
+    if (!manifest.ok || !geometry.ok) throw new Error("v2 fixtures must parse");
+    const base = { rowFrameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8], visibleCellMasks: [127, 255, 255, 15, 31, 255, 63, 63, 63, 255, 255] };
+    const missingDirection = buildPetPackManifest({
+      manifest: manifest.value,
+      geometry: geometry.value,
+      rowFrameCounts: { ...base, visibleCellMasks: base.visibleCellMasks.map((mask, row) => row === 9 ? 253 : mask) }
+    });
+    expect(missingDirection.ok).toBe(false);
+    const missingNeutral = buildPetPackManifest({
+      manifest: manifest.value,
+      geometry: geometry.value,
+      rowFrameCounts: { ...base, visibleCellMasks: base.visibleCellMasks.map((mask, row) => row === 0 ? 63 : mask) }
+    });
+    expect(missingNeutral.ok).toBe(false);
   });
 
   it("omits empty rows and falls back through the role chains", () => {

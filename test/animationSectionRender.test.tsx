@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnimationSection } from "../src/renderer/clawd-migrated/features/animation/AnimationSection";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 import { defaultSettings } from "../src/renderer/shared/events";
 import { catalogFromPetPack } from "../src/shared/petThemeCatalog";
-import { makePackManifest } from "./helpers/packFixtures";
+import { spritesheetAssetsFromPack } from "../src/shared/petPackAssets";
+import { spriteFramePosition } from "../src/shared/spriteFrame";
+import { makePackManifest, makeV2PackManifest } from "./helpers/packFixtures";
 
 const packCatalog = catalogFromPetPack(makePackManifest());
 
@@ -98,5 +100,22 @@ describe("imported-theme Animation page localization", () => {
     expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-width"))).toBeCloseTo(13.913, 3);
     expect(Array.from(inputs, input => input.step)).toEqual(["1", "1"]);
     expect(intervalTrack.querySelector(".range-fill-boundary > .range-fill")).toBeTruthy();
+  });
+
+  it("adds one interactive 16-direction preview for v2 packs", () => {
+    const pack = makeV2PackManifest();
+    const view = render(
+      <I18nProvider initialLocale="en">
+        <AnimationSection active settings={settings} updateSettings={vi.fn()} catalog={catalogFromPetPack(pack)} spritesheet={spritesheetAssetsFromPack(pack)} />
+      </I18nProvider>
+    );
+    expect(screen.getByText("Pointer look")).toBeTruthy();
+    expect(screen.getByText("v2 · 16 directions")).toBeTruthy();
+    const stage = screen.getByLabelText("16-direction pointer look preview");
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 200, height: 200, right: 200, bottom: 200, x: 0, y: 0, toJSON: () => ({}) });
+    act(() => { stage.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 200, clientY: 100 })); });
+    const sprite = view.container.querySelector<HTMLElement>(".pet-look-stage .pet-sprite");
+    const position = spriteFramePosition(4, 9, 8, 11);
+    expect(sprite?.style.backgroundPosition).toBe(`${position.xPercent}% ${position.yPercent}%`);
   });
 });
