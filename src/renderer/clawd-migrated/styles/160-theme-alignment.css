@@ -363,6 +363,17 @@
   background: var(--anim-surface-raised);
 }
 
+.animation-page .animation-summary-row-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.animation-page .animation-timing-note {
+  margin: -3px 2px 0;
+  color: var(--anim-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .animation-page .animation-stat {
   min-height: 58px;
   border-right-color: var(--anim-line);

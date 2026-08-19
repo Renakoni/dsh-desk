@@ -1133,8 +1133,13 @@
 
 .dsh-plugins-page .dsh-plugin-search svg { color: var(--settings-muted); }
 .dsh-plugins-page .dsh-plugin-search input,
-.dsh-plugins-page .dsh-plugin-search input:focus {
-  min-height: 36px;
+.dsh-plugins-page .dsh-plugin-search input:focus,
+.dsh-plugins-page .dsh-plugin-search input:focus-visible {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
   color: var(--settings-ink);
   background: transparent;
   font-size: 12px;

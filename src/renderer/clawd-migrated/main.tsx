@@ -17,6 +17,7 @@ import {
   Minus,
   MonitorCheck,
   MousePointer2,
+  Palette,
   PlugZap,
   Radio,
   Search,
@@ -44,6 +45,7 @@ import { SettingsSection } from "./features/settings/SettingsSection";
 import { AnimationSection } from "./features/animation/AnimationSection";
 import { DataSection } from "./features/data/DataSection";
 import { PluginsPage } from "./components/plugins/PluginsPage";
+import { DshAppearancePage } from "./components/appearance/DshAppearancePage";
 import { connectionSurfaceKey } from "./features/overview/connectionState";
 import { useConnectionSurface } from "./features/overview/useConnectionSurface";
 import { petAnimationAssets } from "./utils/petAnimationAssets";
@@ -202,8 +204,8 @@ function PetApp() {
     }
   }
 
-  // 随机动作只在待机间隔结束后短暂播放；动画测试会暂停调度，
-  // 避免预览结束时突然露出后台已经推进到一半的动作。
+  // 随机动作在待机期间持续轮换；动画测试会暂停调度，避免预览
+  // 结束时突然露出后台已经切换过的动作。
   useEffect(() => {
     setIdleAnimConfig(previous => keepIdleAnimationConfigReference(previous, settings.idleAnim ?? null));
   }, [settings.idleAnim]);
@@ -901,6 +903,7 @@ function SettingsApp() {
         {[
           { id: "general", icon: <Gauge size={16} />, label: t("settings.tabs.general", "总览") },
           { id: "animation", icon: <Wand2 size={16} />, label: t("settings.tabs.animation", "动画") },
+          { id: "themes", icon: <Palette size={16} />, label: t("settings.tabs.themes", "外观") },
           { id: "plugins", icon: <PlugZap size={16} />, label: t("settings.tabs.plugins", "插件") },
           { id: "data", icon: <FileText size={16} />, label: t("settings.tabs.data", "数据") },
           { id: "settings", icon: <Wrench size={16} />, label: t("settings.tabs.settings", "设置") }
@@ -953,7 +956,6 @@ function SettingsApp() {
               checkingUpdate={checkingUpdate}
               handleCheckUpdate={handleCheckUpdate}
               petPacks={petPacks}
-              refreshPetPacks={refreshPetPacks}
             />
           </div>
         )}
@@ -967,6 +969,18 @@ function SettingsApp() {
         {(activeSection === "plugins" || backgroundSectionsMounted) && (
           <div style={{ display: activeSection === "plugins" ? "contents" : "none" }} aria-hidden={activeSection !== "plugins"}>
             <PluginsPage active={activeSection === "plugins"} hideSensitiveContent={settings.hideSensitiveContent} />
+          </div>
+        )}
+
+        {(activeSection === "themes" || backgroundSectionsMounted) && (
+          <div style={{ display: activeSection === "themes" ? "contents" : "none" }} aria-hidden={activeSection !== "themes"}>
+            <DshAppearancePage
+              active={activeSection === "themes"}
+              settings={settings}
+              updateSettings={stableUpdateSettings}
+              petPacks={petPacks}
+              refreshPetPacks={refreshPetPacks}
+            />
           </div>
         )}
 

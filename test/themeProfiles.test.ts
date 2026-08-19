@@ -8,7 +8,7 @@ const BUILTIN = "minato-aqua";
 const packs = [makePackManifest()];
 
 const aquaMappings = { running: "extra_action_7" };
-const aquaIdle = { enabled: true, selectedSprites: ["idle", "extra_action_8"], intervalMin: 10, intervalMax: 20, repeatMin: 1, repeatMax: 2 };
+const aquaIdle = { enabled: true, selectedSprites: ["idle", "extra_action_8"], intervalMin: 10, intervalMax: 20 };
 
 function builtinSettings() {
   return {
@@ -38,7 +38,7 @@ describe("applyThemeAnimationProfileSwitch", () => {
 
   it("restores a stored profile instead of defaults", () => {
     const packMappings = { jumping: "review" };
-    const packIdle = { enabled: false, selectedSprites: ["waving"], intervalMin: 5, intervalMax: 9, repeatMin: 2, repeatMax: 3 };
+    const packIdle = { enabled: false, selectedSprites: ["waving"], intervalMin: 5, intervalMax: 9 };
     const settings = {
       ...builtinSettings(),
       petTheme: PACK_THEME,

@@ -2,30 +2,23 @@ import { PetAnimationKey } from "../../shared/petAnimationKeys";
 import { MINATO_AQUA_CATALOG, normalizeMappableAnimationKeys, type PetThemeCatalog } from "../../shared/petThemeCatalog";
 
 // Random idle-animation rotation shared by the floating pet and settings
-// preview: wait in the theme's normal idle pose, play one pool member for a
-// random number of beats, then return to normal idle before the next batch.
+// preview: choose one pool member immediately, keep it running for a random
+// interval, then switch directly to the next pool member.
 //
 // The scheduler is React-free with injectable timers/rng so the choreography
 // is unit-testable with fake timers.
-
-export const IDLE_SPRITE_SHOW_MS = 2500;
-export const IDLE_SPRITE_GAP_MS = 1500;
 
 export interface IdleAnimationConfig {
   enabled?: boolean;
   selectedSprites?: string[];
   intervalMin?: number;
   intervalMax?: number;
-  repeatMin?: number;
-  repeatMax?: number;
 }
 
 export interface IdleAnimationPlan {
   pool: PetAnimationKey[];
   intervalMinMs: number;
   intervalMaxMs: number;
-  repeatMin: number;
-  repeatMax: number;
 }
 
 export function keepIdleAnimationConfigReference(
@@ -37,10 +30,6 @@ export function keepIdleAnimationConfigReference(
 
 function toSeconds(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
-}
-
-function toRepeat(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
 }
 
 // Turn the persisted config into a runnable plan, or null when rotation should
@@ -56,14 +45,10 @@ export function planIdleAnimation(
   if (pool.length === 0) return null;
   const intervalMin = toSeconds(config.intervalMin, 20);
   const intervalMax = Math.max(intervalMin, toSeconds(config.intervalMax, intervalMin));
-  const repeatMin = toRepeat(config.repeatMin, 1);
-  const repeatMax = Math.max(repeatMin, toRepeat(config.repeatMax, repeatMin));
   return {
     pool,
     intervalMinMs: intervalMin * 1000,
-    intervalMaxMs: intervalMax * 1000,
-    repeatMin,
-    repeatMax
+    intervalMaxMs: intervalMax * 1000
   };
 }
 
@@ -91,10 +76,6 @@ export function startIdleAnimator(
     timer = setTimeout(() => { if (!stopped) fn(); }, delayMs);
   }
 
-  function scheduleNext() {
-    schedule(playBatch, plan.intervalMinMs + rng() * (plan.intervalMaxMs - plan.intervalMinMs));
-  }
-
   function takeNextSprite(): PetAnimationKey {
     if (remainingSprites.length === 0) {
       remainingSprites = [...plan.pool];
@@ -108,28 +89,13 @@ export function startIdleAnimator(
     return sprite;
   }
 
-  function playBatch() {
-    const sprite = takeNextSprite();
-    const span = plan.repeatMax - plan.repeatMin;
-    const repeats = plan.repeatMin + (span > 0 ? Math.floor(rng() * (span + 1)) : 0);
-    let count = 0;
-    function show() {
-      display(sprite);
-      schedule(() => {
-        display(null);
-        count++;
-        if (count < repeats) {
-          schedule(show, IDLE_SPRITE_GAP_MS);
-        } else {
-          scheduleNext();
-        }
-      }, IDLE_SPRITE_SHOW_MS);
-    }
-    show();
+  function playNext() {
+    display(takeNextSprite());
+    const duration = plan.intervalMinMs + rng() * (plan.intervalMaxMs - plan.intervalMinMs);
+    schedule(playNext, duration);
   }
 
-  display(null);
-  scheduleNext();
+  playNext();
 
   return () => {
     stopped = true;

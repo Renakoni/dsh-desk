@@ -71,6 +71,18 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
       : snapshot.schemes[0]?.id ?? "");
   }, [snapshot.appliedSchemeId, snapshot.schemes]);
   useEffect(() => setQuery(""), [activeTab]);
+  useEffect(() => {
+    if (active) return;
+    setActiveTab("plugins");
+    setQuery("");
+    setSchemeQuery("");
+    setSchemeMenuOpen(false);
+    setNewMenuOpen(false);
+    setEditor(null);
+    setDeleteConfirm(false);
+    setMarketOpen(false);
+    setActionError(null);
+  }, [active]);
 
   const selectedScheme = snapshot.schemes.find(scheme => scheme.id === selectedSchemeId) ?? snapshot.schemes[0];
   const knownPluginIds = useMemo(() => [...new Set([

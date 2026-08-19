@@ -7,11 +7,15 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { agentErrorEvent, createBridge, sessionStartEvent } from './bridge.js'
+import { mountAppearanceManager } from './appearance-manager.js'
+
+export { mountAppearanceManager } from './appearance-manager.js'
 
 export const name = 'dsh-desk'
 export const inject = ['agents', 'sessions', 'approval', 'loader', 'skills']
 
 export const Config = Schema.object({
+  component: Schema.string().default('desk'),
   port: Schema.number().default(17321),
   eventTimeoutMs: Schema.number().default(800),
   permissionCreateTimeoutMs: Schema.number().default(5000),
@@ -466,6 +470,13 @@ function positiveSafeInteger(name, value, maximum = Number.MAX_SAFE_INTEGER) {
 }
 
 export async function apply(ctx, config) {
+  if (config.component === 'appearance-manager') {
+    ctx.inject(['webServer'], webContext => {
+      const webServer = typeof webContext.get === 'function' ? webContext.get('webServer') : undefined
+      if (webServer !== undefined) webContext.effect(() => mountAppearanceManager({ webServer, loader: ctx.loader }), 'dsh-appearance-manager: routes')
+    })
+    return
+  }
   positiveSafeInteger('port', config.port, 65535)
   positiveSafeInteger('eventTimeoutMs', config.eventTimeoutMs)
   positiveSafeInteger('permissionCreateTimeoutMs', config.permissionCreateTimeoutMs)

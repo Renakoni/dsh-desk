@@ -38,6 +38,7 @@ import type {
   DshResourceStateInput
 } from "../shared/dshResources";
 import { createEmptyDshResourceSchemesSnapshot } from "../shared/dshResources";
+import type { DshSkinMarketInstallResult, DshSkinMarketplaceSnapshot, DshSkinMutationInput, DshSkinMutationResult } from "../shared/dshSkins";
 import {
   defaultSettings,
   defaultStats,
@@ -138,6 +139,9 @@ type CompanionApi = {
   addDshSkillRepo: (repo: DshSkillRepo) => Promise<DshSkillRepoMutationResult>;
   removeDshSkillRepo: (owner: string, name: string) => Promise<DshSkillRepoMutationResult>;
   installDshSkill: (skill: DshMarketplaceSkill) => Promise<DshSkillInstallResult>;
+  getDshSkinMarketplace: (force?: boolean) => Promise<DshSkinMarketplaceSnapshot>;
+  installDshSkinMarketplace: () => Promise<DshSkinMarketInstallResult>;
+  mutateDshSkin: (input: DshSkinMutationInput) => Promise<DshSkinMutationResult>;
   revealDshSkill: (path: string) => Promise<boolean>;
   getClaudeResources: (force?: boolean) => Promise<ClaudeResourcesSnapshot>;
   getClaudeProfiles: (force?: boolean) => Promise<ClaudeProfilesSnapshot>;
@@ -431,6 +435,30 @@ let mockDshSkillMarketplace: DshSkillMarketplaceSnapshot = {
   }],
   scannedAt: Date.now(),
   errors: []
+};
+const mockDshSkinMarketplace: DshSkinMarketplaceSnapshot = {
+  skins: [{
+    id: "demo.ocean",
+    name: { zh: "深海", en: "Deep Ocean" },
+    author: "demo",
+    description: "为 DSH Web 提供清晰的深色海洋界面。",
+    repositoryUrl: "https://github.com/demo/dsh-ocean-skin",
+    packageName: "dsh-ocean-skin",
+    rowId: "dsh-ocean-skin",
+    tags: ["ocean", "dark"],
+    modes: ["dark"],
+    install: { target: "github:demo/dsh-ocean-skin#1234567890123456789012345678901234567890", version: "1.0.0", commit: "1234567890123456789012345678901234567890" },
+    compatibility: { dsh: "^0.1.0", platform: ["web"] },
+    screenshots: ["https://picsum.photos/seed/dsh-ocean/960/540"],
+    review: { compatibility: "verified", preview: "verified", installation: "verified" },
+    license: { code: "MIT", commercialUse: true },
+    stars: 128,
+    updatedAt: "2026-08-17T00:00:00.000Z"
+  }],
+  generatedAt: "2026-08-17T00:00:00.000Z",
+  catalogSource: "remote",
+  catalogCheckedAt: Date.now(),
+  host: { connected: false, marketInstalled: false, skins: [], restartAvailable: false, runningAgentCount: null }
 };
 
 const settingsListeners = new Set<Listener<CompanionSettings>>();
@@ -872,6 +900,20 @@ export function installClawdCompat() {
       mockDshSkillMarketplace = { ...mockDshSkillMarketplace, skills: mockDshSkillMarketplace.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) };
       return { ok: true, snapshot: mockDshSkills };
     },
+    getDshSkinMarketplace: async () => mockDshSkinMarketplace,
+    installDshSkinMarketplace: async () => ({ ok: true, restartRequired: true, snapshot: { ...mockDshSkinMarketplace, host: { ...mockDshSkinMarketplace.host, marketInstalled: true } } }),
+    mutateDshSkin: async input => ({
+      ok: true,
+      snapshot: {
+        ...mockDshSkinMarketplace,
+        host: {
+          ...mockDshSkinMarketplace.host,
+          connected: true,
+          marketInstalled: true,
+          skins: [{ skinId: input.skinId, installation: "installed", activation: input.action === "activate" ? "active" : "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
+        }
+      }
+    }),
     revealDshSkill: async () => true,
     getClaudeResources: async () => ({ summary: { skills: 0, plugins: 0, mcp: 0 }, skills: [], plugins: [], mcp: [], scannedAt: Date.now(), paths: { claudeDir: "~/.claude", claudeJson: "~/.claude.json" } }),
     getClaudeProfiles: async () => mockClaudeProfiles,

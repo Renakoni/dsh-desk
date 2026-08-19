@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Clock3, FlaskConical, Repeat2, RotateCcw, Shuffle, Sparkles, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Clock3, FlaskConical, RotateCcw, Shuffle, Sparkles, Wand2, X } from "lucide-react";
 import type { CompanionSettings, IdleAnimConfig } from "../../../shared/events";
 import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
@@ -81,11 +81,11 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
         <SwitchButton checked={config.enabled} onChange={enabled => onChange({ ...config, enabled })} label={t("data.enableIdleRandom", "启用待机随机动画")} />
       </section>
 
-      <div className="animation-summary-row">
+      <div className="animation-summary-row animation-summary-row-compact">
         <AnimationStat label={t("animation.pool", "动画池")} value={`${selectedSprites.length}/${options.length}`} />
-        <AnimationStat icon={<Clock3 size={14} />} label={t("data.playInterval", "播放间隔")} value={formatRange(config.intervalMin, config.intervalMax, value => `${value}s`)} />
-        <AnimationStat icon={<Repeat2 size={14} />} label={t("data.repeatCount", "每次播放")} value={formatRange(config.repeatMin, config.repeatMax, value => `${value}x`)} />
+        <AnimationStat icon={<Clock3 size={14} />} label={t("data.playInterval", "动作切换间隔")} value={formatRange(config.intervalMin, config.intervalMax, value => `${value}s`)} />
       </div>
+      <p className="animation-timing-note">{t("data.idleAnimationTimingNote", "当前动作会在随机间隔内持续循环；计时结束后直接切换到下一个动作，不会强制插入待机。")}</p>
 
       <section className="animation-section-block">
         <SectionHead title={t("data.optionalPool", "可选动画池")} meta={t("animation.selectedCount", "已选 {count}").replace("{count}", String(selectedSprites.length))} />
@@ -105,7 +105,7 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
 
       <section className="animation-section-block animation-ranges">
         <RangeSlider
-          label={t("data.playInterval", "播放间隔")}
+          label={t("data.playInterval", "动作切换间隔")}
           min={5}
           max={120}
           step={5}
@@ -113,16 +113,6 @@ function IdleAnimSettings({ config, onChange, catalog, options, spritesheet }: {
           high={config.intervalMax}
           format={value => `${value} ${t("common.seconds", "秒")}`}
           onChange={(low, high) => onChange({ ...config, intervalMin: low, intervalMax: high })}
-        />
-        <RangeSlider
-          label={t("data.repeatCount", "每次播放次数")}
-          min={1}
-          max={5}
-          step={1}
-          low={config.repeatMin}
-          high={config.repeatMax}
-          format={value => `${value} ${t("common.times", "次")}`}
-          onChange={(low, high) => onChange({ ...config, repeatMin: low, repeatMax: high })}
         />
       </section>
     </div>
@@ -449,8 +439,6 @@ function idleAnimEqual(a: any, b: any) {
   return a.enabled === b.enabled
     && a.intervalMin === b.intervalMin
     && a.intervalMax === b.intervalMax
-    && a.repeatMin === b.repeatMin
-    && a.repeatMax === b.repeatMax
     && arraysEqual(a.selectedSprites, b.selectedSprites);
 }
 

@@ -94,6 +94,16 @@ describe("PetThemeGrid rendering", () => {
     // Not nested inside the selection button.
     expect(remove.closest("button.pet-theme-card")).toBeNull();
   });
+
+  it("keeps the gallery command before the card list", () => {
+    const view = renderGrid();
+    const command = view.container.querySelector(".pet-install-by-id");
+    const grid = view.container.querySelector(".pet-theme-grid");
+    expect(command).toBeTruthy();
+    expect(grid).toBeTruthy();
+    expect(Boolean(command!.compareDocumentPosition(grid!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(grid!.querySelector(".pet-theme-card strong")?.textContent).toBe("Import pet");
+  });
 });
 
 describe("PetThemeGrid removal", () => {

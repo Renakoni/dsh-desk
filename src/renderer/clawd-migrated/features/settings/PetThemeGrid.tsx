@@ -195,51 +195,6 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
 
   return (
     <>
-      <div className="pet-theme-grid" onDragOver={event => event.preventDefault()} onDrop={beginImportFromDrop}>
-        {listPetThemes(petPacks).map(theme => {
-          const packId = packIdFromThemeId(theme.id);
-          const pack = packId ? petPacks.find(candidate => candidate.id === packId) : undefined;
-          const armed = armedRemoveId === theme.id;
-          return (
-            <div
-              key={theme.id}
-              className="pet-theme-card-wrap"
-              onKeyDown={event => { if (event.key === "Escape") disarm(); }}
-            >
-              <button
-                type="button"
-                className={`pet-theme-card ${activeThemeId === theme.id ? "active" : ""}`}
-                onClick={() => { disarm(); onSelectTheme(theme.id); }}
-              >
-                {pack ? <PackThemeCover pack={pack} /> : <img src={builtinCovers[theme.id]} alt="" draggable={false} />}
-                <span className="pet-theme-card-copy">
-                  <strong>{theme.displayName}</strong>
-                  <small>{pack ? t("petImport.importedTheme", "导入宠物") : theme.characterName}</small>
-                </span>
-              </button>
-              {pack ? (
-                <button
-                  type="button"
-                  className={`pet-theme-remove ${armed ? "armed" : ""}`}
-                  disabled={removingId !== null}
-                  aria-label={armed ? t("petImport.removeConfirm", "再次点击确认移除") : t("petImport.remove", "移除")}
-                  onClick={() => void handleRemove(theme)}
-                  onBlur={() => { if (armed) disarm(); }}
-                >
-                  {armed ? <span className="pet-theme-remove-label">{t("petImport.removeArmedLabel", "确认移除")}</span> : <Trash2 size={13} />}
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
-        <button type="button" className="pet-theme-card pet-theme-import-card" onClick={() => void beginImportFromPicker()}>
-          <span className="pet-theme-import-mark"><Plus size={22} /></span>
-          <span className="pet-theme-card-copy">
-            <strong>{t("petImport.importCard", "导入宠物")}</strong>
-            <small>{t("petImport.importHint", "codex-pet 宠物包 (.zip)")}</small>
-          </span>
-        </button>
-      </div>
       <div className="pet-install-by-id">
         <span className="pet-install-command">
           <Terminal size={13} aria-hidden="true" />
@@ -283,6 +238,51 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
           {notice.detail ? <small className="pet-theme-notice-detail">{notice.detail}</small> : null}
         </p>
       ) : null}
+      <div className="pet-theme-grid" onDragOver={event => event.preventDefault()} onDrop={beginImportFromDrop}>
+        <button type="button" className="pet-theme-card pet-theme-import-card" onClick={() => void beginImportFromPicker()}>
+          <span className="pet-theme-import-mark"><Plus size={22} /></span>
+          <span className="pet-theme-card-copy">
+            <strong>{t("petImport.importCard", "导入宠物")}</strong>
+            <small>{t("petImport.importHint", "codex-pet 宠物包 (.zip)")}</small>
+          </span>
+        </button>
+        {listPetThemes(petPacks).map(theme => {
+          const packId = packIdFromThemeId(theme.id);
+          const pack = packId ? petPacks.find(candidate => candidate.id === packId) : undefined;
+          const armed = armedRemoveId === theme.id;
+          return (
+            <div
+              key={theme.id}
+              className="pet-theme-card-wrap"
+              onKeyDown={event => { if (event.key === "Escape") disarm(); }}
+            >
+              <button
+                type="button"
+                className={`pet-theme-card ${activeThemeId === theme.id ? "active" : ""}`}
+                onClick={() => { disarm(); onSelectTheme(theme.id); }}
+              >
+                {pack ? <PackThemeCover pack={pack} /> : <img src={builtinCovers[theme.id]} alt="" draggable={false} />}
+                <span className="pet-theme-card-copy">
+                  <strong>{theme.displayName}</strong>
+                  <small>{pack ? t("petImport.importedTheme", "导入宠物") : theme.characterName}</small>
+                </span>
+              </button>
+              {pack ? (
+                <button
+                  type="button"
+                  className={`pet-theme-remove ${armed ? "armed" : ""}`}
+                  disabled={removingId !== null}
+                  aria-label={armed ? t("petImport.removeConfirm", "再次点击确认移除") : t("petImport.remove", "移除")}
+                  onClick={() => void handleRemove(theme)}
+                  onBlur={() => { if (armed) disarm(); }}
+                >
+                  {armed ? <span className="pet-theme-remove-label">{t("petImport.removeArmedLabel", "确认移除")}</span> : <Trash2 size={13} />}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       {importZipPath ? (
         <PetImportDialog
           zipPath={importZipPath}

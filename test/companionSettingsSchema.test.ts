@@ -128,4 +128,23 @@ describe("pickCanonicalSettings", () => {
       "malformed-entry"
     ]);
   });
+
+  it("removes retired repeat fields from active and per-theme idle animation settings", () => {
+    const picked = pickCanonicalSettings({
+      idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 12, intervalMax: 28, repeatMin: 2, repeatMax: 4 },
+      themeAnimationProfiles: {
+        "minato-aqua": {
+          stateAnimations: {},
+          idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 8, intervalMax: 16, repeatMin: 1, repeatMax: 3 }
+        }
+      }
+    });
+    expect(picked.idleAnim).toEqual({ enabled: true, selectedSprites: ["idle"], intervalMin: 12, intervalMax: 28 });
+    expect((picked.themeAnimationProfiles as any)["minato-aqua"].idleAnim).toEqual({
+      enabled: true,
+      selectedSprites: ["idle"],
+      intervalMin: 8,
+      intervalMax: 16
+    });
+  });
 });

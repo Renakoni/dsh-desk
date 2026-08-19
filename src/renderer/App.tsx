@@ -302,8 +302,8 @@ export default function App() {
   const petState: PetState = activePermission ? "permission-prompt" : state;
 
   // Random idle rotation runs only while the pet is actually idling. Preview
-  // and drag animations pause it so their end cannot reveal a batch that
-  // advanced while hidden.
+  // and drag animations pause it so their end cannot reveal a rotation that
+  // advanced while hidden; the selected action stays mounted until switching.
   useEffect(() => {
     if (petState !== "idle" || previewAnimation || dragDirection) {
       setIdleAnimation(null);

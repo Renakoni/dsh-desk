@@ -30,9 +30,7 @@ function defaultIdleAnimFor(theme: string, packs: readonly PetPackManifest[]): u
       enabled: true,
       selectedSprites: defaultIdlePool(pack.animations),
       intervalMin: 12,
-      intervalMax: 28,
-      repeatMin: 1,
-      repeatMax: 2
+      intervalMax: 28
     };
   }
   return JSON.parse(JSON.stringify(DEFAULT_COMPANION_SETTINGS.idleAnim)) as unknown;

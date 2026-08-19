@@ -12,7 +12,7 @@ const packCatalog = catalogFromPetPack(makePackManifest());
 
 const settings = {
   ...defaultSettings,
-  idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 10, intervalMax: 20, repeatMin: 1, repeatMax: 2 },
+  idleAnim: { enabled: true, selectedSprites: ["idle"], intervalMin: 10, intervalMax: 20 },
   stateAnimations: {}
 };
 
@@ -91,10 +91,10 @@ describe("imported-theme Animation page localization", () => {
   it("aligns range fills to the slider thumb travel area", () => {
     const view = renderSection("en");
     const tracks = view.container.querySelectorAll<HTMLElement>(".range-track");
-    const repeatTrack = tracks[1];
+    const intervalTrack = tracks[0];
 
-    expect(repeatTrack.style.getPropertyValue("--range-left")).toBe("0%");
-    expect(repeatTrack.style.getPropertyValue("--range-width")).toBe("25%");
-    expect(repeatTrack.querySelector(".range-fill-boundary > .range-fill")).toBeTruthy();
+    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-left"))).toBeCloseTo(4.3478, 3);
+    expect(Number.parseFloat(intervalTrack.style.getPropertyValue("--range-width"))).toBeCloseTo(8.6957, 3);
+    expect(intervalTrack.querySelector(".range-fill-boundary > .range-fill")).toBeTruthy();
   });
 });

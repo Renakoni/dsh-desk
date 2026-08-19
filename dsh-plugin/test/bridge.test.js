@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { afterEach, describe, it } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import {
@@ -18,6 +19,7 @@ import {
   createAgentSkillPolicy,
   createPluginPackageController,
   loaderInventory,
+  mountAppearanceManager,
   runtimeEntryOwners,
 } from '../src/index.js'
 
@@ -55,6 +57,24 @@ async function listen(handler) {
   servers.add(server)
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   return { server, port: server.address().port }
+}
+
+async function invokeRoute(route, { method = 'GET', path = route.path, body, origin = 'http://127.0.0.1:3080' } = {}) {
+  const request = Readable.from(body === undefined ? [] : [JSON.stringify(body)])
+  request.method = method
+  request.url = path
+  request.headers = { origin, host: '127.0.0.1:3080' }
+  return new Promise((resolve, reject) => {
+    const response = {
+      writeHead(status) { this.status = status },
+      end(value = '') {
+        let parsed = null
+        try { parsed = value ? JSON.parse(String(value)) : null } catch { parsed = value }
+        resolve({ status: this.status, body: parsed })
+      },
+    }
+    Promise.resolve(route.handler(request, response)).catch(reject)
+  })
 }
 
 function config(port) {
@@ -270,6 +290,183 @@ describe('DSH Desk loopback transport', () => {
 })
 
 describe('DSH Loader inventory bridge', () => {
+  it('mounts the built-in appearance manager under its own Host route namespace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(profile, { recursive: true })
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+    })
+    assert.deepEqual(routes.map(route => route.path), [
+      '/dsh-appearance-manager/state',
+      '/dsh-appearance-manager/install',
+      '/dsh-appearance-manager/activate',
+      '/dsh-appearance-manager/deactivate',
+      '/dsh-appearance-manager/update',
+      '/dsh-appearance-manager/uninstall',
+      '/dsh-appearance-manager/operations',
+    ])
+    dispose()
+  })
+
+  it('reports and repairs a dependency whose theme package is incomplete', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-broken-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'demo-skin')
+    mkdirSync(packageDir, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'demo-skin': 'github:demo/skin#1234567890123456789012345678901234567890' },
+    }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'demo.skin': { active: true, packageName: 'demo-skin', version: '1.0.0' } },
+    }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const calls = []
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async (profileName, args) => {
+        calls.push([profileName, args])
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const stateRoute = routes.find(route => route.path === '/dsh-appearance-manager/state')
+    const state = await invokeRoute(stateRoute)
+    assert.equal(state.body.skins[0].installation, 'broken')
+
+    const installRoute = routes.find(route => route.path === '/dsh-appearance-manager/install')
+    const started = await invokeRoute(installRoute, { method: 'POST', body: {
+      skin: {
+        id: 'demo.skin',
+        packageName: 'demo-skin',
+        rowId: 'demo-skin',
+        install: { target: 'github:demo/skin#1234567890123456789012345678901234567890', version: '1.0.0' },
+      },
+    }})
+    assert.equal(started.status, 202)
+    const operations = routes.find(route => route.kind === 'prefix')
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(calls, [['web', ['add', 'github:demo/skin#1234567890123456789012345678901234567890']]])
+    dispose()
+  })
+
+  it('only disables appearance entries in the same activation group', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-mutual-exclusion-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const localPackage = join(profile, 'node_modules', 'local-theme')
+    const catalogPackage = join(profile, 'node_modules', 'catalog-theme')
+    const alternatePackage = join(profile, 'node_modules', 'alternate-theme')
+    const featurePackage = join(profile, 'node_modules', 'dsh-file-upload')
+    const fontsPackage = join(profile, 'node_modules', 'dsh-fonts')
+    mkdirSync(localPackage, { recursive: true })
+    mkdirSync(catalogPackage, { recursive: true })
+    mkdirSync(alternatePackage, { recursive: true })
+    mkdirSync(featurePackage, { recursive: true })
+    mkdirSync(fontsPackage, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'local-theme': 'github:demo/local-theme', 'catalog-theme': 'github:demo/catalog-theme', 'alternate-theme': 'github:demo/alternate-theme', 'dsh-file-upload': '1.0.0', 'dsh-fonts': '1.0.0' },
+      dsh: { profile: { bundles: ['local-theme', 'catalog-theme', 'alternate-theme', 'dsh-file-upload', 'dsh-fonts'] } },
+    }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'local:local-theme': { active: true, packageName: 'local-theme', version: '1.0.0', activationGroup: 'base-theme' } },
+    }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    writeFileSync(join(localPackage, 'package.json'), JSON.stringify({
+      name: 'local-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(localPackage, 'cordis.patch.yml'), '- insert:\n    - id: local-theme\n      name: local-theme\n')
+    writeFileSync(join(catalogPackage, 'package.json'), JSON.stringify({
+      name: 'catalog-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(catalogPackage, 'cordis.patch.yml'), '- insert:\n    - id: catalog-theme\n      name: catalog-theme\n')
+    writeFileSync(join(alternatePackage, 'package.json'), JSON.stringify({
+      name: 'alternate-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(alternatePackage, 'cordis.patch.yml'), '- insert:\n    - id: alternate-theme\n      name: alternate-theme\n')
+    writeFileSync(join(featurePackage, 'package.json'), JSON.stringify({
+      name: 'dsh-file-upload', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(featurePackage, 'cordis.patch.yml'), '- insert:\n    - id: dsh-file-upload\n      name: dsh-file-upload\n')
+    writeFileSync(join(fontsPackage, 'package.json'), JSON.stringify({
+      name: 'dsh-fonts', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(fontsPackage, 'cordis.patch.yml'), '- insert:\n    - id: dsh-fonts\n      name: dsh-fonts\n')
+    const updates = []
+    const fixture = loaderFixture([
+      { options: { id: 'local-theme', name: 'local-theme' }, update: async patch => { updates.push(['local-theme', patch]); } },
+      { options: { id: 'catalog-theme', name: 'catalog-theme' } },
+      { options: { id: 'alternate-theme', name: 'alternate-theme' } },
+      { options: { id: 'dsh-file-upload', name: 'dsh-file-upload' }, update: async patch => { updates.push(['dsh-file-upload', patch]); } },
+      { options: { id: 'dsh-fonts', name: 'dsh-fonts' }, update: async patch => { updates.push(['dsh-fonts', patch]); } },
+    ])
+    fixture.include.options.config.path = join(profile, 'cordis.patch.yml')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: fixture.loader,
+    })
+    const activate = routes.find(route => route.path === '/dsh-appearance-manager/activate')
+    const started = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme', activationGroup: 'base-theme' },
+      catalog: [
+        { id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme', activationGroup: 'base-theme' },
+        { id: 'alternate.skin', packageName: 'alternate-theme', rowId: 'alternate-theme', activationGroup: 'base-theme' },
+        { id: 'fonts', packageName: 'dsh-fonts', rowId: 'dsh-fonts' },
+      ],
+    } })
+    assert.equal(started.status, 202)
+    for (let attempt = 0; attempt < 20 && updates.length === 0; attempt += 1) await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(updates, [['local-theme', { disabled: true }]])
+    const disabledPatch = readFileSync(join(profile, 'cordis.patch.yml'), 'utf8')
+    assert.match(disabledPatch, /id: local-theme[\s\S]*disabled: true/)
+    assert.match(disabledPatch, /id: alternate-theme[\s\S]*disabled: true/)
+    assert.doesNotMatch(disabledPatch, /id: dsh-file-upload/)
+    assert.doesNotMatch(disabledPatch, /id: dsh-fonts/)
+
+    const operations = routes.find(route => route.kind === 'prefix')
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (result.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    const restored = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'local:local-theme', packageName: 'local-theme', rowId: 'local-theme', activationGroup: 'base-theme' },
+      catalog: [
+        { id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme', activationGroup: 'base-theme' },
+        { id: 'alternate.skin', packageName: 'alternate-theme', rowId: 'alternate-theme', activationGroup: 'base-theme' },
+        { id: 'fonts', packageName: 'dsh-fonts', rowId: 'dsh-fonts' },
+      ],
+    } })
+    assert.equal(restored.status, 202)
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${restored.body.operationId}` })
+      if (result.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    const restoredPatch = readFileSync(join(profile, 'cordis.patch.yml'), 'utf8')
+    assert.doesNotMatch(restoredPatch, /id: local-theme/)
+    assert.match(restoredPatch, /id: catalog-theme[\s\S]*disabled: true/)
+    assert.match(restoredPatch, /id: alternate-theme[\s\S]*disabled: true/)
+    assert.doesNotMatch(restoredPatch, /id: dsh-fonts/)
+    dispose()
+  })
+
   it('waits for the initial policy exchange before plugin startup settles', async () => {
     let release
     const { port } = await listen((_request, response) => {

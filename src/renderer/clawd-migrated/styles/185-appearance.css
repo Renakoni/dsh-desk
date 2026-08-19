@@ -1,0 +1,76 @@
+.appearance-page {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.appearance-page-head {
+  flex: 0 0 auto;
+}
+
+.appearance-page-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.appearance-page-content > .dsh-themes-page,
+.appearance-pet-library {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.appearance-pet-library {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.appearance-pet-library::-webkit-scrollbar {
+  display: none;
+}
+
+.appearance-library-header {
+  min-width: 0;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+}
+
+.appearance-library-header h2 {
+  margin: 0;
+  color: var(--settings-ink);
+  font-size: 20px;
+  font-weight: 730;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.appearance-library-header p {
+  margin: 3px 0 0;
+  color: var(--settings-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 720px) {
+  .appearance-page {
+    overflow: visible;
+  }
+
+  .appearance-page-content,
+  .appearance-pet-library {
+    height: auto;
+    overflow: visible;
+  }
+}
