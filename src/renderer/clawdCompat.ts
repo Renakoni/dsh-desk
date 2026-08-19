@@ -444,6 +444,7 @@ const mockDshSkinMarketplace: DshSkinMarketplaceSnapshot = {
     description: "为 DSH Web 提供清晰的深色海洋界面。",
     repositoryUrl: "https://github.com/demo/dsh-ocean-skin",
     packageName: "dsh-ocean-skin",
+    rowId: "dsh-ocean-skin",
     tags: ["ocean", "dark"],
     modes: ["dark"],
     install: { target: "github:demo/dsh-ocean-skin#1234567890123456789012345678901234567890", version: "1.0.0", commit: "1234567890123456789012345678901234567890" },

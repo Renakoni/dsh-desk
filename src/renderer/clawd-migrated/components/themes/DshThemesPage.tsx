@@ -41,8 +41,9 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
     });
   }, [snapshot]);
   const localInstalled = snapshot?.localSkins ?? [];
+  const canManageThemes = snapshot?.host.connected === true;
 
-  async function mutate(skin: DshSkinCatalogEntry, action: DshSkinAction) {
+  async function mutate(skin: Pick<DshSkinCatalogEntry, "id">, action: DshSkinAction) {
     setBusy(`${skin.id}:${action}`);
     setNotice(null);
     try {
@@ -117,10 +118,16 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
         {localInstalled.length > 0 ? <>
           <div className="dsh-theme-local-heading"><strong>{t("dshThemes.localThemes", "本地未收录主题")}</strong><span>{t("dshThemes.localThemesDetail", "这些主题保留在本机，不属于当前目录。", { count: localInstalled.length })}</span></div>
           <div className="dsh-theme-library-grid">{localInstalled.map(skin => (
-            <article key={skin.id} className="dsh-theme-library-card dsh-theme-local-card">
-              <div className="dsh-theme-library-preview"><div className="dsh-theme-preview-fallback"><Palette size={24} /><span>{t("dshThemes.notCatalogued", "未收录")}</span></div></div>
+            <article key={skin.id} className={`dsh-theme-library-card dsh-theme-local-card ${skin.active ? "active" : ""}`}>
+              <div className="dsh-theme-library-preview"><div className="dsh-theme-preview-fallback"><Palette size={24} /><span>{t("dshThemes.notCatalogued", "未收录")}</span></div>{skin.active ? <span className="dsh-theme-status active"><Check size={12} />{t("dshThemes.inUse", "使用中")}</span> : null}</div>
               <div className="dsh-theme-library-copy"><div><strong title={skin.name.en}>{locale === "zh" ? skin.name.zh : skin.name.en}</strong><span title={skin.author}>{skin.author}</span></div>{skin.repositoryUrl ? <button type="button" className="dsh-theme-repository-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl!)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={15} /></button> : null}</div>
-              <div className="dsh-theme-library-actions"><span className="dsh-theme-broken">{skin.broken ? t("dshThemes.broken", "安装不完整") : t("dshThemes.keptLocally", "仅保留在本机")}</span></div>
+              <div className="dsh-theme-library-actions">
+                <span className={skin.broken || !skin.rowId ? "dsh-theme-broken" : "dsh-theme-local-label"}>{skin.broken ? t("dshThemes.broken", "安装不完整") : !skin.rowId ? t("dshThemes.registrationMissing", "未找到主题入口") : t("dshThemes.keptLocally", "仅保留在本机")}</span>
+                {!skin.broken && skin.rowId ? skin.active
+                  ? <button type="button" disabled={!canManageThemes || busy?.startsWith(`${skin.id}:`) === true} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button>
+                  : <button type="button" className="primary" disabled={!canManageThemes || busy?.startsWith(`${skin.id}:`) === true} onClick={() => void mutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button>
+                  : null}
+              </div>
             </article>
           ))}</div>
         </> : null}

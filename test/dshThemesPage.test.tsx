@@ -13,6 +13,7 @@ const themes: DshSkinMarketplaceSnapshot["skins"] = [{
   description: "Ocean interface",
   repositoryUrl: "https://github.com/demo/ocean",
   packageName: "ocean-theme",
+  rowId: "ocean-theme",
   tags: ["ocean"],
   modes: ["dark"],
   install: { target: "github:demo/ocean#1234567890123456789012345678901234567890", version: "1.0.0", commit: "1234567890123456789012345678901234567890" },
@@ -29,6 +30,7 @@ const themes: DshSkinMarketplaceSnapshot["skins"] = [{
   description: "Paper interface",
   repositoryUrl: "https://github.com/demo/paper",
   packageName: "paper-theme",
+  rowId: "paper-theme",
   tags: ["light"],
   modes: ["light"],
   install: { target: "github:demo/paper#1234567890123456789012345678901234567890", version: "2.0.0", commit: "1234567890123456789012345678901234567890" },
@@ -122,11 +124,12 @@ describe("DshThemesPage", () => {
     expect(api.mutateDshSkin).not.toHaveBeenCalled();
   });
 
-  it("shows an installed theme outside the catalog without offering destructive controls", async () => {
-    renderPage({ ...snapshot(), localSkins: [{ id: "local:custom", packageName: "custom-theme", name: { zh: "本地主题", en: "Local theme" }, author: "local", description: "local", version: "1.0.0", repositoryUrl: null, active: false, broken: false }] });
+  it("can activate an installed theme outside the catalog without offering uninstall", async () => {
+    const api = renderPage({ ...snapshot(), localSkins: [{ id: "local:custom", packageName: "custom-theme", rowId: "custom-theme", name: { zh: "本地主题", en: "Local theme" }, author: "local", description: "local", version: "1.0.0", repositoryUrl: null, active: false, broken: false }] });
     await screen.findByText("本地未收录主题");
     expect(screen.getAllByText("本地主题").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "使用" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "使用" }));
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "local:custom", action: "activate" }));
     expect(screen.queryByRole("button", { name: "卸载" })).toBeNull();
   });
 });

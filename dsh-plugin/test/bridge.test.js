@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { afterEach, describe, it } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import {
@@ -56,6 +57,24 @@ async function listen(handler) {
   servers.add(server)
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   return { server, port: server.address().port }
+}
+
+async function invokeRoute(route, { method = 'GET', path = route.path, body, origin = 'http://127.0.0.1:3080' } = {}) {
+  const request = Readable.from(body === undefined ? [] : [JSON.stringify(body)])
+  request.method = method
+  request.url = path
+  request.headers = { origin, host: '127.0.0.1:3080' }
+  return new Promise((resolve, reject) => {
+    const response = {
+      writeHead(status) { this.status = status },
+      end(value = '') {
+        let parsed = null
+        try { parsed = value ? JSON.parse(String(value)) : null } catch { parsed = value }
+        resolve({ status: this.status, body: parsed })
+      },
+    }
+    Promise.resolve(route.handler(request, response)).catch(reject)
+  })
 }
 
 function config(port) {
@@ -290,6 +309,70 @@ describe('DSH Loader inventory bridge', () => {
       '/dsh-appearance-manager/uninstall',
       '/dsh-appearance-manager/operations',
     ])
+    dispose()
+  })
+
+  it('disables an installed uncatalogued client theme when activating a catalog theme', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-mutual-exclusion-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const localPackage = join(profile, 'node_modules', 'local-theme')
+    const catalogPackage = join(profile, 'node_modules', 'catalog-theme')
+    mkdirSync(localPackage, { recursive: true })
+    mkdirSync(catalogPackage, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'local-theme': 'github:demo/local-theme', 'catalog-theme': 'github:demo/catalog-theme' },
+      dsh: { profile: { bundles: ['local-theme', 'catalog-theme'] } },
+    }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    writeFileSync(join(localPackage, 'package.json'), JSON.stringify({
+      name: 'local-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(localPackage, 'cordis.patch.yml'), '- insert:\n    - id: local-theme\n      name: local-theme\n')
+    writeFileSync(join(catalogPackage, 'package.json'), JSON.stringify({
+      name: 'catalog-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(catalogPackage, 'cordis.patch.yml'), '- insert:\n    - id: catalog-theme\n      name: catalog-theme\n')
+    const updates = []
+    const fixture = loaderFixture([
+      { options: { id: 'local-theme', name: 'local-theme' }, update: async patch => { updates.push(['local-theme', patch]); } },
+      { options: { id: 'catalog-theme', name: 'catalog-theme' } },
+    ])
+    fixture.include.options.config.path = join(profile, 'cordis.patch.yml')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: fixture.loader,
+    })
+    const activate = routes.find(route => route.path === '/dsh-appearance-manager/activate')
+    const started = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme' },
+      catalog: [{ id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme' }],
+    } })
+    assert.equal(started.status, 202)
+    for (let attempt = 0; attempt < 20 && updates.length === 0; attempt += 1) await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(updates, [['local-theme', { disabled: true }]])
+    assert.match(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), /id: local-theme[\s\S]*disabled: true/)
+
+    const operations = routes.find(route => route.kind === 'prefix')
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (result.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    const restored = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'local:local-theme', packageName: 'local-theme', rowId: 'local-theme' },
+      catalog: [{ id: 'catalog.skin', packageName: 'catalog-theme', rowId: 'catalog-theme' }],
+    } })
+    assert.equal(restored.status, 202)
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${restored.body.operationId}` })
+      if (result.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    const restoredPatch = readFileSync(join(profile, 'cordis.patch.yml'), 'utf8')
+    assert.doesNotMatch(restoredPatch, /id: local-theme/)
+    assert.match(restoredPatch, /id: catalog-theme[\s\S]*disabled: true/)
     dispose()
   })
 

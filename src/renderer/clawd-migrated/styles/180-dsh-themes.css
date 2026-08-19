@@ -165,6 +165,7 @@
 .dsh-theme-library-actions button.danger,
 .dsh-theme-dialog-actions button.danger-quiet { color: #c24e44; }
 .dsh-theme-broken { margin-right: auto; color: #c24e44; font-size: 11px; }
+.dsh-theme-local-label { margin-right: auto; color: var(--settings-muted); font-size: 11px; }
 
 .dsh-theme-market-toolbar { min-width: 0; display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: center; gap: 9px; }
 .dsh-theme-search { min-width: 0; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--settings-line); border-radius: 8px; color: var(--settings-muted); background: var(--theme-surface); }

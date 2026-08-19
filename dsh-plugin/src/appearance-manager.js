@@ -89,6 +89,54 @@ function bundleOwnsRow(profileDir, skin) {
   } catch { return false }
 }
 
+function bundleRowIds(profileDir, packageName) {
+  const manifest = packageManifest(profileDir, packageName)
+  const patch = objectValue(objectValue(manifest?.dsh)?.bundle)?.patch
+  if (typeof patch !== 'string') return new Set()
+  try {
+    const value = parse(readFileSync(resolve(packageDir(profileDir, packageName), patch), 'utf8'))
+    const ids = new Set()
+    const visit = node => {
+      const row = objectValue(node)
+      if (!row || !Array.isArray(row.insert)) return
+      for (const child of row.insert) {
+        const childRow = objectValue(child)
+        if (childRow?.name === packageName && typeof childRow.id === 'string') ids.add(childRow.id)
+        visit(child)
+      }
+    }
+    if (Array.isArray(value)) for (const operation of value) visit(operation)
+    return ids
+  } catch { return new Set() }
+}
+
+function uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage) {
+  const knownPackages = new Set(Array.isArray(catalog)
+    ? catalog.flatMap(skin => typeof skin?.packageName === 'string' ? [skin.packageName] : [])
+    : [])
+  const entries = [...loader.entries()]
+  return Object.keys(dependencies(profileDir)).flatMap(packageName => {
+    if (packageName === selectedPackage || knownPackages.has(packageName) || packageName === 'dsh-desk-plugin' || packageName === 'dsh-skin-market' || packageName.startsWith('@deepseek-ai/')) return []
+    const manifest = packageManifest(profileDir, packageName)
+    if (objectValue(manifest?.dsh)?.client === undefined) return []
+    const rowIds = bundleRowIds(profileDir, packageName)
+    return entries.flatMap(entry => {
+      const options = objectValue(entry.options)
+      if (!options || typeof options.id !== 'string') return []
+      if (options.name !== packageName && !rowIds.has(options.id)) return []
+      return [{ packageName, rowId: options.id, entry }]
+    })
+  })
+}
+
+async function disableUncataloguedThemes(profileDir, loader, catalog, selectedPackage) {
+  for (const theme of uncataloguedThemeEntries(profileDir, loader, catalog, selectedPackage)) {
+    ensureRegistration(profileDir, theme, true)
+    if (theme.entry.options?.disabled === true || typeof theme.entry.update !== 'function') continue
+    await theme.entry.update({ disabled: true }, false, true)
+  }
+}
+
 function updateProfileManifest(profileDir, packageName, enabled) {
   const manifest = profileManifest(profileDir)
   const dsh = objectValue(manifest.dsh) ?? {}
@@ -166,9 +214,10 @@ function skinState(profileDir, skin, stored) {
 }
 
 class AppearanceManager {
-  constructor(profileDir) {
+  constructor(profileDir, loader) {
     this.profileDir = profileDir
     this.profile = profileDir.split(/[\\/]/).pop() || 'web'
+    this.loader = loader
     this.instanceId = randomUUID()
     this.operations = new Map()
     this.activeOperation = null
@@ -225,6 +274,7 @@ class AppearanceManager {
             ensureRegistration(this.profileDir, other, true)
             stored.skins[other.id] = { active: false, packageName: other.packageName, version: other.install?.version }
           }
+          await disableUncataloguedThemes(this.profileDir, this.loader, catalog, skin.packageName)
         }
         ensureRegistration(this.profileDir, skin, !active)
         stored.skins[skin.id] = { active, packageName: skin.packageName, version: skin.install.version }
@@ -278,7 +328,7 @@ function method(request, response, expected) {
 export function mountAppearanceManager({ webServer, loader }) {
   const profileDir = profileDirectory(loader)
   if (!profileDir || !PROFILE_NAME.test(profileDir.split(/[\\/]/).pop() || '')) return () => undefined
-  const manager = new AppearanceManager(profileDir)
+  const manager = new AppearanceManager(profileDir, loader)
   const routes = []
   const register = route => routes.push(webServer.register(route))
   register({ kind: 'exact', path: '/dsh-appearance-manager/state', handler: (request, response) => {

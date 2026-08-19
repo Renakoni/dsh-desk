@@ -708,6 +708,7 @@
     "restartToApply": "主题状态已保存，重启 DSH 后生效。",
     "refreshToApply": "主题状态已保存，刷新 DSH 页面后完全生效。",
     "broken": "安装不完整",
+    "registrationMissing": "未找到主题入口",
     "operationFailed": "操作失败。"
   },
   "notifRules": {

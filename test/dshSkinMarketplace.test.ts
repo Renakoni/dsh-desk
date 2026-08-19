@@ -25,6 +25,7 @@ function skinCatalog(generatedAt = "2026-08-17T00:00:00.000Z") {
       description: "A visual theme",
       repo: "https://github.com/demo/skin",
       package: "demo-skin",
+      rowId: "demo-skin",
       tags: ["dark"],
       modes: ["dark"],
       install: { target: "github:demo/skin#1234567890123456789012345678901234567890", version: "1.0.0", commit: "1234567890123456789012345678901234567890" },
@@ -89,6 +90,24 @@ describe("DshSkinMarketplace", () => {
     expect(snapshot.host).toMatchObject({ connected: true, marketInstalled: true, restartAvailable: true, skins: [{ skinId: "demo.skin", activation: "active" }] });
   });
 
+  it("does not let runtime state erase a profile update detected by version or commit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-update-"));
+    const webProfileDir = join(root, "web");
+    const packageDir = join(webProfileDir, "node_modules", "demo-skin");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: {
+      "demo-skin": "github:demo/skin#0000000000000000000000000000000000000000"
+    } }));
+    writeFileSync(join(packageDir, "package.json"), JSON.stringify({ version: "1.0.0", dsh: { client: {} } }));
+    const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
+      ? response(skinCatalog())
+      : response({ skins: [{ skinId: "demo.skin", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }], restartAvailable: false }));
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir, marketInstalled: () => true, fetcher });
+
+    const snapshot = await market.snapshot();
+    expect(snapshot.host.skins).toEqual([expect.objectContaining({ skinId: "demo.skin", updateAvailable: true })]);
+  });
+
   it("reads the local theme library without the market controller", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-local-"));
     const webProfileDir = join(root, "web");
@@ -139,6 +158,30 @@ describe("DshSkinMarketplace", () => {
     const result = await market.mutate({ skinId: "demo.skin", action: "install" });
     expect(result.ok).toBe(true);
     expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:3080/dsh-appearance-manager/operations/op-1", expect.anything());
+  });
+
+  it("resolves an uncatalogued local theme to its registered loader row", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-local-mutate-"));
+    const webProfileDir = join(root, "web");
+    const localPackageDir = join(webProfileDir, "node_modules", "local-skin");
+    mkdirSync(localPackageDir, { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: { "local-skin": "file:local-skin" } }));
+    writeFileSync(join(webProfileDir, "cordis.patch.yml"), "- insert:\n    - id: local-skin-row\n      name: local-skin\n");
+    writeFileSync(join(localPackageDir, "package.json"), JSON.stringify({ name: "local-skin", version: "2.0.0", dsh: { client: {} } }));
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
+      if (url.endsWith("/deactivate")) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ skin: {
+          id: "local:local-skin", packageName: "local-skin", rowId: "local-skin-row"
+        } });
+        return response({ operationId: "local-op" }, 202);
+      }
+      if (url.endsWith("/operations/local-op")) return response({ phase: "done" });
+      return response({ skins: [], restartAvailable: false });
+    });
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir, marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
+
+    await expect(market.mutate({ skinId: "local:local-skin", action: "deactivate" })).resolves.toMatchObject({ ok: true });
   });
 
   it("marks activation as restart-required until DSH reloads the browser loader", async () => {

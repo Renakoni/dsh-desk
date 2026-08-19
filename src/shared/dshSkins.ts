@@ -13,6 +13,7 @@ export type DshSkinCatalogEntry = {
   description: string;
   repositoryUrl: string | null;
   packageName: string;
+  rowId: string;
   tags: string[];
   modes: DshSkinMode[];
   install: { target: string; version: string; commit: string };
@@ -28,6 +29,7 @@ export type DshSkinCatalogEntry = {
 export type DshLocalSkin = {
   id: string;
   packageName: string;
+  rowId: string | null;
   name: { zh: string; en: string };
   author: string;
   description: string;

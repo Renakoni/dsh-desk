@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 import type {
   DshSkinAction,
   DshSkinCatalogEntry,
@@ -81,6 +82,43 @@ function readJsonFile<T>(path: string, fallback: T): T {
   try { return JSON.parse(readFileSync(path, "utf8")) as T; } catch { return fallback; }
 }
 
+function packageDirectory(profileDir: string, packageName: string): string {
+  return join(profileDir, "node_modules", ...packageName.split("/"));
+}
+
+function collectPatchRows(value: unknown, rows: Record<string, unknown>[] = []): Record<string, unknown>[] {
+  const row = objectValue(value);
+  if (!row) return rows;
+  rows.push(row);
+  if (Array.isArray(row.insert)) for (const child of row.insert) collectPatchRows(child, rows);
+  return rows;
+}
+
+function readPatchRows(path: string): Record<string, unknown>[] {
+  try {
+    const value = parseYaml(readFileSync(path, "utf8"));
+    return Array.isArray(value) ? value.flatMap(operation => collectPatchRows(operation)) : [];
+  } catch { return []; }
+}
+
+function localThemeRegistration(profileDir: string, packageName: string, packageManifest: Record<string, unknown>): { rowId: string | null; active: boolean } {
+  const dsh = objectValue(packageManifest.dsh);
+  const bundle = objectValue(dsh?.bundle);
+  const bundleRows = typeof bundle?.patch === "string"
+    ? readPatchRows(join(packageDirectory(profileDir, packageName), bundle.patch))
+    : [];
+  const profileRows = readPatchRows(join(profileDir, "cordis.patch.yml"));
+  const declared = bundleRows.find(row => row.name === packageName && typeof row.id === "string");
+  const inserted = profileRows.find(row => row.name === packageName && typeof row.id === "string");
+  const rowId = String(inserted?.id ?? declared?.id ?? "") || null;
+  if (!rowId) return { rowId: null, active: false };
+  const override = profileRows.find(row => row.id === rowId && (row.name === undefined || row.name === packageName));
+  if (override) return { rowId, active: override.disabled !== true };
+  const bundles = objectValue(readJsonFile<Record<string, unknown>>(join(profileDir, "package.json"), {}).dsh)?.profile;
+  const profileBundles = objectValue(bundles)?.bundles;
+  return { rowId, active: inserted !== undefined || Array.isArray(profileBundles) && profileBundles.includes(packageName) };
+}
+
 function requiredString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") throw new Error(`Invalid ${label}.`);
   return value;
@@ -143,6 +181,7 @@ function parseSkin(value: unknown, fallbackUpdatedAt?: string): DshSkinCatalogEn
     description: requiredString(source.description, `${id} description`),
     repositoryUrl,
     packageName: requiredString(source.packageName ?? source.package, `${id} package`),
+    rowId: requiredString(source.rowId, `${id} row id`),
     tags: stringArray(source.tags, `${id} tags`),
     modes: modes as DshSkinCatalogEntry["modes"],
     install: {
@@ -277,8 +316,11 @@ export class DshSkinMarketplace {
         });
         return { ok: true, restartRequested: true, snapshot: this.createSnapshot(this.offlineHost(true)) };
       }
-      const skin = this.catalog?.skins.find(item => item.id === input.skinId);
+      const skin = this.catalog?.skins.find(item => item.id === input.skinId) ?? this.localSkinEntry(input.skinId);
       if (!skin) throw new Error("Theme is not present in the current catalog.");
+      if (skin.id.startsWith("local:") && input.action !== "activate" && input.action !== "deactivate") {
+        throw new Error("本地主题只能切换使用状态。");
+      }
       const started = objectValue(await this.hostRequest(`/dsh-appearance-manager/${input.action}`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: this.webOrigin },
@@ -376,18 +418,42 @@ export class DshSkinMarketplace {
         ? packageManifest.homepage
         : objectValue(packageManifest?.repository)?.url;
       const version = typeof packageManifest?.version === "string" ? packageManifest.version : null;
+      const registration = localThemeRegistration(this.options.webProfileDir, packageName, packageManifest ?? {});
       return [{
         id: `local:${packageName}`,
         packageName,
+        rowId: registration.rowId,
         name: { zh: packageName, en: packageName },
         author: typeof packageManifest?.author === "string" ? packageManifest.author : "本地主题",
         description: typeof packageManifest?.description === "string" ? packageManifest.description : "未收录到 DSH 主题目录的本地主题。",
         version,
         repositoryUrl: typeof repository === "string" && /^https:\/\//i.test(repository) ? repository.replace(/^git\+/, "").replace(/\.git$/, "") : null,
-        active: false,
+        active: registration.active,
         broken: packageManifest === null
       } satisfies DshLocalSkin];
     });
+  }
+
+  private localSkinEntry(skinId: string): DshSkinCatalogEntry | undefined {
+    const local = this.localSkins().find(skin => skin.id === skinId);
+    if (!local?.rowId) return undefined;
+    return {
+      id: local.id,
+      name: local.name,
+      author: local.author,
+      description: local.description,
+      repositoryUrl: local.repositoryUrl,
+      packageName: local.packageName,
+      rowId: local.rowId,
+      tags: [],
+      modes: ["light", "dark"],
+      install: { target: "", version: local.version ?? "0.0.0", commit: "" },
+      compatibility: { dsh: "unknown", platform: ["web"] },
+      screenshots: [],
+      license: { code: "unknown", commercialUse: false },
+      stars: null,
+      updatedAt: new Date(0).toISOString()
+    };
   }
 
   private async refreshCatalog(force: boolean): Promise<void> {
@@ -423,7 +489,19 @@ export class DshSkinMarketplace {
       const liveStates = Array.isArray(payload.skins)
         ? payload.skins.map(parseRuntimeSkin).filter((item): item is DshSkinRuntimeState => item !== null)
         : [];
-      for (const state of liveStates) states.set(state.skinId, state);
+      for (const state of liveStates) {
+        const local = states.get(state.skinId);
+        states.set(state.skinId, local
+          ? {
+            ...state,
+            // The Desk profile scan includes the pinned commit. A runtime
+            // response has no catalog context and must not erase that flag.
+            updateAvailable: local.updateAvailable || state.updateAvailable,
+            installedVersion: state.installedVersion ?? local.installedVersion,
+            installedAt: state.installedAt ?? local.installedAt
+          }
+          : state);
+      }
       return {
         connected: true,
         marketInstalled: true,

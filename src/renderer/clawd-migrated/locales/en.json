@@ -708,6 +708,7 @@
     "restartToApply": "The theme state is saved. Restart DSH to apply it.",
     "refreshToApply": "The theme state is saved. Refresh the DSH page to finish applying it.",
     "broken": "Incomplete installation",
+    "registrationMissing": "Theme entry not found",
     "operationFailed": "The operation failed."
   },
   "notifRules": {
