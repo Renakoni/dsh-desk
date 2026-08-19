@@ -46,4 +46,20 @@ describe("pet look watcher", () => {
     vi.advanceTimersByTime(PET_LOOK_SAMPLE_MS * 3);
     expect(onPoint).toHaveBeenCalledTimes(1);
   });
+
+  it("clears the sample when the cursor leaves the native window", () => {
+    vi.useFakeTimers();
+    let cursor = { x: 30, y: 40 };
+    const onPoint = vi.fn();
+    const watcher = createPetLookWatcher({
+      readCursor: () => cursor,
+      readWindowBounds: () => ({ x: 10, y: 10, width: 100, height: 100 }),
+      onPoint
+    });
+
+    watcher.setEnabled(true);
+    cursor = { x: 300, y: 300 };
+    vi.advanceTimersByTime(PET_LOOK_SAMPLE_MS);
+    expect(onPoint).toHaveBeenLastCalledWith(null);
+  });
 });

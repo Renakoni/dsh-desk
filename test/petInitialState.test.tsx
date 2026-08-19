@@ -128,5 +128,30 @@ describe("floating pet initial state", () => {
     expect(setPetLookTracking).toHaveBeenCalledWith(true);
     act(() => { lookListener?.({ x: 300, y: 200 }); });
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("pointer look");
+    act(() => { lookListener?.({ x: 320, y: 200 }); });
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("idle");
+  });
+
+  it("keeps the default idle pool available when the cursor is away", () => {
+    vi.useFakeTimers();
+    const pack = makeV2PackManifest();
+    const settings = { ...defaultSettings, petTheme: petPackThemeId(pack.id), idleAnim: { enabled: true, selectedSprites: ["waving"], intervalMin: 1, intervalMax: 1 } };
+    let lookListener: ((point: { x: number; y: number } | null) => void) | null = null;
+    Reflect.set(window, "companion", {
+      initialState: { settings, petPacks: [pack] },
+      getSettings: () => new Promise(() => {}),
+      onSettings: vi.fn(() => vi.fn()),
+      onPreviewPetAnimation: vi.fn(() => vi.fn()),
+      onPetDragDirection: vi.fn(() => vi.fn()),
+      setPetLookTracking: vi.fn(),
+      onPetLookPoint: vi.fn(callback => {
+        lookListener = callback;
+        return vi.fn();
+      })
+    });
+
+    render(<App />);
+    act(() => { lookListener?.(null); vi.advanceTimersByTime(1_000); });
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("waving");
   });
 });

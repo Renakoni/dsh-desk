@@ -58,7 +58,7 @@ type PetCompanionApi = {
   onPetPacksChanged?: (callback: (payload: unknown) => void) => () => void;
   onPetDragDirection?: (callback: (direction: "left" | "right" | null) => void) => () => void;
   setPetLookTracking?: (enabled: boolean) => void;
-  onPetLookPoint?: (callback: (point: { x: number; y: number }) => void) => () => void;
+  onPetLookPoint?: (callback: (point: { x: number; y: number } | null) => void) => () => void;
   onPetDoubleClickProbe?: (callback: (point: { x: number; y: number }) => void) => () => void;
   openSettings?: () => Promise<void> | void;
 };
@@ -318,9 +318,15 @@ export default function App() {
     }
 
     const unsubscribe = companion?.onPetLookPoint?.(point => {
+      if (!point) {
+        setLookTarget(null);
+        return;
+      }
       const pet = document.querySelector<HTMLElement>(".pet");
       if (!pet) return;
-      setLookTarget(current => lookTargetForPointer(point.x, point.y, pet.getBoundingClientRect(), current));
+      const rect = pet.getBoundingClientRect();
+      const insidePet = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+      setLookTarget(current => insidePet ? lookTargetForPointer(point.x, point.y, rect, current) : null);
     });
     companion?.setPetLookTracking?.(true);
     return () => {

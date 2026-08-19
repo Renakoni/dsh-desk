@@ -3,6 +3,8 @@ export interface PetLookPoint {
   y: number;
 }
 
+export type PetLookSample = PetLookPoint | null;
+
 interface PetLookBounds extends PetLookPoint {
   width: number;
   height: number;
@@ -23,19 +25,25 @@ export interface PetLookWatcher {
 export function createPetLookWatcher(options: {
   readCursor: () => PetLookPoint;
   readWindowBounds: () => PetLookBounds | null;
-  onPoint: (point: PetLookPoint) => void;
+  onPoint: (point: PetLookSample) => void;
   sampleMs?: number;
 }): PetLookWatcher {
   const sampleMs = options.sampleMs ?? PET_LOOK_SAMPLE_MS;
   let timer: ReturnType<typeof setInterval> | null = null;
-  let previous: PetLookPoint | null = null;
+  let previous: PetLookSample | undefined;
 
   function sample() {
     const bounds = options.readWindowBounds();
-    if (!bounds) return;
     const cursor = options.readCursor();
-    const point = { x: cursor.x - bounds.x, y: cursor.y - bounds.y };
-    if (previous?.x === point.x && previous.y === point.y) return;
+    const inside = bounds !== null
+      && cursor.x >= bounds.x
+      && cursor.x <= bounds.x + bounds.width
+      && cursor.y >= bounds.y
+      && cursor.y <= bounds.y + bounds.height;
+    const point = inside && bounds
+      ? { x: cursor.x - bounds.x, y: cursor.y - bounds.y }
+      : null;
+    if (previous !== undefined && previous?.x === point?.x && previous?.y === point?.y) return;
     previous = point;
     options.onPoint(point);
   }
@@ -43,7 +51,7 @@ export function createPetLookWatcher(options: {
   function stop() {
     if (timer !== null) clearInterval(timer);
     timer = null;
-    previous = null;
+    previous = undefined;
   }
 
   return {
