@@ -399,7 +399,7 @@ const ProviderEditPanelContent = memo(function ProviderEditPanelContent({
                     ? slow ? t("routing.testSlow", "连接成功，响应较慢") : t("routing.testOk", "连接成功")
                     : t("routing.testUnreachable", "连接失败");
                   const detail = probeResult.ok
-                    ? `${probeResult.latencyMs ?? 0} ms${probeResult.status ? ` · HTTP ${probeResult.status}` : ""}`
+                    ? `${probeResult.latencyMs ?? 0} ms`
                     : probeResult.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络");
                   return (
                     <div className={`dsh-probe-result ${tone}`} role="status">

@@ -259,7 +259,7 @@ export function DshRoutingPanel() {
       const result = await companion.probeDshProvider({ id: provider.id, mode: "connectivity" });
       if (result.ok) {
         const latency = result.latencyMs ?? 0;
-        const detail = `${latency} ms${result.status ? ` · HTTP ${result.status}` : ""}`;
+        const detail = `${latency} ms`;
         if (latency >= 800) {
           toast.warning(`${provider.name} · ${t("routing.testSlow", "连接成功，响应较慢")}`, { description: detail, closeButton: true });
         } else {

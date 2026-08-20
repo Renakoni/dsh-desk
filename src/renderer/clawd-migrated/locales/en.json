@@ -155,7 +155,7 @@
     "noReasoning": "No reasoning levels",
     "reasoningDefault": "Default: {level}",
     "catalogLoadHint": "DSH resolves this provider catalog after saving, or you can load it now.",
-    "reachable": "Connected · {latency} ms · HTTP {status}",
+    "reachable": "Connected · {latency} ms",
     "customNeedsEndpoint": "A manually declared route normally needs an endpoint",
     "customNeedsProtocol": "A manually declared route normally needs an upstream protocol"
   },
