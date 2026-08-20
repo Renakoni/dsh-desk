@@ -35,6 +35,7 @@ const EXPECTED_CANONICAL_KEYS = [
   "autoStartWithCli",
   "autoUpdateEnabled",
   "petTheme",
+  "removedBuiltinPetThemes",
   "enabledSources",
   "notificationsEnabled",
   "theme",
@@ -77,6 +78,11 @@ describe("canonical settings schema", () => {
 });
 
 describe("pickCanonicalSettings", () => {
+  it("keeps only the known removable built-in pet theme id", () => {
+    expect(pickCanonicalSettings({ removedBuiltinPetThemes: ["minato-aqua", "unknown", 42] }))
+      .toEqual({ removedBuiltinPetThemes: ["minato-aqua"] });
+  });
+
   it("drops unknown top-level keys so they are never re-persisted", () => {
     expect(pickCanonicalSettings({ petScale: 1.2, mysteryKnob: true, obsoleteField: "x" })).toEqual({ petScale: 1.2 });
   });

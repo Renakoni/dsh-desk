@@ -305,6 +305,7 @@ export interface CompanionSettings {
   autoStartWithCli: boolean;
   autoUpdateEnabled: boolean;
   petTheme: PetThemeId;
+  removedBuiltinPetThemes?: string[];
   enabledSources: ProviderId[];
   notificationsEnabled: boolean;
   theme: "light" | "dark" | "system";
@@ -630,6 +631,7 @@ export const defaultSettings: CompanionSettings = {
   autoStartWithCli: false,
   autoUpdateEnabled: true,
   petTheme: "minato-aqua",
+  removedBuiltinPetThemes: [],
   enabledSources: ["deepseek-harness"],
   notificationsEnabled: true,
   theme: "system",

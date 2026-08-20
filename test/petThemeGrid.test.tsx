@@ -23,6 +23,7 @@ interface CompanionMock {
 
 let companion: CompanionMock;
 let onSelectTheme: ReturnType<typeof vi.fn<(themeId: string) => void>>;
+let onRemoveBuiltinTheme: ReturnType<typeof vi.fn<(themeId: string, nextThemeId: string | null) => Promise<void>>>;
 let refreshPetPacks: ReturnType<typeof vi.fn<() => void>>;
 
 function deferred<T>() {
@@ -38,14 +39,16 @@ function renderGrid(locale: "en" | "zh" = "en", activeThemeId: string = PACK_THE
         activeThemeId={activeThemeId}
         petPacks={[makePackManifest()]}
         onSelectTheme={onSelectTheme}
+        onRemoveBuiltinTheme={onRemoveBuiltinTheme}
         refreshPetPacks={refreshPetPacks}
       />
     </I18nProvider>
   );
 }
 
-function removeButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: /Remove|Click again to remove|移除|再次点击确认移除/ }) as HTMLButtonElement;
+function removeButton(themeName = "月薪喵"): HTMLButtonElement {
+  const wrap = screen.getByText(themeName).closest(".pet-theme-card-wrap");
+  return wrap?.querySelector(".pet-theme-remove") as HTMLButtonElement;
 }
 
 beforeEach(() => {
@@ -61,6 +64,7 @@ beforeEach(() => {
   };
   Reflect.set(window, "companion", companion);
   onSelectTheme = vi.fn<(themeId: string) => void>();
+  onRemoveBuiltinTheme = vi.fn(async () => undefined);
   refreshPetPacks = vi.fn<() => void>();
 });
 
@@ -124,6 +128,16 @@ describe("PetThemeGrid rendering", () => {
 });
 
 describe("PetThemeGrid removal", () => {
+  it("removes the active built-in Aqua theme and selects an installed pet", async () => {
+    renderGrid("en", "minato-aqua");
+
+    fireEvent.click(removeButton("Minato Aqua"));
+    fireEvent.click(removeButton("Minato Aqua"));
+
+    await waitFor(() => expect(onRemoveBuiltinTheme).toHaveBeenCalledWith("minato-aqua", PACK_THEME));
+    expect(companion.removePetPack).not.toHaveBeenCalled();
+  });
+
   it("arms on the first click with visible and announced confirmation", () => {
     renderGrid();
     fireEvent.click(removeButton());
