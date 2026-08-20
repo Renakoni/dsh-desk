@@ -668,22 +668,29 @@
   }
 }
 
-.settings-page .pet-install-command input {
+.settings-page .pet-install-command input:not([type="range"]) {
   position: relative;
   z-index: 1;
+  width: auto;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   padding: 7px 0;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--settings-ink);
   font-size: 12px;
   font-weight: 600;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  box-shadow: none;
 }
 
-.settings-page .pet-install-command input:focus {
+.settings-page .pet-install-command input:not([type="range"]):focus,
+.settings-page .pet-install-command input:not([type="range"]):focus-visible {
   outline: none;
+  border: none;
+  box-shadow: none;
 }
 
 .settings-page .pet-install-command:focus-within {
