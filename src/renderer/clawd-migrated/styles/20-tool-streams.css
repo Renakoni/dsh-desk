@@ -185,8 +185,6 @@
 .terminal-prop { background: var(--black); }
 .mcp-prop { background: var(--blue); }
 .idle-prop { background: var(--steel); }
-.clawd-thinking .clawd-glow, .clawd-tool_bash .clawd-glow, .clawd-tool_edit .clawd-glow, .clawd-tool_read .clawd-glow, .clawd-tool_search .clawd-glow { animation-duration: 1.1s; }
-
 .clawd-sprite {
   transform: translate(var(--sprite-x, 0px), var(--sprite-y, 0px)) scale(var(--sprite-scale, 1));
   transform-origin: bottom center;
