@@ -179,7 +179,7 @@ describe("inspectPetPackZip", () => {
 });
 
 describe("installPetPack", () => {
-  it("installs a v2 package only with a complete 16-direction scan", () => {
+  it("installs a v2 package with a complete optional 16-direction scan", () => {
     const zipPath = v2WebpZip();
     const result = installPetPack(zipPath, {
       rowFrameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8],
@@ -189,6 +189,19 @@ describe("installPetPack", () => {
     if (!result.ok) return;
     expect(result.pack.sourceFormat).toBe("codex-pet-v2");
     expect(readPetPack(petsDir, "dpsk-girl")?.look?.directions).toBe(16);
+  });
+
+  it("persists and reloads a v2 package without optional look rows", () => {
+    const zipPath = v2WebpZip();
+    const result = installPetPack(zipPath, {
+      rowFrameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 0, 0],
+      visibleCellMasks: [63, 255, 255, 15, 31, 255, 63, 63, 63, 0, 0]
+    }, inspectedDigest(zipPath), petsDir);
+    expect(result.ok, !result.ok ? JSON.stringify(result.problems) : "").toBe(true);
+    if (!result.ok) return;
+
+    expect(result.pack.look).toBeUndefined();
+    expect(readPetPack(petsDir, "dpsk-girl")?.look).toBeUndefined();
   });
 
   it("persists the pack directory with the genuine sheet bytes and the app manifest", () => {

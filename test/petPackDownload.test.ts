@@ -73,7 +73,10 @@ describe("downloadPetPack", () => {
     });
     const codexPets = await downloadPetPack("eve", downloadsDir, { source: "codex-pets", fetchImpl: codexPetsFetch.impl });
     expect(codexPets.ok).toBe(true);
-    if (codexPets.ok) expect(inspectPetPackZip(codexPets.zipPath).ok).toBe(true);
+    if (codexPets.ok) {
+      expect(codexPets.galleryUrl).toBe("https://codex-pets.net/#/pets/eve");
+      expect(inspectPetPackZip(codexPets.zipPath).ok).toBe(true);
+    }
 
     const petsCodexFetch = makeFetch({
       "/catalog.json": () => jsonResponse({ pets: [{ id: "cat", path: "cat" }] }),

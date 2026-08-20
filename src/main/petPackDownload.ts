@@ -213,7 +213,9 @@ export async function downloadPetPack(
       slug,
       displayName,
       creator: String(row.creator ?? ""),
-      galleryUrl: source === "petscodex" ? "https://petscodex.com/#pets" : `${origin}/pets/${encodeURIComponent(slug)}`
+      galleryUrl: source === "petscodex"
+        ? "https://petscodex.com/#pets"
+        : `${origin}/pets/${encodeURIComponent(slug)}`
     };
   } catch (error) {
     return fail("network", error instanceof Error ? error.message : String(error));
@@ -260,7 +262,7 @@ async function downloadCodexPets(
       slug,
       displayName: String(pet.displayName ?? slug),
       creator: String(pet.ownerName ?? pet.ownerHandle ?? ""),
-      galleryUrl: `${origin}/pets/${encodeURIComponent(slug)}`
+      galleryUrl: `${origin}/#/pets/${encodeURIComponent(slug)}`
     };
   } catch (error) {
     return fail("network", error instanceof Error ? error.message : String(error));

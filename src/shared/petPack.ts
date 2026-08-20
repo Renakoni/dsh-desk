@@ -389,11 +389,6 @@ export function buildPetPackManifest(input: {
         problems.push({ field: `visibleCellMasks[${row}]`, message: "cell visibility mask is invalid" });
       }
     }
-    for (let row = CODEX_PET_LOOK_START_ROW; row < CODEX_PET_V2_ROWS; row++) {
-      if (visibleCellMasks[row] !== (1 << CODEX_PET_COLUMNS) - 1) {
-        problems.push({ field: `visibleCellMasks[${row}]`, message: "all 16 v2 look cells must contain visible pixels" });
-      }
-    }
   }
   if (problems.length > 0) return { ok: false, problems };
 
@@ -435,7 +430,10 @@ export function buildPetPackManifest(input: {
         done: resolveRole("done", available),
         error: resolveRole("error", available)
       },
-      ...(manifest.spriteVersionNumber === 2 && ((visibleCellMasks?.[0] ?? 0) & (1 << CODEX_PET_IDLE_FRAMES)) !== 0 ? {
+      ...(manifest.spriteVersionNumber === 2
+        && visibleCellMasks?.[CODEX_PET_LOOK_START_ROW] === (1 << CODEX_PET_COLUMNS) - 1
+        && visibleCellMasks?.[CODEX_PET_LOOK_START_ROW + 1] === (1 << CODEX_PET_COLUMNS) - 1
+        && ((visibleCellMasks?.[0] ?? 0) & (1 << CODEX_PET_IDLE_FRAMES)) !== 0 ? {
         look: {
           directions: CODEX_PET_LOOK_DIRECTIONS,
           startRow: CODEX_PET_LOOK_START_ROW,

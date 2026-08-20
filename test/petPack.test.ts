@@ -272,7 +272,7 @@ describe("buildPetPackManifest", () => {
     expect(built.value.animations.every(animation => animation.row < 9)).toBe(true);
   });
 
-  it("requires v2 direction cells but accepts packs without a neutral look frame", () => {
+  it("accepts optional v2 look rows and omits look without a complete capability", () => {
     const manifest = parseCodexPetManifest({ id: "v2", displayName: "V2", spriteVersionNumber: 2 });
     const geometry = deriveSheetGeometry(1536, 2288, 2);
     if (!manifest.ok || !geometry.ok) throw new Error("v2 fixtures must parse");
@@ -282,7 +282,8 @@ describe("buildPetPackManifest", () => {
       geometry: geometry.value,
       rowFrameCounts: { ...base, visibleCellMasks: base.visibleCellMasks.map((mask, row) => row === 9 ? 253 : mask) }
     });
-    expect(missingDirection.ok).toBe(false);
+    expect(missingDirection.ok).toBe(true);
+    if (missingDirection.ok) expect(missingDirection.value.look).toBeUndefined();
     const missingNeutral = buildPetPackManifest({
       manifest: manifest.value,
       geometry: geometry.value,

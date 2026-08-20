@@ -331,7 +331,7 @@ describe("PetThemeGrid install command", () => {
     expect(screen.getByRole("menuitem", { name: "codex-pets" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "petscodex" })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "codex-pets" }));
-    expect(companion.openExternal).toHaveBeenCalledWith("https://codexpets.net/gallery");
+    expect(companion.openExternal).toHaveBeenCalledWith("https://codex-pets.net/#/");
   });
 
   it("keeps the installer gallery as the source for pasted npx commands", () => {

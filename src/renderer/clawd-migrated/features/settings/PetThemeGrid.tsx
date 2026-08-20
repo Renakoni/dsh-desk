@@ -16,7 +16,7 @@ const REMOVE_ARM_TIMEOUT_MS = 4000;
 
 const PET_GALLERY_SOURCES = [
   { id: "codex-pet-installer", labelKey: "petImport.galleryCodexInstaller", fallback: "codex-pet-installer", url: "https://codex-pet.org" },
-  { id: "codex-pets", labelKey: "petImport.galleryCodexPets", fallback: "codex-pets", url: "https://codexpets.net/gallery" },
+  { id: "codex-pets", labelKey: "petImport.galleryCodexPets", fallback: "codex-pets", url: "https://codex-pets.net/#/" },
   { id: "petscodex", labelKey: "petImport.galleryPetsCodex", fallback: "petscodex", url: "https://petscodex.com/#pets" }
 ] as const;
 
