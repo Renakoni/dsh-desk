@@ -658,7 +658,6 @@ function ClawdSprite({ state, idleBubble, eventType, tool, stateAnimations, over
 
   return (
     <>
-      <div className="clawd-glow" />
       {imageSrc ? <img key={imageKey} className={`clawd-animation-img clawd-animation-${animationKey}`} src={imageSrc} alt="" draggable={false} /> : null}
       <div className="shadow" />
     </>

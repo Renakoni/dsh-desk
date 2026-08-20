@@ -257,17 +257,6 @@
   animation: pixel-bob 2.8s steps(2, end) infinite;
   image-rendering: pixelated;
 }
-.clawd-glow {
-  position: absolute;
-  left: 32px;
-  top: 62px;
-  width: 162px;
-  height: 118px;
-  border-radius: 10px;
-  background: rgba(215, 119, 87, 0.22);
-  filter: blur(16px);
-  animation: pulse 2.6s steps(3, end) infinite;
-}
 .clawd-image {
   position: relative;
   z-index: 4;
@@ -293,11 +282,6 @@
 }
 
 /* === State-specific animations === */
-
-/* thinking: gentle pulse glow, inspired by GIF where Clawd has something above its head */
-.clawd-thinking .clawd-glow {
-  animation: glow-think 1.2s steps(3, end) infinite;
-}
 
 /* tool_bash: rapid shake, inspired by OGC.gif (Clawd with hardhat working) */
 .clawd-tool_bash {
@@ -328,9 +312,6 @@
 .clawd-skill {
   animation: glow-think 1.2s steps(2, end) infinite;
 }
-.clawd-skill .clawd-glow {
-  animation: glow-happy 0.8s steps(2, end) infinite;
-}
 
 /* task: task processing, subtle bounce */
 .clawd-task {
@@ -346,25 +327,15 @@
 .clawd-waiting_permission {
   animation: clawd-alert 0.6s steps(2, end) infinite;
 }
-.clawd-waiting_permission .clawd-glow {
-  animation: glow-alert 0.8s steps(2, end) infinite;
-}
 
 /* done: happy bounce, inspired by 6f34b40.gif (big happy face) */
 .clawd-done {
   animation: clawd-celebrate 0.5s steps(2, end) 3;
 }
-.clawd-done .clawd-glow {
-  animation: glow-happy 0.8s steps(2, end) infinite;
-}
 
 /* error: collapse/shake, inspired by awdwd.gif (sitting on ground) */
 .clawd-error {
   animation: clawd-collapse 0.6s steps(2, end) 2;
-}
-.clawd-error .clawd-glow {
-  background: rgba(217, 107, 90, 0.3);
-  animation: glow-error 0.6s steps(2, end) infinite;
 }
 
 @keyframes glow-think {
@@ -395,23 +366,11 @@
   0%, 100% { translate: 0 0; }
   50% { translate: 0 -4px; }
 }
-@keyframes glow-alert {
-  0%, 100% { opacity: .4; }
-  50% { opacity: 1; }
-}
 @keyframes clawd-celebrate {
   0%, 100% { translate: 0 0; }
   50% { translate: 0 -12px; }
 }
-@keyframes glow-happy {
-  0%, 100% { opacity: .6; background: rgba(114, 169, 140, 0.2); }
-  50% { opacity: 1; background: rgba(114, 169, 140, 0.35); }
-}
 @keyframes clawd-collapse {
   0% { translate: 0 0; }
   100% { translate: 0 6px; }
-}
-@keyframes glow-error {
-  0%, 100% { opacity: .5; }
-  50% { opacity: .9; }
 }
