@@ -250,6 +250,10 @@
   transform: var(--y) translateX(-50%);
 }
 
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swiping="true"] {
+  transform: var(--y) translateY(var(--swipe-amount-y, 0px)) translateX(calc(-50% + var(--swipe-amount-x, 0px)));
+}
+
 [data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-content] {
   min-width: 0;
   max-width: 100%;
