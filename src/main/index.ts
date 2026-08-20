@@ -4263,8 +4263,9 @@ app.whenReady().then(() => {
     if (result.ok) broadcastPetPacksChanged();
     return result;
   });
-  ipcMain.handle("companion:pet-pack-download", (event, petSlug: string) =>
+  ipcMain.handle("companion:pet-pack-download", (event, petSlug: string, source?: "codex-pet-installer" | "codex-pets" | "petscodex") =>
     downloadPetPack(String(petSlug ?? ""), petDownloadsDir(), {
+      source,
       onProgress: (receivedBytes, totalBytes) => {
         if (!event.sender.isDestroyed()) {
           event.sender.send("companion:pet-pack-download-progress", { receivedBytes, totalBytes });

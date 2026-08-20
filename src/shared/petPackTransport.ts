@@ -22,6 +22,7 @@
 
 import type { CodexPetManifest, PetPackManifest, PetPackProblem, SheetGeometry } from "./petPack";
 import type { PetPackScanResult } from "./petPackScan";
+import type { PetInstallSource } from "./petInstallCommand";
 
 export interface StagedPetPack {
   manifest: CodexPetManifest;
@@ -73,3 +74,5 @@ export interface PetPackDownloadProgress {
   receivedBytes: number;
   totalBytes: number | null;
 }
+
+export type PetPackDownloadSource = PetInstallSource;

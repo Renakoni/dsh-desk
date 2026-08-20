@@ -1,8 +1,7 @@
 /**
  * Parser for pet install command lines.
  *
- * Gallery pages show a copy-pastable command (the codex-pet.org API even
- * ships it as a `command` field), so the install box accepts the whole line
+ * Gallery pages show a copy-pastable command, so the install box accepts the whole line
  * — e.g. `npx codex-pet-installer add yuexinmiao` — as well as a bare slug.
  *
  * SECURITY: this is parsing, never execution. A recognized command is
@@ -18,8 +17,10 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** Installers whose ecosystems exist but which this app cannot resolve yet. */
 const KNOWN_UNSUPPORTED_INSTALLERS = new Set(["petdex", "codex-pet-cli"]);
 
+export type PetInstallSource = "codex-pet-installer" | "codex-pets" | "petscodex";
+
 export type PetInstallCommandResult =
-  | { ok: true; source: "codex-pet.org"; slug: string }
+  | { ok: true; source: PetInstallSource; slug: string }
   | { ok: false; code: "empty" | "unsupported-installer" | "unrecognized"; installer?: string };
 
 export function parsePetInstallCommand(input: string): PetInstallCommandResult {
@@ -35,7 +36,7 @@ export function parsePetInstallCommand(input: string): PetInstallCommandResult {
     const slug = tokens[0].toLowerCase();
     if (slug === "npx" || slug === "npm") return { ok: false, code: "unrecognized" };
     return SLUG_PATTERN.test(slug)
-      ? { ok: true, source: "codex-pet.org", slug }
+      ? { ok: true, source: "codex-pet-installer", slug }
       : { ok: false, code: "unrecognized" };
   }
 
@@ -47,11 +48,12 @@ export function parsePetInstallCommand(input: string): PetInstallCommandResult {
   const installer = tokens[index]?.toLowerCase();
   if (!installer) return { ok: false, code: "unrecognized" };
 
-  if (installer === "codex-pet-installer") {
+  if (installer === "codex-pet-installer" || installer === "codex-pets" || installer === "petscodex") {
     const verb = tokens[index + 1]?.toLowerCase();
     const slug = tokens[index + 2]?.toLowerCase();
-    if (verb === "add" && slug && SLUG_PATTERN.test(slug) && tokens.length === index + 3) {
-      return { ok: true, source: "codex-pet.org", slug };
+    const expectedVerb = installer === "petscodex" ? "install" : "add";
+    if (verb === expectedVerb && slug && SLUG_PATTERN.test(slug) && tokens.length === index + 3) {
+      return { ok: true, source: installer, slug };
     }
     return { ok: false, code: "unrecognized" };
   }

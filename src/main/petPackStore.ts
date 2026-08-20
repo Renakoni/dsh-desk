@@ -314,13 +314,15 @@ function isPetPackManifest(value: unknown): value is PetPackManifest {
   const sheet = record.sheet as { columns: number; rows: number };
   if (spriteVersionNumber === 2) {
     const look = record.look;
-    if (!look || typeof look !== "object" || Array.isArray(look)) return false;
-    const lookRecord = look as Record<string, unknown>;
-    const neutral = lookRecord.neutralFrame;
-    if (lookRecord.directions !== 16 || lookRecord.startRow !== 9 || lookRecord.columns !== 8
-      || !neutral || typeof neutral !== "object" || Array.isArray(neutral)
-      || (neutral as Record<string, unknown>).row !== 0
-      || (neutral as Record<string, unknown>).column !== 6) return false;
+    if (look !== undefined) {
+      if (!look || typeof look !== "object" || Array.isArray(look)) return false;
+      const lookRecord = look as Record<string, unknown>;
+      const neutral = lookRecord.neutralFrame;
+      if (lookRecord.directions !== 16 || lookRecord.startRow !== 9 || lookRecord.columns !== 8
+        || !neutral || typeof neutral !== "object" || Array.isArray(neutral)
+        || (neutral as Record<string, unknown>).row !== 0
+        || (neutral as Record<string, unknown>).column !== 6) return false;
+    }
   }
 
   if (!Array.isArray(record.animations) || record.animations.length === 0) return false;

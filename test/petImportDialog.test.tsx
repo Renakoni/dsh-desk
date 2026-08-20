@@ -180,7 +180,7 @@ describe("PetImportDialog", () => {
     await screen.findByRole("button", { name: "Install" });
 
     expect(screen.getByText(/Creator:/).textContent).toContain("qa-user");
-    fireEvent.click(screen.getByRole("button", { name: "View on codex-pet.org" }));
+    fireEvent.click(screen.getByRole("button", { name: "View in gallery" }));
     expect(companion.openExternal).toHaveBeenCalledWith("https://codex-pet.org/pets/boba");
   });
 });
