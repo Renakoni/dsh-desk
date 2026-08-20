@@ -61,6 +61,8 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
   const [downloadedAttribution, setDownloadedAttribution] = useState<{ galleryUrl: string; creator: string } | null>(null);
   const [galleryMenuOpen, setGalleryMenuOpen] = useState(false);
   const [commandHintIndex, setCommandHintIndex] = useState(0);
+  const [previousCommandHintIndex, setPreviousCommandHintIndex] = useState<number | null>(null);
+  const commandHintIndexRef = useRef(0);
 
   useEffect(() => {
     return window.companion.onPetPackDownloadProgress?.(payload => {
@@ -70,9 +72,22 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setCommandHintIndex(index => (index + 1) % PET_INSTALL_COMMANDS.length), 3200);
+    if (installCommand.trim() || downloading) return;
+    const timer = window.setInterval(() => {
+      const current = commandHintIndexRef.current;
+      const next = (current + 1) % PET_INSTALL_COMMANDS.length;
+      setPreviousCommandHintIndex(current);
+      commandHintIndexRef.current = next;
+      setCommandHintIndex(next);
+    }, 3200);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [downloading, installCommand]);
+
+  useEffect(() => {
+    if (previousCommandHintIndex === null) return;
+    const timer = window.setTimeout(() => setPreviousCommandHintIndex(null), 280);
+    return () => window.clearTimeout(timer);
+  }, [previousCommandHintIndex]);
 
   function downloadFailureHeadline(code: PetPackDownloadCode): string {
     if (code === "invalid-slug") return t("petImport.errInvalidSlug", "请输入宠物 ID，例如 happy-dog");
@@ -217,12 +232,27 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
       <div className="pet-install-by-id">
         <span className="pet-install-command">
           <Terminal size={13} aria-hidden="true" />
+          {!installCommand && !downloading ? (
+            <span className="pet-install-command-hint" aria-hidden="true">
+              {previousCommandHintIndex !== null ? (
+                <span className="pet-install-command-hint-line is-leaving" key={`leaving-${previousCommandHintIndex}`}>
+                  {PET_INSTALL_COMMANDS[previousCommandHintIndex]}
+                </span>
+              ) : null}
+              <span
+                className={`pet-install-command-hint-line ${previousCommandHintIndex === null ? "is-static" : "is-entering"}`}
+                key={`current-${commandHintIndex}`}
+              >
+                {PET_INSTALL_COMMANDS[commandHintIndex]}
+              </span>
+            </span>
+          ) : null}
           <input
             type="text"
             value={installCommand}
             onChange={event => setInstallCommand(event.target.value)}
             onKeyDown={event => { if (event.key === "Enter") void beginInstallFromCommand(); }}
-            placeholder={PET_INSTALL_COMMANDS[commandHintIndex]}
+            placeholder=""
             aria-label={t("petImport.installCommand", "安装命令")}
             disabled={downloading}
             spellCheck={false}

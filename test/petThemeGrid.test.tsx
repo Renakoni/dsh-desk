@@ -104,6 +104,23 @@ describe("PetThemeGrid rendering", () => {
     expect(Boolean(command!.compareDocumentPosition(grid!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(grid!.querySelector(".pet-theme-card strong")?.textContent).toBe("Import pet");
   });
+
+  it("rotates install hints with a vertical roll and hides them while typing", () => {
+    vi.useFakeTimers();
+    const view = renderGrid();
+    const hint = () => view.container.querySelector(".pet-install-command-hint") as HTMLElement | null;
+    expect(hint()?.textContent).toBe("npx codex-pet-installer add yuexinmiao");
+
+    act(() => { vi.advanceTimersByTime(3200); });
+    expect(hint()?.textContent).toContain("npx codex-pets add eve");
+    expect(view.container.querySelector(".pet-install-command-hint-line.is-leaving")).toBeTruthy();
+
+    act(() => { vi.advanceTimersByTime(280); });
+    expect(view.container.querySelector(".pet-install-command-hint-line.is-leaving")).toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Install command" }), { target: { value: "npx petscodex install mimikyu" } });
+    expect(hint()).toBeNull();
+  });
 });
 
 describe("PetThemeGrid removal", () => {

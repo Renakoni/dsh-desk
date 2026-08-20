@@ -601,6 +601,7 @@
 
 /* Terminal-styled command input: the command is parsed, never executed. */
 .settings-page .pet-install-command {
+  position: relative;
   flex: 1 1 220px;
   min-width: 0;
   display: inline-flex;
@@ -613,7 +614,62 @@
   color: var(--settings-muted);
 }
 
+.settings-page .pet-install-command-hint {
+  position: absolute;
+  left: 30px;
+  right: 10px;
+  top: 50%;
+  height: 1.35em;
+  overflow: hidden;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--settings-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.settings-page .pet-install-command-hint-line {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-page .pet-install-command-hint-line.is-entering {
+  animation: pet-command-hint-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.settings-page .pet-install-command-hint-line.is-leaving {
+  animation: pet-command-hint-leave 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pet-command-hint-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pet-command-hint-leave {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
 .settings-page .pet-install-command input {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   padding: 7px 0;
@@ -631,6 +687,13 @@
 
 .settings-page .pet-install-command:focus-within {
   border-color: oklch(72% 0.09 82 / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page .pet-install-command-hint-line.is-entering,
+  .settings-page .pet-install-command-hint-line.is-leaving {
+    animation: none;
+  }
 }
 
 .settings-page .pet-install-by-id button {
