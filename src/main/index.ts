@@ -3295,8 +3295,10 @@ function seedBundledPetPacks() {
   mkdirSync(targetRoot, { recursive: true });
   for (const pack of packs) {
     const targetDir = join(targetRoot, pack.id);
-    if (readPetPack(targetRoot, pack.id)) continue;
     const sourceSheet = join(bundledRoot, pack.id, "spritesheet.webp");
+    // A directory is an explicit user-owned installation, even when its
+    // manifest is incomplete. Never overwrite it during startup seeding.
+    if (existsSync(join(targetRoot, pack.id))) continue;
     if (!existsSync(sourceSheet)) continue;
     mkdirSync(targetDir, { recursive: true });
     copyFileSync(sourceSheet, join(targetDir, "spritesheet.webp"));
