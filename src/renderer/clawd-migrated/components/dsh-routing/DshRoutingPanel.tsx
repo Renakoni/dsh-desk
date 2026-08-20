@@ -7,7 +7,6 @@ import type { DshProvider, DshProviderListResult, DshProviderSaveInput } from ".
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PANEL_EXIT_MS, ProviderEditPanel } from "./ProviderEditPanel";
-import { RoutingToaster } from "./RoutingToaster";
 import { SortableDshProviderCard } from "./ProviderCard";
 
 type ProviderListProps = {
@@ -328,7 +327,6 @@ export function DshRoutingPanel() {
         <button className="cc-switch-add" onClick={openNewProvider} title={t("routing.addProvider", "添加供应商")} aria-label={t("routing.addProvider", "添加供应商")}><Plus size={18} /></button>
       </header>
 
-      <RoutingToaster />
       {listing && !listing.ok ? <div className="ccs-provider-status">{listing.error}</div> : null}
 
       <ProviderList

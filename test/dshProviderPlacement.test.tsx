@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OverviewSection } from "../src/renderer/clawd-migrated/features/overview/OverviewSection";
 import { SettingsSection } from "../src/renderer/clawd-migrated/features/settings/SettingsSection";
 import { ProviderEditPanel } from "../src/renderer/clawd-migrated/components/dsh-routing/ProviderEditPanel";
+import { RoutingToaster } from "../src/renderer/clawd-migrated/components/dsh-routing/RoutingToaster";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 import { defaultSettings } from "../src/renderer/shared/events";
 
@@ -82,6 +83,7 @@ describe("DSH model routing placement", () => {
   it("shows latency without exposing the HTTP status for card connectivity checks", async () => {
     render(
       <I18nProvider initialLocale="en">
+        <RoutingToaster />
         <OverviewSection
           settings={{ hideSensitiveContent: false }}
           connection={{ serverListening: false, error: null }}
@@ -98,6 +100,7 @@ describe("DSH model routing placement", () => {
     expect(toast?.querySelector("[data-title]")?.textContent).toBe("DeepSeek");
     expect(toast?.querySelector("[data-description]")?.textContent).toBe("Reachable · 600 ms");
     expect(toast?.textContent).not.toContain("HTTP");
+    expect(document.querySelectorAll("[data-sonner-toaster]")).toHaveLength(1);
   });
 
   it("does not expose a Models subsection under Settings", () => {

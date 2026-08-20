@@ -255,6 +255,31 @@
   transform: var(--y) translateY(var(--swipe-amount-y, 0px)) translateX(calc(-50% + var(--swipe-amount-x, 0px)));
 }
 
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="left"] { animation-name: dsh-probe-swipe-out-left; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="right"] { animation-name: dsh-probe-swipe-out-right; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="up"] { animation-name: dsh-probe-swipe-out-up; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="down"] { animation-name: dsh-probe-swipe-out-down; }
+
+@keyframes dsh-probe-swipe-out-left {
+  from { transform: var(--y) translateX(calc(-50% + var(--swipe-amount-x))); opacity: 1; }
+  to { transform: var(--y) translateX(calc(-150% + var(--swipe-amount-x))); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-right {
+  from { transform: var(--y) translateX(calc(-50% + var(--swipe-amount-x))); opacity: 1; }
+  to { transform: var(--y) translateX(calc(50% + var(--swipe-amount-x))); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-up {
+  from { transform: var(--y) translateY(var(--swipe-amount-y)) translateX(-50%); opacity: 1; }
+  to { transform: var(--y) translateY(calc(var(--swipe-amount-y) - 100%)) translateX(-50%); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-down {
+  from { transform: var(--y) translateY(var(--swipe-amount-y)) translateX(-50%); opacity: 1; }
+  to { transform: var(--y) translateY(calc(var(--swipe-amount-y) + 100%)) translateX(-50%); opacity: 0; }
+}
+
 [data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-content] {
   min-width: 0;
   max-width: 100%;
