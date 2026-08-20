@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, screen, shell, Tray } from "electron";
 import { autoUpdater } from "electron-updater";
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
@@ -51,6 +51,7 @@ import {
 } from "./claudePricing";
 import { PermissionBroker, type PendingPermission, type PermissionPollResult } from "./permissionBroker";
 import { inspectPetPackZip, installPetPack, listPetPacks, readPetPack, removePetPack, resolvePetAssetPath } from "./petPackStore";
+import { seedBundledPetPacks } from "./bundledPetPacks";
 import { cleanupPetDownloads, discardDownloadedPetPack, downloadPetPack } from "./petPackDownload";
 import { createPetDragWatcher, type PetDragWatcher } from "./petDragWatcher";
 import { createPetLookWatcher, type PetLookWatcher } from "./petLookWatcher";
@@ -3285,45 +3286,6 @@ function petPacksDir() {
   return join(app.getPath("userData"), "pets");
 }
 
-function seedBundledPetPacks() {
-  const seedMarker = join(app.getPath("userData"), "bundled-pets-v1.seeded");
-  if (existsSync(seedMarker)) return;
-  const bundledRoot = app.isPackaged
-    ? join(process.resourcesPath, "pets")
-    : join(__dirname, "../../src/main/assets/pets");
-  const targetRoot = petPacksDir();
-  const packs = [
-    { id: "yuexinmiao", rows: 9, height: 1872, displayName: "月薪喵", description: "A small white office cat mascot." },
-    { id: "maid-deepseek-whale", rows: 11, height: 2288, displayName: "Maid-DeepSeek-Whale", description: "A tiny chibi blue-haired whale maid." }
-  ];
-  if (packs.some(pack => !existsSync(join(bundledRoot, pack.id, "spritesheet.webp")))) return;
-  mkdirSync(targetRoot, { recursive: true });
-  for (const pack of packs) {
-    const targetDir = join(targetRoot, pack.id);
-    const sourceSheet = join(bundledRoot, pack.id, "spritesheet.webp");
-    // A directory is an explicit user-owned installation, even when its
-    // manifest is incomplete. Never overwrite it during startup seeding.
-    if (existsSync(join(targetRoot, pack.id))) continue;
-    mkdirSync(targetDir, { recursive: true });
-    copyFileSync(sourceSheet, join(targetDir, "spritesheet.webp"));
-    const animations = ["idle", "running_right", "running_left", "waving", "jumping", "failed", "waiting_permission", "running", "review"]
-      .map((key, row) => ({ key, row, frameCount: 8, frameDurationMs: 160 }));
-    writeFileSync(join(targetDir, "pack.manifest.json"), JSON.stringify({
-      formatVersion: 1,
-      sourceFormat: pack.rows === 11 ? "codex-pet-v2" : "codex-pet-v1",
-      spriteVersionNumber: pack.rows === 11 ? 2 : 1,
-      id: pack.id,
-      displayName: pack.displayName,
-      description: pack.description,
-      spritesheetFile: "spritesheet.webp",
-      sheet: { width: 1536, height: pack.height, columns: 8, rows: pack.rows, cellWidth: 192, cellHeight: pack.height / pack.rows },
-      animations,
-      roleDefaults: { idle: "idle", running: "running", waiting_permission: "waiting_permission", done: "jumping", error: "failed" }
-    }, null, 2));
-  }
-  writeFileSync(seedMarker, "bundled-pets-v1\n", "utf8");
-}
-
 function petDownloadsDir() {
   return join(app.getPath("userData"), "pet-downloads");
 }
@@ -4049,7 +4011,10 @@ function startEventServer() {
 
 if (singleInstanceLock) {
 app.whenReady().then(() => {
-  seedBundledPetPacks();
+  seedBundledPetPacks(
+    app.getPath("userData"),
+    app.isPackaged ? join(process.resourcesPath, "pets") : join(__dirname, "../../src/main/assets/pets")
+  );
   try {
     restoreLegacyDisabledDshSkills();
   } catch (error) {
