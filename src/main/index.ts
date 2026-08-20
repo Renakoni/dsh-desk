@@ -3286,12 +3286,17 @@ function petPacksDir() {
 }
 
 function seedBundledPetPacks() {
-  const bundledRoot = join(process.resourcesPath ?? join(__dirname, "../../src/main/assets"), "pets");
+  const seedMarker = join(app.getPath("userData"), "bundled-pets-v1.seeded");
+  if (existsSync(seedMarker)) return;
+  const bundledRoot = app.isPackaged
+    ? join(process.resourcesPath, "pets")
+    : join(__dirname, "../../src/main/assets/pets");
   const targetRoot = petPacksDir();
   const packs = [
     { id: "yuexinmiao", rows: 9, height: 1872, displayName: "月薪喵", description: "A small white office cat mascot." },
     { id: "maid-deepseek-whale", rows: 11, height: 2288, displayName: "Maid-DeepSeek-Whale", description: "A tiny chibi blue-haired whale maid." }
   ];
+  if (packs.some(pack => !existsSync(join(bundledRoot, pack.id, "spritesheet.webp")))) return;
   mkdirSync(targetRoot, { recursive: true });
   for (const pack of packs) {
     const targetDir = join(targetRoot, pack.id);
@@ -3299,7 +3304,6 @@ function seedBundledPetPacks() {
     // A directory is an explicit user-owned installation, even when its
     // manifest is incomplete. Never overwrite it during startup seeding.
     if (existsSync(join(targetRoot, pack.id))) continue;
-    if (!existsSync(sourceSheet)) continue;
     mkdirSync(targetDir, { recursive: true });
     copyFileSync(sourceSheet, join(targetDir, "spritesheet.webp"));
     const animations = ["idle", "running_right", "running_left", "waving", "jumping", "failed", "waiting_permission", "running", "review"]
@@ -3317,6 +3321,7 @@ function seedBundledPetPacks() {
       roleDefaults: { idle: "idle", running: "running", waiting_permission: "waiting_permission", done: "jumping", error: "failed" }
     }, null, 2));
   }
+  writeFileSync(seedMarker, "bundled-pets-v1\n", "utf8");
 }
 
 function petDownloadsDir() {
