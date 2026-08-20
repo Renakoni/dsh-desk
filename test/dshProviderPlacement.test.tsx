@@ -79,6 +79,23 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByText("Install DSH Desk into the DSH Web and Headless profiles.")).toBeNull();
   });
 
+  it("shows latency without exposing the HTTP status for card connectivity checks", async () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <OverviewSection
+          settings={{ hideSensitiveContent: false }}
+          connection={{ serverListening: false, error: null }}
+          hookStatus={null}
+        />
+      </I18nProvider>
+    );
+
+    vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: true, latencyMs: 600, status: 404 });
+    fireEvent.click(await screen.findByRole("button", { name: "Connectivity check" }));
+    await waitFor(() => expect(document.querySelector("[data-sonner-toast]")?.textContent).toContain("600 ms"));
+    expect(document.querySelector("[data-sonner-toast]")?.textContent).not.toContain("HTTP");
+  });
+
   it("does not expose a Models subsection under Settings", () => {
     render(
       <I18nProvider initialLocale="en">
@@ -313,10 +330,12 @@ describe("DSH model routing placement", () => {
     const speedTest = () => screen.getAllByRole("button", { name: "Test" }).find(button => !(button as HTMLButtonElement).disabled) as HTMLButtonElement;
     fireEvent.click(speedTest());
     await waitFor(() => expect(document.querySelector(".dsh-probe-result.info")?.textContent).toContain("180 ms"));
+    expect(document.querySelector(".dsh-probe-result.info")?.textContent).not.toContain("HTTP");
 
     vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: true, latencyMs: 900, status: 200 });
     fireEvent.click(speedTest());
     await waitFor(() => expect(document.querySelector(".dsh-probe-result.warning")?.textContent).toContain("900 ms"));
+    expect(document.querySelector(".dsh-probe-result.warning")?.textContent).not.toContain("HTTP");
 
     vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: false, error: "timeout" });
     fireEvent.click(speedTest());

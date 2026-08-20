@@ -155,7 +155,7 @@
     "noReasoning": "无推理档位",
     "reasoningDefault": "默认：{level}",
     "catalogLoadHint": "保存后 DSH 会解析该供应商目录，也可以先点击获取模型目录。",
-    "reachable": "连通正常 · {latency} ms · HTTP {status}",
+    "reachable": "连通正常 · {latency} ms",
     "customNeedsEndpoint": "手工声明的路由通常需要请求地址",
     "customNeedsProtocol": "手工声明的路由通常需要指定上游协议"
   },
