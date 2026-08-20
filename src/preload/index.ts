@@ -93,7 +93,7 @@ contextBridge.exposeInMainWorld("companion", {
   removePetPack: (id: string) => ipcRenderer.invoke("companion:pet-pack-remove", id),
   onPetPacksChanged: (callback: (payload: unknown) => void) => onChannel("companion:pet-packs-changed", callback),
   getPetPackFilePath: (file: File) => webUtils.getPathForFile(file),
-  downloadPetPack: (petSlug: string) => ipcRenderer.invoke("companion:pet-pack-download", petSlug),
+  downloadPetPack: (petSlug: string, source?: "codex-pet-installer" | "codex-pets" | "petscodex") => ipcRenderer.invoke("companion:pet-pack-download", petSlug, source),
   discardPetPackDownload: (zipPath: string) => ipcRenderer.invoke("companion:pet-pack-discard-download", zipPath),
   onPetPackDownloadProgress: (callback: (payload: unknown) => void) => onChannel("companion:pet-pack-download-progress", callback),
   listClaudeProviders: () => ipcRenderer.invoke("companion:providers-list"),

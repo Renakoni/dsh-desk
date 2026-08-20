@@ -1,18 +1,30 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, Plus, Terminal, Trash2 } from "lucide-react";
+import { ChevronDown, Download, ExternalLink, Plus, Terminal, Trash2 } from "lucide-react";
 import { useI18n } from "../../useI18n";
 import { SpritesheetSprite } from "../../../components/SpritesheetSprite";
 import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
 import type { PetPackManifest } from "../../../../shared/petPack";
 import { spritesheetAssetsFromPack } from "../../../../shared/petPackAssets";
 import { parsePetInstallCommand } from "../../../../shared/petInstallCommand";
-import { CODEX_PET_GALLERY_URL, type PetPackDownloadCode } from "../../../../shared/petPackTransport";
+import { type PetPackDownloadCode } from "../../../../shared/petPackTransport";
 import { BUILTIN_PET_THEME_ID, packIdFromThemeId } from "../../../../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../../../../shared/spriteFrame";
 import { listPetThemes, type PetThemeDefinition } from "../../utils/petThemes";
 import { PetImportDialog } from "./PetImportDialog";
 
 const REMOVE_ARM_TIMEOUT_MS = 4000;
+
+const PET_GALLERY_SOURCES = [
+  { id: "codex-pet-installer", labelKey: "petImport.galleryCodexInstaller", fallback: "codex-pet-installer", url: "https://codex-pet.org" },
+  { id: "codex-pets", labelKey: "petImport.galleryCodexPets", fallback: "codex-pets", url: "https://codexpets.net/gallery" },
+  { id: "petscodex", labelKey: "petImport.galleryPetsCodex", fallback: "petscodex", url: "https://petscodex.com/#pets" }
+] as const;
+
+const PET_INSTALL_COMMANDS = [
+  "npx codex-pet-installer add yuexinmiao",
+  "npx codex-pets add eve",
+  "npx petscodex install mimikyu"
+] as const;
 
 const builtinCovers: Record<string, string> = {
   [BUILTIN_PET_THEME_ID]: minatoAquaCover
@@ -47,12 +59,19 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
   const [downloading, setDownloading] = useState(false);
   const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
   const [downloadedAttribution, setDownloadedAttribution] = useState<{ galleryUrl: string; creator: string } | null>(null);
+  const [galleryMenuOpen, setGalleryMenuOpen] = useState(false);
+  const [commandHintIndex, setCommandHintIndex] = useState(0);
 
   useEffect(() => {
     return window.companion.onPetPackDownloadProgress?.(payload => {
       const { receivedBytes, totalBytes } = payload;
       setDownloadPercent(totalBytes ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100)) : null);
     });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCommandHintIndex(index => (index + 1) % PET_INSTALL_COMMANDS.length), 3200);
+    return () => window.clearInterval(timer);
   }, []);
 
   function downloadFailureHeadline(code: PetPackDownloadCode): string {
@@ -69,8 +88,8 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
     const parsed = parsePetInstallCommand(installCommand);
     if (!parsed.ok) {
       const headline = parsed.code === "unsupported-installer"
-        ? t("petImport.errUnsupportedInstaller", "暂不支持 {installer} 安装器，目前仅支持 codex-pet.org 的命令").split("{installer}").join(parsed.installer ?? "")
-        : t("petImport.errUnrecognizedCommand", "无法识别该命令，请粘贴宠物页面上的安装命令，例如 npx codex-pet-installer add happy-dog");
+        ? t("petImport.errUnsupportedInstaller", "暂不支持 {installer} 安装器，请使用支持的图库命令").split("{installer}").join(parsed.installer ?? "")
+        : t("petImport.errUnrecognizedCommand", "无法识别该命令，请粘贴宠物页面上的安装命令");
       setNotice({ headline });
       setStatusMessage(headline);
       return;
@@ -80,7 +99,7 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
     setNotice(null);
     setStatusMessage(t("petImport.downloading", "下载中…"));
     try {
-      const result = await window.companion.downloadPetPack(parsed.slug);
+      const result = await window.companion.downloadPetPack(parsed.slug, parsed.source);
       if (result.ok) {
         setDownloadedAttribution({ galleryUrl: result.galleryUrl, creator: result.creator });
         setImportZipPath(result.zipPath);
@@ -203,7 +222,7 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
             value={installCommand}
             onChange={event => setInstallCommand(event.target.value)}
             onKeyDown={event => { if (event.key === "Enter") void beginInstallFromCommand(); }}
-            placeholder={t("petImport.commandPlaceholder", "npx codex-pet-installer add happy-dog")}
+            placeholder={PET_INSTALL_COMMANDS[commandHintIndex]}
             aria-label={t("petImport.installCommand", "安装命令")}
             disabled={downloading}
             spellCheck={false}
@@ -222,14 +241,36 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
               : t("petImport.downloading", "下载中…")
             : t("petImport.download", "获取")}
         </button>
-        <button
-          type="button"
-          className="pet-install-by-id-gallery"
-          onClick={() => void window.companion.openExternal(CODEX_PET_GALLERY_URL)}
-        >
-          <ExternalLink size={13} />
-          {t("petImport.openGallery", "打开宠物图库")}
-        </button>
+        <div className="pet-install-gallery-menu">
+          <button
+            type="button"
+            className="pet-install-by-id-gallery"
+            aria-haspopup="menu"
+            aria-expanded={galleryMenuOpen}
+            onClick={() => setGalleryMenuOpen(open => !open)}
+          >
+            <ExternalLink size={13} />
+            {t("petImport.openGallery", "打开宠物图鉴")}
+            <ChevronDown size={13} />
+          </button>
+          {galleryMenuOpen ? (
+            <div className="pet-install-gallery-options" role="menu">
+              {PET_GALLERY_SOURCES.map(source => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  key={source.id}
+                  onClick={() => {
+                    setGalleryMenuOpen(false);
+                    void window.companion.openExternal(source.url);
+                  }}
+                >
+                  <span>{t(source.labelKey, source.fallback)}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
       <p className="pet-theme-status" role="status" aria-live="polite">{statusMessage}</p>
       {notice ? (

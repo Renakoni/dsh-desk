@@ -240,7 +240,7 @@ export function PetImportDialog({ zipPath, galleryUrl, creator, onClose, onInsta
               {creator ? <small className="pet-import-creator">{t("petImport.byCreator", "作者：")}{creator}</small> : null}
               {galleryUrl ? (
                 <button type="button" className="pet-import-gallery-link" onClick={() => void window.companion.openExternal(galleryUrl)}>
-                  {t("petImport.viewOnGallery", "在 codex-pet.org 查看")}
+                  {t("petImport.viewOnGallery", "在图库中查看")}
                 </button>
               ) : null}
               {needsOverwrite ? <em className="pet-import-overwrite-note">{t("petImport.overwriteConfirm", "已安装同名宠物，覆盖安装？")}</em> : null}

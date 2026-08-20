@@ -200,7 +200,7 @@ type CompanionApi = {
   onPetPacksChanged: (callback: Listener<unknown>) => Unsubscribe;
   /** Absolute path of a dropped File (Electron webUtils); "" in the browser. */
   getPetPackFilePath: (file: File) => string;
-  downloadPetPack: (petSlug: string) => Promise<PetPackDownloadResult>;
+  downloadPetPack: (petSlug: string, source?: "codex-pet-installer" | "codex-pets" | "petscodex") => Promise<PetPackDownloadResult>;
   discardPetPackDownload: (zipPath: string) => Promise<{ ok: boolean }>;
   onPetPackDownloadProgress: (callback: Listener<PetPackDownloadProgress>) => Unsubscribe;
 };

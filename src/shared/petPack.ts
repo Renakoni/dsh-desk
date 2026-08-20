@@ -5,6 +5,9 @@
  * and one spritesheet image. v1 uses an 8x9 grid; v2 keeps those nine action
  * rows and adds two rows for 16 clockwise pointer-look directions. Sheet
  * sizes vary in the wild, so cell size is derived from image dimensions.
+ * v2 look rows are optional at runtime: Desk currently plays the standard
+ * nine action rows, and older/third-party v2 sheets may omit the neutral
+ * pointer frame while still being valid pets.
  *
  * This module is the pure domain layer: manifest parsing, sheet geometry,
  * vocabulary translation, and construction of the app's internal
@@ -391,9 +394,6 @@ export function buildPetPackManifest(input: {
         problems.push({ field: `visibleCellMasks[${row}]`, message: "all 16 v2 look cells must contain visible pixels" });
       }
     }
-    if ((visibleCellMasks[0] & (1 << CODEX_PET_IDLE_FRAMES)) === 0) {
-      problems.push({ field: "visibleCellMasks[0]", message: "v2 idle row must include its neutral look frame" });
-    }
   }
   if (problems.length > 0) return { ok: false, problems };
 
@@ -435,7 +435,7 @@ export function buildPetPackManifest(input: {
         done: resolveRole("done", available),
         error: resolveRole("error", available)
       },
-      ...(manifest.spriteVersionNumber === 2 ? {
+      ...(manifest.spriteVersionNumber === 2 && ((visibleCellMasks?.[0] ?? 0) & (1 << CODEX_PET_IDLE_FRAMES)) !== 0 ? {
         look: {
           directions: CODEX_PET_LOOK_DIRECTIONS,
           startRow: CODEX_PET_LOOK_START_ROW,

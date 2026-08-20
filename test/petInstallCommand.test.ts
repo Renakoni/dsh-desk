@@ -4,21 +4,25 @@ import { parsePetInstallCommand } from "../src/shared/petInstallCommand";
 describe("parsePetInstallCommand", () => {
   it("parses the official installer command exactly as gallery pages show it", () => {
     expect(parsePetInstallCommand("npx codex-pet-installer add yuexinmiao"))
-      .toEqual({ ok: true, source: "codex-pet.org", slug: "yuexinmiao" });
+      .toEqual({ ok: true, source: "codex-pet-installer", slug: "yuexinmiao" });
+    expect(parsePetInstallCommand("npx codex-pets add eve"))
+      .toEqual({ ok: true, source: "codex-pets", slug: "eve" });
+    expect(parsePetInstallCommand("npx petscodex install mimikyu"))
+      .toEqual({ ok: true, source: "petscodex", slug: "mimikyu" });
   });
 
   it("tolerates copied shell prompts, npx flags, extra whitespace, and case", () => {
     expect(parsePetInstallCommand("$ npx codex-pet-installer add happy-dog"))
-      .toEqual({ ok: true, source: "codex-pet.org", slug: "happy-dog" });
+      .toEqual({ ok: true, source: "codex-pet-installer", slug: "happy-dog" });
     expect(parsePetInstallCommand("> npx -y codex-pet-installer add boba"))
-      .toEqual({ ok: true, source: "codex-pet.org", slug: "boba" });
+      .toEqual({ ok: true, source: "codex-pet-installer", slug: "boba" });
     expect(parsePetInstallCommand("  NPX  codex-pet-installer   ADD   Boba  "))
-      .toEqual({ ok: true, source: "codex-pet.org", slug: "boba" });
+      .toEqual({ ok: true, source: "codex-pet-installer", slug: "boba" });
   });
 
   it("keeps accepting a bare slug", () => {
-    expect(parsePetInstallCommand("yuexinmiao")).toEqual({ ok: true, source: "codex-pet.org", slug: "yuexinmiao" });
-    expect(parsePetInstallCommand("Happy-Dog")).toEqual({ ok: true, source: "codex-pet.org", slug: "happy-dog" });
+    expect(parsePetInstallCommand("yuexinmiao")).toEqual({ ok: true, source: "codex-pet-installer", slug: "yuexinmiao" });
+    expect(parsePetInstallCommand("Happy-Dog")).toEqual({ ok: true, source: "codex-pet-installer", slug: "happy-dog" });
   });
 
   it("names known-but-unsupported installers explicitly", () => {

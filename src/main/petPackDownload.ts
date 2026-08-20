@@ -1,11 +1,9 @@
 /**
- * One-click network install: resolve a codex-pet.org gallery slug to its two
- * package files and repackage them as a local .codex-pet.zip.
+ * One-click network install: resolve a supported gallery command to a
+ * standard local .codex-pet.zip.
  *
- * The resolution mirrors the official `codex-pet-installer` npm package
- * (v0.1.1): GET /api/pets/<slug> for the row, then
- * /api/pets/<slug>/files/pet.json and /files/spritesheet.webp for the
- * assets. This module ONLY produces a zip on disk — installation still goes
+ * Each adapter mirrors its official npm installer. This module ONLY produces
+ * a zip on disk — installation still goes
  * through the exact same inspect → scan → digest-bound install pipeline as a
  * hand-picked file, so a gallery endpoint change can never weaken import
  * validation, and removing this module cannot affect file import.
@@ -15,16 +13,19 @@ import { zipSync } from "fflate";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { isValidSpritesheetFileName } from "../shared/petPack";
-import { CODEX_PET_GALLERY_URL, type PetPackDownloadCode, type PetPackDownloadResult } from "../shared/petPackTransport";
+import { CODEX_PET_GALLERY_URL, type PetPackDownloadCode, type PetPackDownloadResult, type PetPackDownloadSource } from "../shared/petPackTransport";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_MANIFEST_DOWNLOAD_BYTES = 64 * 1024;
+const MAX_CATALOG_DOWNLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_SHEET_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_ARCHIVE_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 20_000;
 
 export interface PetPackDownloadOptions {
   fetchImpl?: typeof fetch;
   siteUrl?: string;
+  source?: PetPackDownloadSource;
   onProgress?: (receivedBytes: number, totalBytes: number | null) => void;
 }
 
@@ -107,7 +108,8 @@ export async function downloadPetPack(
   options: PetPackDownloadOptions = {}
 ): Promise<PetPackDownloadResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const siteUrl = options.siteUrl ?? CODEX_PET_GALLERY_URL;
+  const source = options.source ?? "codex-pet-installer";
+  const siteUrl = options.siteUrl ?? sourceSiteUrl(source);
 
   const slug = String(petSlug ?? "").trim().toLowerCase();
   if (!SLUG_PATTERN.test(slug)) return fail("invalid-slug");
@@ -119,18 +121,30 @@ export async function downloadPetPack(
     return fail("network", "invalid gallery URL");
   }
 
+  if (source === "codex-pets") return downloadCodexPets(slug, downloadsDir, fetchImpl, options.onProgress, origin);
+
   // 1. Resolve the gallery row.
   let row: Record<string, unknown>;
   try {
-    const response = await fetchImpl(`${origin}/api/pets/${encodeURIComponent(slug)}`, {
+    const lookupPath = source === "petscodex" ? "/catalog.json" : `/api/pets/${encodeURIComponent(slug)}`;
+    const response = await fetchImpl(source === "petscodex" ? petsCodexCatalogUrl() : `${origin}${lookupPath}`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
     if (response.status === 404) return fail("not-found");
     if (!response.ok) return fail("network", `pet lookup failed with status ${response.status}`);
-    const body = await response.json() as { pet?: Record<string, unknown> };
-    if (!body?.pet || typeof body.pet !== "object") return fail("not-found");
-    row = body.pet;
+    if (source === "petscodex") {
+      const catalogBytes = await readBodyWithCap(response, MAX_CATALOG_DOWNLOAD_BYTES);
+      if ("tooLarge" in catalogBytes) return fail("too-large");
+      const catalog = JSON.parse(new TextDecoder("utf-8").decode(catalogBytes)) as { pets?: Array<Record<string, unknown>> };
+      const pet = catalog.pets?.find(item => item.id === slug || item.path === slug);
+      if (!pet) return fail("not-found");
+      row = pet;
+    } else {
+      const body = await response.json() as { pet?: Record<string, unknown> };
+      if (!body?.pet || typeof body.pet !== "object") return fail("not-found");
+      row = body.pet;
+    }
   } catch (error) {
     return fail("network", error instanceof Error ? error.message : String(error));
   }
@@ -139,7 +153,7 @@ export async function downloadPetPack(
   // spritesheet package.
   const imageUrl = String(row.image_url ?? "");
   const assetPath = String(row.asset_path ?? "");
-  if (!imageUrl || !(assetPath.endsWith("/spritesheet.webp") || imageUrl.toLowerCase().endsWith("/spritesheet.webp"))) {
+  if (source !== "petscodex" && (!imageUrl || !(assetPath.endsWith("/spritesheet.webp") || imageUrl.toLowerCase().endsWith("/spritesheet.webp")))) {
     return fail("invalid-package", "gallery entry does not include spritesheet.webp");
   }
 
@@ -147,9 +161,18 @@ export async function downloadPetPack(
   let manifestBytes: Uint8Array;
   let sheetBytes: Uint8Array;
   try {
+    const petPath = source === "petscodex" ? String(row.path || row.id || slug) : slug;
+    const encodedPetPath = petPath.split("/").map(segment => encodeURIComponent(segment)).join("/");
+    if (!petPath || petPath.split("/").some(segment => !segment || segment === "." || segment === "..")) return fail("invalid-package", "gallery entry has an invalid pet path");
+    const manifestUrl = source === "petscodex"
+      ? `https://raw.githubusercontent.com/mn8821236/petscodex/main/${encodedPetPath}/pet.json`
+      : `${origin}/api/pets/${encodeURIComponent(slug)}/files/pet.json`;
+    const sheetUrl = source === "petscodex"
+      ? `https://raw.githubusercontent.com/mn8821236/petscodex/main/${encodedPetPath}/spritesheet.webp`
+      : `${origin}/api/pets/${encodeURIComponent(slug)}/files/spritesheet.webp`;
     const [manifestResponse, sheetResponse] = await Promise.all([
-      fetchImpl(`${origin}/api/pets/${encodeURIComponent(slug)}/files/pet.json`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
-      fetchImpl(`${origin}/api/pets/${encodeURIComponent(slug)}/files/spritesheet.webp`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      fetchImpl(manifestUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+      fetchImpl(sheetUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
     ]);
     if (!manifestResponse.ok || !sheetResponse.ok) return fail("network", "could not download the pet package files");
 
@@ -190,6 +213,53 @@ export async function downloadPetPack(
       slug,
       displayName,
       creator: String(row.creator ?? ""),
+      galleryUrl: source === "petscodex" ? "https://petscodex.com/#pets" : `${origin}/pets/${encodeURIComponent(slug)}`
+    };
+  } catch (error) {
+    return fail("network", error instanceof Error ? error.message : String(error));
+  }
+}
+
+function sourceSiteUrl(source: PetPackDownloadSource): string {
+  if (source === "codex-pets") return "https://codex-pets.net";
+  if (source === "petscodex") return "https://petscodex.com";
+  return CODEX_PET_GALLERY_URL;
+}
+
+function petsCodexCatalogUrl(): string {
+  return "https://raw.githubusercontent.com/mn8821236/petscodex/main/catalog.json";
+}
+
+async function downloadCodexPets(
+  slug: string,
+  downloadsDir: string,
+  fetchImpl: typeof fetch,
+  onProgress?: (receivedBytes: number, totalBytes: number | null) => void,
+  siteUrl = "https://codex-pets.net"
+): Promise<PetPackDownloadResult> {
+  const origin = siteUrl;
+  try {
+    const lookup = await fetchImpl(`${origin}/api/pets/${encodeURIComponent(slug)}/share-data`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (lookup.status === 404) return fail("not-found");
+    if (!lookup.ok) return fail("network", `pet lookup failed with status ${lookup.status}`);
+    const body = await lookup.json() as { pet?: Record<string, unknown> };
+    const pet = body.pet;
+    if (!pet || typeof pet !== "object") return fail("not-found");
+    const downloadUrl = String(pet.downloadUrl ?? "");
+    if (!downloadUrl) return fail("invalid-package", "gallery entry does not include a downloadable package");
+    const response = await fetchImpl(new URL(downloadUrl, `${origin}/`).toString(), { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (!response.ok) return fail("network", `pet download failed with status ${response.status}`);
+    const archive = await readBodyWithCap(response, MAX_ARCHIVE_DOWNLOAD_BYTES, onProgress);
+    if ("tooLarge" in archive) return fail("too-large");
+    mkdirSync(downloadsDir, { recursive: true });
+    const zipPath = join(downloadsDir, `${slug}.codex-pet.zip`);
+    writeFileSync(zipPath, archive);
+    return {
+      ok: true,
+      zipPath,
+      slug,
+      displayName: String(pet.displayName ?? slug),
+      creator: String(pet.ownerName ?? pet.ownerHandle ?? ""),
       galleryUrl: `${origin}/pets/${encodeURIComponent(slug)}`
     };
   } catch (error) {

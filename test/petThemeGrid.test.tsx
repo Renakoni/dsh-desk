@@ -252,7 +252,7 @@ describe("PetThemeGrid install command", () => {
     fireEvent.click(screen.getByRole("button", { name: /Get/ }));
 
     await screen.findByRole("dialog");
-    expect(companion.downloadPetPack).toHaveBeenCalledWith("boba");
+    expect(companion.downloadPetPack).toHaveBeenCalledWith("boba", "codex-pet-installer");
     // The dialog's mount effect may flush a tick after the dialog appears.
     await waitFor(() => expect(companion.inspectPetPack).toHaveBeenCalledWith("C:/downloads/boba.codex-pet.zip"));
   });
@@ -270,7 +270,7 @@ describe("PetThemeGrid install command", () => {
 
     fireEvent.change(commandInput(), { target: { value: "boba" } });
     fireEvent.click(screen.getByRole("button", { name: /Get/ }));
-    await waitFor(() => expect(companion.downloadPetPack).toHaveBeenCalledWith("boba"));
+    await waitFor(() => expect(companion.downloadPetPack).toHaveBeenCalledWith("boba", "codex-pet-installer"));
   });
 
   it("rejects unrecognized commands locally without ever downloading or executing", async () => {
@@ -280,7 +280,7 @@ describe("PetThemeGrid install command", () => {
     fireEvent.click(screen.getByRole("button", { name: /Get/ }));
 
     await waitFor(() => expect(view.container.querySelector(".pet-theme-notice")?.textContent)
-      .toContain("Enter the install command from the pet's gallery page"));
+      .toContain("Enter an install command from a supported pet gallery"));
     expect(companion.downloadPetPack).not.toHaveBeenCalled();
   });
 
@@ -307,9 +307,20 @@ describe("PetThemeGrid install command", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("opens the gallery in the external browser", () => {
+  it("offers all supported galleries and opens the selected source", () => {
     renderGrid("en");
     fireEvent.click(screen.getByRole("button", { name: /Open pet gallery/ }));
+    expect(screen.getByRole("menuitem", { name: "codex-pet-installer" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "codex-pets" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "petscodex" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "codex-pets" }));
+    expect(companion.openExternal).toHaveBeenCalledWith("https://codexpets.net/gallery");
+  });
+
+  it("keeps the installer gallery as the source for pasted npx commands", () => {
+    renderGrid("en");
+    fireEvent.click(screen.getByRole("button", { name: /Open pet gallery/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "codex-pet-installer" }));
     expect(companion.openExternal).toHaveBeenCalledWith("https://codex-pet.org");
   });
 });

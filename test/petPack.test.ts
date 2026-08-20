@@ -272,7 +272,7 @@ describe("buildPetPackManifest", () => {
     expect(built.value.animations.every(animation => animation.row < 9)).toBe(true);
   });
 
-  it("requires every v2 look cell and the neutral frame", () => {
+  it("requires v2 direction cells but accepts packs without a neutral look frame", () => {
     const manifest = parseCodexPetManifest({ id: "v2", displayName: "V2", spriteVersionNumber: 2 });
     const geometry = deriveSheetGeometry(1536, 2288, 2);
     if (!manifest.ok || !geometry.ok) throw new Error("v2 fixtures must parse");
@@ -288,7 +288,8 @@ describe("buildPetPackManifest", () => {
       geometry: geometry.value,
       rowFrameCounts: { ...base, visibleCellMasks: base.visibleCellMasks.map((mask, row) => row === 0 ? 63 : mask) }
     });
-    expect(missingNeutral.ok).toBe(false);
+    expect(missingNeutral.ok).toBe(true);
+    if (missingNeutral.ok) expect(missingNeutral.value.look).toBeUndefined();
   });
 
   it("omits empty rows and falls back through the role chains", () => {

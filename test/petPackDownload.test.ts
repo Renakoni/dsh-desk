@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupPetDownloads, discardDownloadedPetPack, downloadPetPack } from "../src/main/petPackDownload";
 import { inspectPetPackZip } from "../src/main/petPackStore";
 import { makeVp8lHeader } from "./helpers/imageFixtures";
+import { strToU8, zipSync } from "fflate";
 
 const MANIFEST = { id: "boba", displayName: "Boba", description: "A gallery pet.", spritesheetPath: "spritesheet.webp" };
 const ROW = {
@@ -61,6 +62,29 @@ function happyRoutes(overrides: Partial<RouteMap> = {}): RouteMap {
 }
 
 describe("downloadPetPack", () => {
+  it("resolves codex-pets and petscodex commands into the same trusted package shape", async () => {
+    const archive = zipSync({
+      "pet.json": strToU8(JSON.stringify({ ...MANIFEST, id: "eve" })),
+      "spritesheet.webp": makeVp8lHeader(1536, 1872)
+    });
+    const codexPetsFetch = makeFetch({
+      "/api/pets/eve/share-data": () => jsonResponse({ pet: { id: "eve", displayName: "EVE", downloadUrl: "/api/pets/eve/download" } }),
+      "/api/pets/eve/download": () => new Response(bytesBody(archive), { status: 200 })
+    });
+    const codexPets = await downloadPetPack("eve", downloadsDir, { source: "codex-pets", fetchImpl: codexPetsFetch.impl });
+    expect(codexPets.ok).toBe(true);
+    if (codexPets.ok) expect(inspectPetPackZip(codexPets.zipPath).ok).toBe(true);
+
+    const petsCodexFetch = makeFetch({
+      "/catalog.json": () => jsonResponse({ pets: [{ id: "cat", path: "cat" }] }),
+      "/cat/pet.json": () => new Response(JSON.stringify({ ...MANIFEST, id: "cat" }), { status: 200 }),
+      "/cat/spritesheet.webp": () => new Response(bytesBody(makeVp8lHeader(1536, 1872)), { status: 200 })
+    });
+    const petsCodex = await downloadPetPack("cat", downloadsDir, { source: "petscodex", fetchImpl: petsCodexFetch.impl });
+    expect(petsCodex.ok).toBe(true);
+    if (petsCodex.ok) expect(inspectPetPackZip(petsCodex.zipPath).ok).toBe(true);
+  });
+
   it("resolves a slug like the official installer and produces a zip the trusted pipeline accepts", async () => {
     const { impl } = makeFetch(happyRoutes());
     const progress: number[] = [];
