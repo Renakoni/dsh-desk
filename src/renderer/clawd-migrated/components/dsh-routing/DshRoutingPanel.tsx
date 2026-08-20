@@ -89,6 +89,8 @@ function probeToastDescription(status: string, latencyMs: number) {
   );
 }
 
+const probeToastClassName = "dsh-probe-toast";
+
 function createEmptyProvider(name: string): DshProviderSaveInput {
   return {
     id: "",
@@ -276,19 +278,22 @@ export function DshRoutingPanel() {
         if (latency >= 800) {
           toast.warning(probeToastTitle(provider.name), {
             description: probeToastDescription(t("routing.testSlow", "连接成功，响应较慢"), latency),
-            closeButton: true
+            closeButton: true,
+            className: probeToastClassName
           });
         } else {
           toast.info(probeToastTitle(provider.name), {
             description: probeToastDescription(t("routing.testOk", "连接成功"), latency),
-            closeButton: true
+            closeButton: true,
+            className: probeToastClassName
           });
         }
       } else {
         toast.error(probeToastTitle(provider.name), {
           description: result.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络"),
           duration: 8000,
-          closeButton: true
+          closeButton: true,
+          className: probeToastClassName
         });
       }
     } finally {

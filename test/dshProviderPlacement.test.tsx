@@ -94,6 +94,7 @@ describe("DSH model routing placement", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Connectivity check" }));
     await waitFor(() => expect(document.querySelector("[data-sonner-toast]")?.textContent).toContain("600 ms"));
     const toast = document.querySelector("[data-sonner-toast]");
+    expect(toast?.classList.contains("dsh-probe-toast")).toBe(true);
     expect(toast?.querySelector("[data-title]")?.textContent).toBe("DeepSeek");
     expect(toast?.querySelector("[data-description]")?.textContent).toBe("Reachable · 600 ms");
     expect(toast?.textContent).not.toContain("HTTP");

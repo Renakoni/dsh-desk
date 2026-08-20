@@ -239,23 +239,25 @@
   -webkit-app-region: no-drag;
 }
 
-/* Keep connectivity feedback compact while giving long provider names a
-   stable, discoverable single-line title. */
-[data-sonner-toaster] {
-  --dsh-routing-toast-width: min(460px, calc(100vw - 24px));
+/* Connectivity feedback is content-sized instead of reserving a broad empty
+   surface. The max width keeps long provider names readable without letting a
+   provider name push the toast out of a narrow window. */
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] {
+  width: auto;
+  max-width: min(360px, calc(100vw - 24px));
+  left: 50%;
+  right: auto;
+  transform: var(--y) translateX(-50%);
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
-  width: var(--dsh-routing-toast-width);
-}
-
-[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-content] {
   min-width: 0;
+  max-width: 100%;
   flex: 1 1 auto;
   gap: 4px;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-title] {
   min-width: 0;
   max-width: 100%;
 }
@@ -285,12 +287,4 @@
 
 .dsh-probe-toast-detail-latency {
   flex: 0 0 auto;
-}
-
-@media (max-width: 600px) {
-  [data-sonner-toaster][data-x-position="center"] [data-sonner-toast][data-styled="true"] {
-    left: 0;
-    right: 0;
-    margin-inline: auto;
-  }
 }
