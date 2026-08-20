@@ -19,7 +19,7 @@ import type {
 } from "../shared/claudeProfiles";
 import { snapshotAfterClaudeProfileApply, snapshotAfterClaudeProfileResourceState } from "../shared/claudeProfiles";
 import { PET_IMAGE_SIZE, getPetWindowHeight, getPetWindowWidth, normalizePetDisplaySettings } from "../shared/petDisplaySettings";
-import { BUILTIN_PET_THEME_ID, BUILTIN_PET_THEME_NAME, packIdFromThemeId, petPackThemeId } from "../shared/petThemeCatalog";
+import { BUILTIN_PET_THEME_ID, packIdFromThemeId, petPackThemeId } from "../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../shared/spriteFrame";
 import { createDefaultCompanionSettings, pickCanonicalSettings } from "./companionSettingsSchema";
 import { applyThemeAnimationProfileSwitch } from "./themeProfiles";
@@ -52,6 +52,7 @@ import {
 import { PermissionBroker, type PendingPermission, type PermissionPollResult } from "./permissionBroker";
 import { inspectPetPackZip, installPetPack, listPetPacks, readPetPack, removePetPack, resolvePetAssetPath } from "./petPackStore";
 import { seedBundledPetPacks } from "./bundledPetPacks";
+import { buildTrayMenuPets, isRemovedBuiltinPetTheme } from "./trayMenuPets";
 import { cleanupPetDownloads, discardDownloadedPetPack, downloadPetPack } from "./petPackDownload";
 import { createPetDragWatcher, type PetDragWatcher } from "./petDragWatcher";
 import { createPetLookWatcher, type PetLookWatcher } from "./petLookWatcher";
@@ -583,18 +584,14 @@ function clearTrayMenuPresentFallback() {
   }
 }
 
-// The switchable pets for the tray submenu: the built-in theme plus every
-// installed codex-pet pack, in registry order, with the active one flagged.
+// The switchable pets for the tray submenu: available built-in and installed
+// codex-pet themes, in registry order, with the active one flagged.
 function trayMenuPets(): Array<{ id: string; name: string; active: boolean }> {
-  const active = typeof companionSettings.petTheme === "string" ? companionSettings.petTheme : BUILTIN_PET_THEME_ID;
-  const pets = [
-    { id: BUILTIN_PET_THEME_ID, name: BUILTIN_PET_THEME_NAME },
-    ...listPetPacks(petPacksDir()).map(pack => ({ id: petPackThemeId(pack.id), name: pack.displayName }))
-  ];
-  // If the stored theme no longer resolves (pack removed), the built-in is the
-  // effective active one — mirror resolveThemeCatalog's fallback.
-  const activeExists = pets.some(pet => pet.id === active);
-  return pets.map(pet => ({ ...pet, active: activeExists ? pet.id === active : pet.id === BUILTIN_PET_THEME_ID }));
+  return buildTrayMenuPets(
+    companionSettings.petTheme,
+    listPetPacks(petPacksDir()).map(pack => ({ id: petPackThemeId(pack.id), name: pack.displayName })),
+    companionSettings.removedBuiltinPetThemes
+  );
 }
 
 function trayMenuState() {
@@ -4059,6 +4056,11 @@ app.whenReady().then(() => {
     const previousPermissionScale = companionSettings.permissionScale;
     const previousPetTheme = typeof companionSettings.petTheme === "string" ? companionSettings.petTheme : "";
     const canonicalNext = pickCanonicalSettings(next && typeof next === "object" ? next : {});
+    const requestedTheme = canonicalNext.petTheme;
+    const removedBuiltinPetThemes = "removedBuiltinPetThemes" in canonicalNext
+      ? canonicalNext.removedBuiltinPetThemes
+      : companionSettings.removedBuiltinPetThemes;
+    if (isRemovedBuiltinPetTheme(requestedTheme, removedBuiltinPetThemes)) delete canonicalNext.petTheme;
     const mergedSettings = { ...companionSettings, ...canonicalNext };
     companionSettings = { ...mergedSettings, ...normalizePetDisplaySettings(mergedSettings) };
     if (panelWindow && !panelWindow.isDestroyed()) {
