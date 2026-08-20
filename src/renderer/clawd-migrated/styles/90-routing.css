@@ -245,6 +245,7 @@
 [data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] {
   width: auto;
   max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 18px;
   left: 50%;
   right: auto;
   transform: var(--y) translateX(-50%);
