@@ -13,7 +13,6 @@ import {
 } from "../../../../shared/dshResources";
 import { type I18nTranslate, useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
-import { RoutingToaster } from "../dsh-routing/RoutingToaster";
 import { DshMarketPanel } from "./DshMarketPanel";
 import { DshSchemeEditor } from "./DshSchemeEditor";
 import { RequiredComponentWarningDialog, shouldWarnRequiredComponent } from "./RequiredComponentWarningDialog";
@@ -193,7 +192,6 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
   if (editor) return (
     <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page">
-      <RoutingToaster />
       <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} knownPluginIds={knownPluginIds} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => setEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
       {deleteConfirm && editorScheme ? <ConfirmDialog title={t("dshResources.deleteSchemeTitle", "Delete scheme?")} cancelLabel={t("common.cancel", "Cancel")} confirmLabel={t("common.delete", "Delete")} danger onCancel={() => setDeleteConfirm(false)} onConfirm={() => void deleteScheme(editorScheme.id)}><p>{t("dshResources.deleteSchemeMessage", "Delete \"{name}\" permanently?", { name: schemeDisplayName(editorScheme, t) })}</p></ConfirmDialog> : null}
     </div>
@@ -201,7 +199,6 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
   return (
     <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page">
-      <RoutingToaster />
       <div className="claude-profile-top-row dsh-plugins-head">
         <section className="claude-profile-toolbar">
           <div className="claude-profile-picker"><span>{t("dshResources.scheme", "Scheme")}</span><div className="claude-profile-dropdown" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSchemeMenuOpen(false); }}>

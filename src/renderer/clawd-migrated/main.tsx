@@ -46,6 +46,7 @@ import { AnimationSection } from "./features/animation/AnimationSection";
 import { DataSection } from "./features/data/DataSection";
 import { PluginsPage } from "./components/plugins/PluginsPage";
 import { DshAppearancePage } from "./components/appearance/DshAppearancePage";
+import { RoutingToaster } from "./components/dsh-routing/RoutingToaster";
 import { connectionSurfaceKey } from "./features/overview/connectionState";
 import { useConnectionSurface } from "./features/overview/useConnectionSurface";
 import { petAnimationAssets } from "./utils/petAnimationAssets";
@@ -872,6 +873,7 @@ function SettingsApp() {
 
   return (
     <main className="settings-shell">
+      <RoutingToaster />
       {gitToast && (
         <div className="git-toast" key={gitToast.id} style={{ left: "50%", top: 64, transform: "translateX(-50%)" }}>
           <span className="git-toast-title">{gitToast.title}</span>

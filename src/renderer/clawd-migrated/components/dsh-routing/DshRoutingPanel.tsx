@@ -7,7 +7,6 @@ import type { DshProvider, DshProviderListResult, DshProviderSaveInput } from ".
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PANEL_EXIT_MS, ProviderEditPanel } from "./ProviderEditPanel";
-import { RoutingToaster } from "./RoutingToaster";
 import { SortableDshProviderCard } from "./ProviderCard";
 
 type ProviderListProps = {
@@ -74,6 +73,22 @@ const ProviderList = memo(function ProviderList({
 function formatI18n(template: string, values: Record<string, string | number>) {
   return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 }
+
+function probeToastTitle(providerName: string) {
+  return <span className="dsh-probe-toast-title" title={providerName}>{providerName}</span>;
+}
+
+function probeToastDescription(status: string, latencyMs: number) {
+  return (
+    <span className="dsh-probe-toast-detail">
+      <span className="dsh-probe-toast-detail-status">{status}</span>
+      <span aria-hidden="true"> · </span>
+      <span className="dsh-probe-toast-detail-latency">{latencyMs} ms</span>
+    </span>
+  );
+}
+
+const probeToastClassName = "dsh-probe-toast";
 
 function createEmptyProvider(name: string): DshProviderSaveInput {
   return {
@@ -259,17 +274,25 @@ export function DshRoutingPanel() {
       const result = await companion.probeDshProvider({ id: provider.id, mode: "connectivity" });
       if (result.ok) {
         const latency = result.latencyMs ?? 0;
-        const detail = `${latency} ms`;
         if (latency >= 800) {
-          toast.warning(`${provider.name} · ${t("routing.testSlow", "连接成功，响应较慢")}`, { description: detail, closeButton: true });
+          toast.warning(probeToastTitle(provider.name), {
+            description: probeToastDescription(t("routing.testSlow", "连接成功，响应较慢"), latency),
+            closeButton: true,
+            className: probeToastClassName
+          });
         } else {
-          toast.info(`${provider.name} · ${t("routing.testOk", "连接成功")}`, { description: detail, closeButton: true });
+          toast.info(probeToastTitle(provider.name), {
+            description: probeToastDescription(t("routing.testOk", "连接成功"), latency),
+            closeButton: true,
+            className: probeToastClassName
+          });
         }
       } else {
-        toast.error(`${provider.name} · ${t("routing.testUnreachable", "连接失败")}`, {
+        toast.error(probeToastTitle(provider.name), {
           description: result.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络"),
           duration: 8000,
-          closeButton: true
+          closeButton: true,
+          className: probeToastClassName
         });
       }
     } finally {
@@ -304,7 +327,6 @@ export function DshRoutingPanel() {
         <button className="cc-switch-add" onClick={openNewProvider} title={t("routing.addProvider", "添加供应商")} aria-label={t("routing.addProvider", "添加供应商")}><Plus size={18} /></button>
       </header>
 
-      <RoutingToaster />
       {listing && !listing.ok ? <div className="ccs-provider-status">{listing.error}</div> : null}
 
       <ProviderList

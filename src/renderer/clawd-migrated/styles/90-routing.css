@@ -238,3 +238,83 @@
 [data-sonner-toaster] [data-close-button] {
   -webkit-app-region: no-drag;
 }
+
+/* Connectivity feedback is content-sized instead of reserving a broad empty
+   surface. The max width keeps long provider names readable without letting a
+   provider name push the toast out of a narrow window. */
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] {
+  width: auto;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 18px;
+  left: 50%;
+  right: auto;
+  transform: var(--y) translateX(-50%);
+}
+
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swiping="true"] {
+  transform: var(--y) translateY(var(--swipe-amount-y, 0px)) translateX(calc(-50% + var(--swipe-amount-x, 0px)));
+}
+
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="left"] { animation-name: dsh-probe-swipe-out-left; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="right"] { animation-name: dsh-probe-swipe-out-right; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="up"] { animation-name: dsh-probe-swipe-out-up; }
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-swipe-out="true"][data-swipe-direction="down"] { animation-name: dsh-probe-swipe-out-down; }
+
+@keyframes dsh-probe-swipe-out-left {
+  from { transform: var(--y) translateX(calc(-50% + var(--swipe-amount-x))); opacity: 1; }
+  to { transform: var(--y) translateX(calc(-150% + var(--swipe-amount-x))); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-right {
+  from { transform: var(--y) translateX(calc(-50% + var(--swipe-amount-x))); opacity: 1; }
+  to { transform: var(--y) translateX(calc(50% + var(--swipe-amount-x))); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-up {
+  from { transform: var(--y) translateY(var(--swipe-amount-y)) translateX(-50%); opacity: 1; }
+  to { transform: var(--y) translateY(calc(var(--swipe-amount-y) - 100%)) translateX(-50%); opacity: 0; }
+}
+
+@keyframes dsh-probe-swipe-out-down {
+  from { transform: var(--y) translateY(var(--swipe-amount-y)) translateX(-50%); opacity: 1; }
+  to { transform: var(--y) translateY(calc(var(--swipe-amount-y) + 100%)) translateX(-50%); opacity: 0; }
+}
+
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-content] {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  gap: 4px;
+}
+
+[data-sonner-toaster] .dsh-probe-toast[data-sonner-toast][data-styled="true"] [data-title] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dsh-probe-toast-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-probe-toast-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-probe-toast-detail-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dsh-probe-toast-detail-latency {
+  flex: 0 0 auto;
+}
