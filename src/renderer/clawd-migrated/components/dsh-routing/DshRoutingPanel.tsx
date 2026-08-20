@@ -75,6 +75,20 @@ function formatI18n(template: string, values: Record<string, string | number>) {
   return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 }
 
+function probeToastTitle(providerName: string) {
+  return <span className="dsh-probe-toast-title" title={providerName}>{providerName}</span>;
+}
+
+function probeToastDescription(status: string, latencyMs: number) {
+  return (
+    <span className="dsh-probe-toast-detail">
+      <span className="dsh-probe-toast-detail-status">{status}</span>
+      <span aria-hidden="true"> · </span>
+      <span className="dsh-probe-toast-detail-latency">{latencyMs} ms</span>
+    </span>
+  );
+}
+
 function createEmptyProvider(name: string): DshProviderSaveInput {
   return {
     id: "",
@@ -259,14 +273,19 @@ export function DshRoutingPanel() {
       const result = await companion.probeDshProvider({ id: provider.id, mode: "connectivity" });
       if (result.ok) {
         const latency = result.latencyMs ?? 0;
-        const detail = `${latency} ms`;
         if (latency >= 800) {
-          toast.warning(`${provider.name} · ${t("routing.testSlow", "连接成功，响应较慢")}`, { description: detail, closeButton: true });
+          toast.warning(probeToastTitle(provider.name), {
+            description: probeToastDescription(t("routing.testSlow", "连接成功，响应较慢"), latency),
+            closeButton: true
+          });
         } else {
-          toast.info(`${provider.name} · ${t("routing.testOk", "连接成功")}`, { description: detail, closeButton: true });
+          toast.info(probeToastTitle(provider.name), {
+            description: probeToastDescription(t("routing.testOk", "连接成功"), latency),
+            closeButton: true
+          });
         }
       } else {
-        toast.error(`${provider.name} · ${t("routing.testUnreachable", "连接失败")}`, {
+        toast.error(probeToastTitle(provider.name), {
           description: result.error ?? t("routing.testUnreachableHint", "请检查请求地址与网络"),
           duration: 8000,
           closeButton: true

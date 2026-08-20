@@ -238,3 +238,59 @@
 [data-sonner-toaster] [data-close-button] {
   -webkit-app-region: no-drag;
 }
+
+/* Keep connectivity feedback compact while giving long provider names a
+   stable, discoverable single-line title. */
+[data-sonner-toaster] {
+  --dsh-routing-toast-width: min(460px, calc(100vw - 24px));
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  width: var(--dsh-routing-toast-width);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 4px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dsh-probe-toast-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-probe-toast-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-probe-toast-detail-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dsh-probe-toast-detail-latency {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  [data-sonner-toaster][data-x-position="center"] [data-sonner-toast][data-styled="true"] {
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+  }
+}

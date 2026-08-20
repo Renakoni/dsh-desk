@@ -93,7 +93,10 @@ describe("DSH model routing placement", () => {
     vi.mocked(window.companion.probeDshProvider).mockResolvedValueOnce({ ok: true, latencyMs: 600, status: 404 });
     fireEvent.click(await screen.findByRole("button", { name: "Connectivity check" }));
     await waitFor(() => expect(document.querySelector("[data-sonner-toast]")?.textContent).toContain("600 ms"));
-    expect(document.querySelector("[data-sonner-toast]")?.textContent).not.toContain("HTTP");
+    const toast = document.querySelector("[data-sonner-toast]");
+    expect(toast?.querySelector("[data-title]")?.textContent).toBe("DeepSeek");
+    expect(toast?.querySelector("[data-description]")?.textContent).toBe("Reachable · 600 ms");
+    expect(toast?.textContent).not.toContain("HTTP");
   });
 
   it("does not expose a Models subsection under Settings", () => {
