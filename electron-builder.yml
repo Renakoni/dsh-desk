@@ -27,6 +27,8 @@ extraResources:
     to: dsh-plugin/dsh-desk-plugin.tgz
   - from: src/main/assets/kuaclock.png
     to: kuaclock.png
+  - from: src/main/assets/pets
+    to: pets
 
 win:
   target:

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, screen, shell, Tray } from "electron";
 import { autoUpdater } from "electron-updater";
-import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
@@ -3285,6 +3285,38 @@ function petPacksDir() {
   return join(app.getPath("userData"), "pets");
 }
 
+function seedBundledPetPacks() {
+  const bundledRoot = join(process.resourcesPath ?? join(__dirname, "../../src/main/assets"), "pets");
+  const targetRoot = petPacksDir();
+  const packs = [
+    { id: "yuexinmiao", rows: 9, height: 1872, displayName: "月薪喵", description: "A small white office cat mascot." },
+    { id: "maid-deepseek-whale", rows: 11, height: 2288, displayName: "Maid-DeepSeek-Whale", description: "A tiny chibi blue-haired whale maid." }
+  ];
+  mkdirSync(targetRoot, { recursive: true });
+  for (const pack of packs) {
+    const targetDir = join(targetRoot, pack.id);
+    if (readPetPack(targetRoot, pack.id)) continue;
+    const sourceSheet = join(bundledRoot, pack.id, "spritesheet.webp");
+    if (!existsSync(sourceSheet)) continue;
+    mkdirSync(targetDir, { recursive: true });
+    copyFileSync(sourceSheet, join(targetDir, "spritesheet.webp"));
+    const animations = ["idle", "running_right", "running_left", "waving", "jumping", "failed", "waiting_permission", "running", "review"]
+      .map((key, row) => ({ key, row, frameCount: 8, frameDurationMs: 160 }));
+    writeFileSync(join(targetDir, "pack.manifest.json"), JSON.stringify({
+      formatVersion: 1,
+      sourceFormat: pack.rows === 11 ? "codex-pet-v2" : "codex-pet-v1",
+      spriteVersionNumber: pack.rows === 11 ? 2 : 1,
+      id: pack.id,
+      displayName: pack.displayName,
+      description: pack.description,
+      spritesheetFile: "spritesheet.webp",
+      sheet: { width: 1536, height: pack.height, columns: 8, rows: pack.rows, cellWidth: 192, cellHeight: pack.height / pack.rows },
+      animations,
+      roleDefaults: { idle: "idle", running: "running", waiting_permission: "waiting_permission", done: "jumping", error: "failed" }
+    }, null, 2));
+  }
+}
+
 function petDownloadsDir() {
   return join(app.getPath("userData"), "pet-downloads");
 }
@@ -4010,6 +4042,7 @@ function startEventServer() {
 
 if (singleInstanceLock) {
 app.whenReady().then(() => {
+  seedBundledPetPacks();
   try {
     restoreLegacyDisabledDshSkills();
   } catch (error) {
