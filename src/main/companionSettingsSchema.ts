@@ -32,6 +32,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   autoStartWithCli: false,
   autoUpdateEnabled: false,
   petTheme: "minato-aqua",
+  removedBuiltinPetThemes: [],
   enabledSources: ["deepseek-harness"],
   notificationsEnabled: true,
   theme: "system",
@@ -159,6 +160,11 @@ export function pickCanonicalSettings(parsed: Record<string, unknown>): Record<s
         ? Object.fromEntries(Object.entries(rule as Record<string, unknown>).filter(([key]) => NOTIFICATION_RULE_KEYS.has(key)))
         : rule
     );
+  }
+  if ("removedBuiltinPetThemes" in canonical) {
+    canonical.removedBuiltinPetThemes = Array.isArray(canonical.removedBuiltinPetThemes)
+      ? canonical.removedBuiltinPetThemes.filter(themeId => themeId === "minato-aqua")
+      : [];
   }
   if ("idleAnim" in canonical) canonical.idleAnim = pickIdleAnimation(canonical.idleAnim);
   if (canonical.themeAnimationProfiles && typeof canonical.themeAnimationProfiles === "object" && !Array.isArray(canonical.themeAnimationProfiles)) {

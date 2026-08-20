@@ -8,7 +8,7 @@ import { PetThemeGrid } from "../../features/settings/PetThemeGrid";
 type DshAppearancePageProps = {
   active: boolean;
   settings: any;
-  updateSettings: (settings: any) => void;
+  updateSettings: (settings: any) => Promise<void> | void;
   petPacks?: any[];
   refreshPetPacks?: () => void;
 };
@@ -25,6 +25,14 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
   function selectSubsection(next: "themes" | "pet") {
     setSubsection(next);
     window.requestAnimationFrame(() => document.querySelector(".section-content")?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+  }
+
+  async function removeBuiltinPetTheme(themeId: string, nextThemeId: string | null) {
+    const removed = Array.isArray(settings.removedBuiltinPetThemes) ? settings.removedBuiltinPetThemes : [];
+    await updateSettings({
+      removedBuiltinPetThemes: [...new Set([...removed, themeId])],
+      ...(nextThemeId ? { petTheme: nextThemeId } : {})
+    });
   }
 
   return (
@@ -61,6 +69,8 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
               activeThemeId={settings.petTheme}
               petPacks={petPacks}
               onSelectTheme={themeId => updateSettings({ petTheme: themeId })}
+              removedBuiltinThemeIds={settings.removedBuiltinPetThemes ?? []}
+              onRemoveBuiltinTheme={removeBuiltinPetTheme}
               refreshPetPacks={() => refreshPetPacks?.()}
             />
           </section>

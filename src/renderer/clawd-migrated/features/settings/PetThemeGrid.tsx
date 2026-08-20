@@ -6,7 +6,7 @@ import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
 import type { PetPackManifest } from "../../../../shared/petPack";
 import { spritesheetAssetsFromPack } from "../../../../shared/petPackAssets";
 import { parsePetInstallCommand } from "../../../../shared/petInstallCommand";
-import { type PetPackDownloadCode } from "../../../../shared/petPackTransport";
+import { type PetPackDownloadCode, type PetPackRemoveResult } from "../../../../shared/petPackTransport";
 import { BUILTIN_PET_THEME_ID, packIdFromThemeId } from "../../../../shared/petThemeCatalog";
 import { displayedSpriteHeight } from "../../../../shared/spriteFrame";
 import { listPetThemes, type PetThemeDefinition } from "../../utils/petThemes";
@@ -38,10 +38,12 @@ const builtinCovers: Record<string, string> = {
  * live region, disarms on blur/Escape/timeout, and the active theme only
  * changes after a deletion actually succeeded.
  */
-export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPetPacks }: {
+export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, removedBuiltinThemeIds = [], onRemoveBuiltinTheme, refreshPetPacks }: {
   activeThemeId: string;
   petPacks: PetPackManifest[];
   onSelectTheme: (themeId: string) => void;
+  removedBuiltinThemeIds?: string[];
+  onRemoveBuiltinTheme?: (themeId: string, nextThemeId: string | null) => Promise<void> | void;
   refreshPetPacks: () => void;
 }) {
   const { t } = useI18n();
@@ -63,6 +65,7 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
   const [commandHintIndex, setCommandHintIndex] = useState(0);
   const [previousCommandHintIndex, setPreviousCommandHintIndex] = useState<number | null>(null);
   const commandHintIndexRef = useRef(0);
+  const themes = listPetThemes(petPacks).filter(theme => !removedBuiltinThemeIds.includes(theme.id));
 
   useEffect(() => {
     return window.companion.onPetPackDownloadProgress?.(payload => {
@@ -154,14 +157,22 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
     setArmedRemoveId(null);
     setRemovingId(theme.id);
     try {
+      const replacement = themes.find(candidate => candidate.id !== theme.id);
+      if (!replacement) return;
       const packId = packIdFromThemeId(theme.id);
-      const result = packId
-        ? await window.companion.removePetPack(packId)
-        : { ok: false as const, error: t("petImport.removeFailed", "移除失败") };
+      let result: PetPackRemoveResult;
+      if (packId) {
+        result = await window.companion.removePetPack(packId);
+      } else if (onRemoveBuiltinTheme) {
+        await onRemoveBuiltinTheme(theme.id, activeThemeId === theme.id ? replacement.id : null);
+        result = { ok: true };
+      } else {
+        result = { ok: false, error: t("petImport.removeFailed", "移除失败") };
+      }
       if (result.ok) {
         // Only a successful deletion may change the selection; the pet
         // window falls back gracefully during the refresh.
-        if (activeThemeId === theme.id) onSelectTheme(BUILTIN_PET_THEME_ID);
+        if (packId && activeThemeId === theme.id) onSelectTheme(replacement.id);
         setNotice(null);
         setStatusMessage(t("petImport.removed", "已移除"));
       } else {
@@ -317,7 +328,7 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
             <small>{t("petImport.importHint", "codex-pet 宠物包 (.zip)")}</small>
           </span>
         </button>
-        {listPetThemes(petPacks).map(theme => {
+        {themes.map(theme => {
           const packId = packIdFromThemeId(theme.id);
           const pack = packId ? petPacks.find(candidate => candidate.id === packId) : undefined;
           const armed = armedRemoveId === theme.id;
@@ -338,7 +349,7 @@ export function PetThemeGrid({ activeThemeId, petPacks, onSelectTheme, refreshPe
                   <small>{pack ? t("petImport.importedTheme", "导入宠物") : theme.characterName}</small>
                 </span>
               </button>
-              {pack ? (
+              {themes.length > 1 && (pack || onRemoveBuiltinTheme) ? (
                 <button
                   type="button"
                   className={`pet-theme-remove ${armed ? "armed" : ""}`}
