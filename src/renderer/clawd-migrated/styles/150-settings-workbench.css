@@ -616,6 +616,7 @@
 
 .settings-page .pet-install-command-hint {
   position: absolute;
+  z-index: 2;
   left: 30px;
   right: 10px;
   top: 50%;
