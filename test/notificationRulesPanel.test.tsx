@@ -22,6 +22,45 @@ afterEach(() => {
 });
 
 describe("NotificationRulesPanel concurrent edits", () => {
+  it("starts with Windows notifications and every supported sound enabled", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <NotificationRulesPanel settings={structuredClone(defaultSettings)} updateSettings={vi.fn()} />
+      </I18nProvider>
+    );
+
+    for (const name of ["Windows notification", "Enable sound", "Done", "Error", "Permission request"]) {
+      expect(screen.getByRole("switch", { name }).getAttribute("aria-checked")).toBe("true");
+    }
+  });
+
+  it("previews the matching built-in sound for every supported DSH alert", async () => {
+    vi.stubGlobal("Audio", class {
+      volume = 1;
+      currentTime = 0;
+      pause = vi.fn();
+      play = vi.fn(async () => undefined);
+      addEventListener = vi.fn();
+    });
+    render(
+      <I18nProvider initialLocale="en">
+        <NotificationRulesPanel settings={structuredClone(defaultSettings)} updateSettings={vi.fn()} />
+      </I18nProvider>
+    );
+
+    const previews = screen.getAllByRole("button", { name: "Preview" });
+    for (const preview of previews) {
+      await act(async () => {
+        fireEvent.click(preview);
+        await Promise.resolve();
+      });
+    }
+
+    expect(window.companion.previewSound).toHaveBeenNthCalledWith(1, "done");
+    expect(window.companion.previewSound).toHaveBeenNthCalledWith(2, "error");
+    expect(window.companion.previewSound).toHaveBeenNthCalledWith(3, "permission");
+  });
+
   it("builds rapid rule and sound updates from the latest local snapshot", () => {
     const updateSettings = vi.fn();
     render(

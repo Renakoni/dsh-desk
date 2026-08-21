@@ -3,7 +3,7 @@ import React from "react";
 import { Bell, Bot, Cable, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
 import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
-import minatoAquaCover from "../../../assets/themes/minato-aqua-cover.png";
+import appIcon from "../../../../main/assets/kuaclock.png";
 import { NotificationRulesPanel } from "../../components/NotificationRulesPanel";
 import { CurrencySegmented, GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
 import { ConnectionManagement } from "./ConnectionManagement";
@@ -54,10 +54,6 @@ export function SettingsSection({
 }) {
   const { t } = useI18n();
   const activePetTheme = getPetTheme(settings.petTheme, petPacks);
-  const petThemeCovers: Record<string, string> = {
-    "minato-aqua": minatoAquaCover
-  };
-  const aboutCover = petThemeCovers[activePetTheme.id] ?? minatoAquaCover;
   // Mirrors the footer's update state machine faithfully (same priority order)
   // instead of collapsing every in-between state to "idle".
   const aboutUpdateValue = updateStatus.error ? updateStatus.error
@@ -226,11 +222,7 @@ export function SettingsSection({
 
         {activeSettingsSubsection === "about" && (
           <div className="settings-about-page">
-            {aboutCover ? (
-              <img className="settings-about-portrait" src={aboutCover} alt="" draggable={false} />
-            ) : (
-              <div className="settings-about-portrait settings-about-portrait-fallback">{activePetTheme.characterName}</div>
-            )}
+            <img className="settings-about-portrait settings-about-app-icon" src={appIcon} alt="" draggable={false} />
             <h3 className="settings-about-name">DSH Desk</h3>
             <span className="settings-about-version">{appVersion ? `v${appVersion}` : "—"}</span>
             <p className="settings-about-tagline">{t("settings.about.description", "面向 DeepSeek Harness 的本地桌宠和工作台。")}</p>
