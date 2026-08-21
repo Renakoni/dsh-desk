@@ -192,6 +192,9 @@
 .dsh-theme-market-copy { padding: 10px 11px 5px; }
 .dsh-theme-stars { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: #a66f1c; font-size: 11px; font-weight: 720; font-variant-numeric: tabular-nums; }
 .dsh-theme-market-description { min-height: 34px; margin: 0; padding: 0 11px; overflow: hidden; color: var(--settings-muted); font-size: 11px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dsh-theme-compatibility-note { margin: 0; padding: 7px 10px; border-left: 3px solid #ad691c; color: var(--settings-ink); background: color-mix(in srgb, #d9a23c 10%, transparent); font-size: 11px; line-height: 1.45; }
+.dsh-theme-library-card .dsh-theme-compatibility-note { margin: 0 10px 8px; }
+.dsh-theme-market-card .dsh-theme-compatibility-note { margin: 0 11px 5px; }
 .dsh-theme-market-card-footer { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: auto; padding: 9px 10px 10px; }
 .dsh-theme-market-card-footer button.text { margin-right: auto; padding-inline: 4px; border-color: transparent; color: var(--settings-muted); background: transparent; }
 .dsh-theme-load-more { min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 7px; margin: 14px auto 0; padding: 0 14px; border: 1px solid var(--settings-line); border-radius: 7px; color: var(--settings-muted); background: var(--theme-surface); font-size: 12px; }

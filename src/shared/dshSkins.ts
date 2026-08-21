@@ -54,7 +54,13 @@ export type DshSkinRuntimeState = {
   installedVersion: string | null;
   installedAt: string | null;
   updateAvailable: boolean;
+  compatibility?: DshSkinCompatibility;
   error?: string;
+};
+
+export type DshSkinCompatibility = {
+  status: "native" | "adapted" | "unverified";
+  code?: string;
 };
 
 export type DshSkinHostState = {
@@ -93,6 +99,7 @@ export type DshSkinOperationPhase =
   | "queued"
   | "downloading"
   | "installing"
+  | "checking"
   | "registering"
   | "activating"
   | "deactivating"

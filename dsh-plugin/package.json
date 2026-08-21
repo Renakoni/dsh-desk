@@ -4,7 +4,10 @@
   "description": "DeepSeek Harness event bridge for DSH Desk.",
   "type": "module",
   "main": "./src/index.js",
-  "exports": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js"
+  },
   "files": [
     "src",
     "cordis.patch.yml",
@@ -18,6 +21,9 @@
     "yaml": "^2.9.0"
   },
   "dsh": {
+    "client": {
+      "platform": "web"
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }

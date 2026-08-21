@@ -124,11 +124,24 @@ describe("DshThemesPage", () => {
     expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "temporary", themeId: "ocean.theme" });
   });
 
+  it("shows the active legacy compatibility adapter above the theme actions", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: null, updateAvailable: false, compatibility: { status: "adapted", code: "legacy-keyed-settings-item" } }] }));
+    const card = await screen.findByText("海洋主题");
+    expect(within(card.closest("article")!).getByText("已启用兼容适配：这个旧版主题正在使用 Desk 的 keyed slot 兼容层。")).not.toBeNull();
+  });
+
+  it("shows an unverified compatibility warning above the active theme actions", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false, compatibility: { status: "unverified", code: "settings-slot-registration-unreadable" } }] }));
+    const card = await screen.findByText("海洋主题");
+    expect(within(card.closest("article")!).getByText("未能安全确认该主题的兼容性，因此暂不启用。请更新主题或从仓库确认它是否支持当前 DSH。")).not.toBeNull();
+  });
+
   it("opens installed library theme details with runtime and catalog metadata", async () => {
     const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: "2026-08-18T00:00:00.000Z", updateAvailable: true }] }));
     await screen.findByText("海洋主题");
     const libraryCard = screen.getByText("海洋主题").closest("article");
-    expect(within(libraryCard!).getByRole("button", { name: "更新" })).not.toBeNull();
+    expect(within(libraryCard!).queryByRole("button", { name: "更新" })).toBeNull();
+    expect(libraryCard?.textContent).toContain("可更新");
 
     fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
 
@@ -141,6 +154,29 @@ describe("DshThemesPage", () => {
     expect(within(dialog).getByRole("button", { name: "停用" })).not.toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "更新" }));
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "update" }));
+  });
+
+  it("keeps use and update as separate actions for an inactive update", async () => {
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "0.9.0", installedAt: null, updateAvailable: true }] }));
+    await screen.findByText("海洋主题");
+    const libraryCard = screen.getByText("海洋主题").closest("article");
+    expect(within(libraryCard!).getByRole("button", { name: "使用" })).not.toBeNull();
+    expect(within(libraryCard!).queryByRole("button", { name: "更新" })).toBeNull();
+    fireEvent.click(within(libraryCard!).getByRole("button", { name: "查看 海洋主题" }));
+    const dialog = await screen.findByRole("dialog", { name: "海洋主题" });
+    expect(within(dialog).getByRole("button", { name: "使用" })).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: "更新" })).not.toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "使用" }));
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "activate" }));
+  });
+
+  it("keeps the market card focused on use when an installed theme has an update", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "0.9.0", installedAt: null, updateAvailable: true }] }));
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    const card = (await screen.findByText("海洋主题")).closest("article");
+    expect(within(card!).getByRole("button", { name: "使用" })).not.toBeNull();
+    expect(within(card!).queryByRole("button", { name: "更新" })).toBeNull();
   });
 
   it("keeps the active theme when uninstalling an inactive library theme", async () => {
