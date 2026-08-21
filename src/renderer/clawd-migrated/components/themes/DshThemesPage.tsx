@@ -151,6 +151,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
               <div className="dsh-theme-library-actions">
                 {state.installation === "broken" ? <span className="dsh-theme-broken">{t("dshThemes.broken", "安装不完整")}</span> : null}
                 {activeTheme ? <button type="button" disabled={!canManage || isBusy} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button> : state.installation === "installed" ? <button type="button" className="primary" disabled={!canManage || isBusy} onClick={() => void mutate(skin, state.updateAvailable ? "update" : "activate")}>{state.updateAvailable ? t("dshThemes.update", "更新") : t("dshThemes.use", "使用")}</button> : null}
+                {activeTheme && state.installation === "installed" && state.updateAvailable ? <button type="button" className="primary" disabled={!canManage || isBusy} onClick={() => void mutate(skin, "update")}>{t("dshThemes.update", "更新")}</button> : null}
                 <button type="button" className="icon danger" disabled={!canManage || isBusy} onClick={() => void mutate(skin, "uninstall")} title={t("dshThemes.uninstall", "卸载")} aria-label={t("dshThemes.uninstall", "卸载")}><Trash2 size={15} /></button>
               </div>
             </article>

@@ -23,6 +23,8 @@ export type DshSkinCatalogEntry = {
   compatibility: { dsh: string; platform: string[] };
   screenshots: string[];
   listScreenshot?: string;
+  /** A Desk-local thumbnail URL added to installed-theme snapshots. */
+  previewLocalUrl?: string;
   review?: DshSkinReview;
   license: { code: string; commercialUse: boolean; notice?: string };
   stars: number | null;

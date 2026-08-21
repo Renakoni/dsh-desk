@@ -107,7 +107,7 @@ import { dshDesiredPluginComponentStates, dshDesiredPluginStates, dshDesiredSkil
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 import type { DshSkinMutationInput } from "../shared/dshSkins";
-import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE, DEFAULT_DSH_WEB_ORIGIN, readManagedDshThemePackages } from "./dshSkinMarketplace";
+import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE, DSH_SKIN_PREVIEW_PROTOCOL, DEFAULT_DSH_WEB_ORIGIN, readManagedDshThemePackages, resolveDshSkinPreviewPath } from "./dshSkinMarketplace";
 import { normalizeDshThemeOverride, resolveDshThemeId } from "../shared/dshThemes";
 
 type DailyRuntimeStats = {
@@ -186,11 +186,12 @@ let updateStatus: UpdateStatus = {
 };
 let companionSettings: Record<string, any> = createDefaultCompanionSettings();
 
-// pet-asset:// serves installed pet-pack spritesheets to the renderer. The
-// scheme must be registered before app ready; the handler is installed in
-// whenReady and only ever resolves files inside the pets directory.
+// Custom asset schemes serve installed pet-pack spritesheets and cached DSH
+// theme previews. They must be registered before app ready; handlers are
+// installed in whenReady and only resolve files inside their cache roots.
 protocol.registerSchemesAsPrivileged([
-  { scheme: "pet-asset", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
+  { scheme: "pet-asset", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: DSH_SKIN_PREVIEW_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
 ]);
 
 if (!singleInstanceLock) {
@@ -3833,9 +3834,15 @@ function dshSkinMarketplace() {
     marketInstalled: dshSkinMarketInstalled,
     installPlugin: input => dshPluginCatalog().install(input),
     webOrigin: dshWebOrigin(),
-    authoritativeTheme: dshAuthoritativeThemeId
+    authoritativeTheme: dshAuthoritativeThemeId,
+    previewCacheDir: dshThemePreviewDir(),
+    previewAssetBaseUrl: `${DSH_SKIN_PREVIEW_PROTOCOL}://previews`
   });
   return dshSkinMarketplaceInstance;
+}
+
+function dshThemePreviewDir() {
+  return join(app.getPath("userData"), "dsh-theme-previews");
 }
 
 function restoreDesiredDshResources() {
@@ -4079,6 +4086,17 @@ app.whenReady().then(() => {
     if (!filePath || !existsSync(filePath)) return new Response(null, { status: 404 });
     const type = filePath.toLowerCase().endsWith(".png") ? "image/png" : "image/webp";
     return new Response(readFileSync(filePath), { headers: { "content-type": type } });
+  });
+  protocol.handle(DSH_SKIN_PREVIEW_PROTOCOL, request => {
+    const filePath = resolveDshSkinPreviewPath(request.url, dshThemePreviewDir());
+    if (!filePath) return new Response(null, { status: 404 });
+    const extension = extname(filePath).toLowerCase();
+    const type = extension === ".png" ? "image/png"
+      : extension === ".jpeg" ? "image/jpeg"
+        : extension === ".gif" ? "image/gif"
+          : extension === ".avif" ? "image/avif"
+            : "image/webp";
+    return new Response(readFileSync(filePath), { headers: { "content-type": type, "cache-control": "max-age=31536000, immutable" } });
   });
   ipcMain.handle("pet:get-event-port", () => eventPort);
   ipcMain.handle("pet:get-snapshot", () => getSnapshot());

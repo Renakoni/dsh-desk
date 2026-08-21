@@ -10,20 +10,18 @@ export function runtimeFor(snapshot: DshSkinMarketplaceSnapshot, skinId: string)
   return snapshot.host.skins.find(item => item.skinId === skinId);
 }
 
-function previewUrl(skin: DshSkinCatalogEntry): string | undefined {
+function remotePreviewUrl(skin: DshSkinCatalogEntry): string | undefined {
   return skin.listScreenshot ?? skin.screenshots[0];
 }
 
 export function ThemePreview({ skin, eager = false }: { skin: DshSkinCatalogEntry; eager?: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const source = previewUrl(skin);
-  if (!source || failed) return <div className="dsh-theme-preview-fallback" role="img" aria-label={`${skin.name.zh} 暂无预览`}><ImageOff size={24} /><span>{skin.author}</span></div>;
-  return <img src={source} alt={`${skin.name.zh} 界面预览`} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(true)} />;
-}
-
-function formatDate(value: string, locale: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium" }).format(date);
+  const remoteSource = remotePreviewUrl(skin);
+  const localSource = skin.previewLocalUrl;
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  useEffect(() => setFailedSource(null), [skin.id, localSource, remoteSource]);
+  const source = localSource && failedSource !== localSource ? localSource : remoteSource;
+  if (!source || failedSource === source) return <div className="dsh-theme-preview-fallback" role="img" aria-label={`${skin.name.zh} 暂无预览`}><ImageOff size={24} /><span>{skin.author}</span></div>;
+  return <img src={source} alt={`${skin.name.zh} 界面预览`} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailedSource(source)} />;
 }
 
 function shortCommit(value: string) {
@@ -216,6 +214,12 @@ export function ThemeDetailsDialog({ skin, runtime, snapshot, shotIndex, busy, l
 }) {
   const canManage = snapshot.host.connected;
   const manual = skin.review?.installation === "manual-only";
+  const installed = runtime?.installation === "installed";
+  const active = runtime?.activation === "active";
+  const restartRequired = runtime?.activation === "restart-required" && snapshot.host.restartAvailable;
+  const updateAvailable = runtime?.updateAvailable === true;
+  const status = runtime?.installation === "broken" ? t("dshThemes.broken", "安装不完整") : active ? t("dshThemes.inUse", "使用中") : installed ? t("dshThemes.installed", "已安装") : t("dshThemes.notInstalled", "未安装");
+  const updateLabel = t("dshThemes.updateAvailable", "可更新");
   const dialogRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -251,10 +255,10 @@ export function ThemeDetailsDialog({ skin, runtime, snapshot, shotIndex, busy, l
   }, [onClose]);
   return <div className="dsh-theme-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section ref={dialogRef} tabIndex={-1} className="dsh-theme-dialog" role="dialog" aria-modal="true" aria-label={locale === "zh" ? skin.name.zh : skin.name.en}>
     <button ref={closeRef} type="button" className="dsh-theme-dialog-close" onClick={onClose} aria-label={t("dshThemes.closeDetails", "关闭详情")}><X size={18} /></button>
-    <div className="dsh-theme-dialog-media"><ThemePreview key={`${skin.id}:${shotIndex}`} skin={{ ...skin, listScreenshot: skin.screenshots[shotIndex] ?? skin.listScreenshot }} eager />{skin.screenshots.length > 1 ? <><button type="button" className="previous" onClick={() => onShotIndex((shotIndex - 1 + skin.screenshots.length) % skin.screenshots.length)} aria-label={t("dshThemes.previousImage", "上一张预览")}><ChevronLeft size={20} /></button><button type="button" className="next" onClick={() => onShotIndex((shotIndex + 1) % skin.screenshots.length)} aria-label={t("dshThemes.nextImage", "下一张预览")}><ChevronRight size={20} /></button><span className="dsh-theme-image-count">{shotIndex + 1} / {skin.screenshots.length}</span></> : null}</div>
-    <div className="dsh-theme-dialog-copy"><div className="dsh-theme-dialog-title"><div><span>{skin.author}</span><h3>{locale === "zh" ? skin.name.zh : skin.name.en}</h3></div><span className="dsh-theme-stars"><Star size={13} fill="currentColor" />{skin.stars === null ? "-" : skin.stars.toLocaleString()}</span></div><p>{skin.description}</p><div className="dsh-theme-tags">{skin.tags.slice(0, 8).map(tag => <span key={tag}>{tag}</span>)}</div><dl className="dsh-theme-metadata"><div><dt>{t("dshThemes.status", "状态")}</dt><dd>{runtime?.installation === "broken" ? t("dshThemes.broken", "安装不完整") : runtime?.activation === "active" ? t("dshThemes.inUse", "使用中") : runtime?.installation === "installed" ? t("dshThemes.installed", "已安装") : t("dshThemes.notInstalled", "未安装")}</dd></div><div><dt>{t("dshThemes.updateStatus", "更新状态")}</dt><dd>{runtime?.updateAvailable ? t("dshThemes.updateAvailable", "可更新") : runtime?.installation === "installed" ? t("dshThemes.upToDate", "已是最新") : "-"}</dd></div><div><dt>{t("dshThemes.installedVersion", "已安装版本")}</dt><dd>{runtime?.installedVersion ?? "-"}</dd></div><div><dt>{t("dshThemes.catalogVersion", "目录版本")}</dt><dd>{skin.install.version}</dd></div><div><dt>{t("dshThemes.catalogCommit", "目录 commit")}</dt><dd title={skin.install.commit}>{skin.install.commit ? shortCommit(skin.install.commit) : "-"}</dd></div><div><dt>{t("dshThemes.updated", "目录更新")}</dt><dd>{formatDate(skin.updatedAt, locale)}</dd></div><div><dt>{t("dshThemes.mode", "模式")}</dt><dd>{skin.modes.join(" / ")}</dd></div><div><dt>{t("dshThemes.compatibility", "DSH")}</dt><dd>{skin.compatibility.dsh}</dd></div></dl>
+    <div className="dsh-theme-dialog-media"><ThemePreview key={`${skin.id}:${shotIndex}`} skin={{ ...skin, previewLocalUrl: undefined, listScreenshot: skin.screenshots[shotIndex] ?? skin.listScreenshot }} eager />{skin.screenshots.length > 1 ? <><button type="button" className="previous" onClick={() => onShotIndex((shotIndex - 1 + skin.screenshots.length) % skin.screenshots.length)} aria-label={t("dshThemes.previousImage", "上一张预览")}><ChevronLeft size={20} /></button><button type="button" className="next" onClick={() => onShotIndex((shotIndex + 1) % skin.screenshots.length)} aria-label={t("dshThemes.nextImage", "下一张预览")}><ChevronRight size={20} /></button><span className="dsh-theme-image-count">{shotIndex + 1} / {skin.screenshots.length}</span></> : null}</div>
+    <div className="dsh-theme-dialog-copy"><div className="dsh-theme-dialog-title"><div><span>{skin.author}</span><h3>{locale === "zh" ? skin.name.zh : skin.name.en}</h3></div><span className="dsh-theme-stars"><Star size={13} fill="currentColor" />{skin.stars === null ? "-" : skin.stars.toLocaleString()}</span></div><p>{skin.description}</p><div className="dsh-theme-tags">{skin.tags.slice(0, 8).map(tag => <span key={tag}>{tag}</span>)}</div><dl className="dsh-theme-metadata"><div><dt>{t("dshThemes.status", "状态")}</dt><dd><span>{status}</span>{updateAvailable ? <><span aria-hidden="true"> / </span><span>{updateLabel}</span></> : null}</dd></div><div><dt>{t("dshThemes.version", "版本")}</dt><dd title={t("dshThemes.versionDetail", "已安装版本 / 目录版本")}><span>{runtime?.installedVersion ?? "-"}</span><span aria-hidden="true"> / </span><span>{skin.install.version}</span></dd></div><div><dt>{t("dshThemes.catalogCommit", "目录 commit")}</dt><dd title={skin.install.commit}>{skin.install.commit ? shortCommit(skin.install.commit) : "-"}</dd></div><div><dt>{t("dshThemes.compatibility", "兼容性")}</dt><dd>{skin.compatibility.dsh} / {skin.modes.join(" / ")}</dd></div></dl>
       {runtime?.error ? <p className="dsh-theme-error">{runtime.error}</p> : null}{manual ? <p className="dsh-theme-manual-note">{t("dshThemes.manualDetail", "该主题暂不支持一键安装，请按仓库说明操作。")}</p> : null}{snapshot.host.marketInstalled && !snapshot.host.connected ? <p className="dsh-theme-manual-note">{t("dshThemes.startDshToManage", "启动 DSH 后可管理主题。")}</p> : null}
-      <div className="dsh-theme-dialog-actions">{skin.repositoryUrl ? <button type="button" className="dsh-theme-icon-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl!)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={17} /></button> : null}{runtime?.installation === "installed" ? <button type="button" className="danger-quiet" disabled={!canManage || busy} onClick={() => void onMutate(skin, "uninstall")}><Trash2 size={15} />{t("dshThemes.uninstall", "卸载")}</button> : null}{runtime?.activation === "active" ? <button type="button" disabled={!canManage || busy} onClick={() => void onMutate(skin, "deactivate")}><Power size={15} />{t("dshThemes.deactivate", "停用")}</button> : runtime?.activation === "restart-required" && snapshot.host.restartAvailable ? <button type="button" className="primary" disabled={busy} onClick={() => void onMutate(skin, "restart")}><RefreshCw size={15} />{t("dshThemes.restartWeb", "重启 DSH")}</button> : runtime?.installation === "installed" ? <button type="button" className="primary" disabled={!canManage || busy} onClick={() => void onMutate(skin, runtime.updateAvailable ? "update" : "activate")}>{runtime.updateAvailable ? t("dshThemes.update", "更新") : t("dshThemes.use", "使用")}</button> : <button type="button" className="primary" disabled={!canManage || busy} onClick={() => void onMutate(skin, "install")}><Download size={15} />{manual ? t("dshThemes.repository", "查看仓库") : t("dshThemes.install", "安装")}</button>}</div>
+      <div className="dsh-theme-dialog-actions">{skin.repositoryUrl ? <button type="button" className="dsh-theme-icon-button" onClick={() => void window.companion.openExternal(skin.repositoryUrl!)} title={t("dshThemes.openRepository", "打开仓库")} aria-label={t("dshThemes.openRepository", "打开仓库")}><ExternalLink size={17} /></button> : null}{installed ? <button type="button" className="danger-quiet" disabled={!canManage || busy} onClick={() => void onMutate(skin, "uninstall")}><Trash2 size={15} />{t("dshThemes.uninstall", "卸载")}</button> : null}{active ? <button type="button" disabled={!canManage || busy} onClick={() => void onMutate(skin, "deactivate")}><Power size={15} />{t("dshThemes.deactivate", "停用")}</button> : restartRequired ? <button type="button" className="primary" disabled={busy} onClick={() => void onMutate(skin, "restart")}><RefreshCw size={15} />{t("dshThemes.restartWeb", "重启 DSH")}</button> : null}{installed && updateAvailable ? <button type="button" className="primary" disabled={!canManage || busy} onClick={() => void onMutate(skin, "update")}>{t("dshThemes.update", "更新")}</button> : installed && !active && !restartRequired ? <button type="button" className="primary" disabled={!canManage || busy} onClick={() => void onMutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button> : !installed ? <button type="button" className="primary" disabled={!canManage || busy} onClick={() => void onMutate(skin, "install")}><Download size={15} />{manual ? t("dshThemes.repository", "查看仓库") : t("dshThemes.install", "安装")}</button> : null}</div>
     </div>
   </section></div>;
 }

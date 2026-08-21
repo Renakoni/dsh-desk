@@ -3,6 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshSkinMarketplaceSnapshot } from "../src/shared/dshSkins";
+import { ThemePreview } from "../src/renderer/clawd-migrated/components/themes/DshThemeMarketPanel";
 import { DshThemesPage } from "../src/renderer/clawd-migrated/components/themes/DshThemesPage";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
@@ -71,6 +72,17 @@ afterEach(() => {
 });
 
 describe("DshThemesPage", () => {
+  it("uses a local installed thumbnail and falls back to the catalog image", async () => {
+    const skin = { ...themes[0], previewLocalUrl: "dsh-theme-asset://previews/local.png" };
+    render(<ThemePreview skin={skin} />);
+    const image = screen.getByRole("img", { name: "海洋主题 界面预览" });
+    expect(image.getAttribute("src")).toBe("dsh-theme-asset://previews/local.png");
+
+    fireEvent.error(image);
+
+    await waitFor(() => expect(screen.getByRole("img", { name: "海洋主题 界面预览" }).getAttribute("src")).toBe("https://example.com/ocean.png"));
+  });
+
   it("keeps the local library separate from the visual market", async () => {
     renderPage();
     await screen.findByText("还没有安装主题");
@@ -113,8 +125,10 @@ describe("DshThemesPage", () => {
   });
 
   it("opens installed library theme details with runtime and catalog metadata", async () => {
-    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: "2026-08-18T00:00:00.000Z", updateAvailable: true }] }));
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: "2026-08-18T00:00:00.000Z", updateAvailable: true }] }));
     await screen.findByText("海洋主题");
+    const libraryCard = screen.getByText("海洋主题").closest("article");
+    expect(within(libraryCard!).getByRole("button", { name: "更新" })).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
 
@@ -124,6 +138,9 @@ describe("DshThemesPage", () => {
     expect(within(dialog).getByText("0.9.0")).not.toBeNull();
     expect(within(dialog).getByText("1.0.0")).not.toBeNull();
     expect(within(dialog).getByText("123456789012")).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: "停用" })).not.toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "更新" }));
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "update" }));
   });
 
   it("keeps the active theme when uninstalling an inactive library theme", async () => {
