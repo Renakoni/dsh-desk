@@ -39,7 +39,7 @@ import type {
   DshThemeOverrideInput
 } from "../shared/dshResources";
 import { createEmptyDshResourceSchemesSnapshot } from "../shared/dshResources";
-import type { DshSkinMarketInstallResult, DshSkinMarketplaceSnapshot, DshSkinMutationInput, DshSkinMutationResult } from "../shared/dshSkins";
+import type { DshSkinMarketInstallResult, DshSkinMarketplaceSnapshot, DshSkinMutationInput, DshSkinMutationResult, DshSkinOperationProgress } from "../shared/dshSkins";
 import {
   defaultSettings,
   defaultStats,
@@ -146,6 +146,7 @@ type CompanionApi = {
   getDshSkinMarketplace: (force?: boolean) => Promise<DshSkinMarketplaceSnapshot>;
   installDshSkinMarketplace: () => Promise<DshSkinMarketInstallResult>;
   mutateDshSkin: (input: DshSkinMutationInput) => Promise<DshSkinMutationResult>;
+  onDshSkinProgress?: (callback: Listener<DshSkinOperationProgress>) => Unsubscribe;
   revealDshSkill: (path: string) => Promise<boolean>;
   getClaudeResources: (force?: boolean) => Promise<ClaudeResourcesSnapshot>;
   getClaudeProfiles: (force?: boolean) => Promise<ClaudeProfilesSnapshot>;

@@ -23,6 +23,8 @@ export type DshSkinCatalogEntry = {
   compatibility: { dsh: string; platform: string[] };
   screenshots: string[];
   listScreenshot?: string;
+  /** A Desk-local thumbnail URL added to installed-theme snapshots. */
+  previewLocalUrl?: string;
   review?: DshSkinReview;
   license: { code: string; commercialUse: boolean; notice?: string };
   stars: number | null;
@@ -85,6 +87,28 @@ export type DshSkinAction = "install" | "activate" | "deactivate" | "update" | "
 export type DshSkinMutationInput = {
   skinId: string;
   action: DshSkinAction;
+};
+
+export type DshSkinOperationPhase =
+  | "queued"
+  | "downloading"
+  | "installing"
+  | "registering"
+  | "activating"
+  | "deactivating"
+  | "uninstalling"
+  | "done"
+  | "failed";
+
+export type DshSkinOperationProgress = {
+  skinId: string;
+  action: DshSkinAction;
+  phase: DshSkinOperationPhase;
+  message?: string;
+  /** A real byte-derived percentage, or null when the downloader has no total. */
+  progress: number | null;
+  receivedBytes?: number;
+  totalBytes?: number;
 };
 
 export type DshSkinMutationResult = {

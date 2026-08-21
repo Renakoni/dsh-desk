@@ -60,6 +60,14 @@
 }
 .dsh-theme-notice span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .dsh-theme-notice button { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border-radius: 5px; color: var(--settings-muted); }
+.dsh-theme-operation-progress { min-width: 0; display: grid; gap: 6px; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--settings-accent) 35%, var(--settings-line)); border-radius: 7px; color: var(--settings-muted); background: var(--theme-surface); font-size: 12px; }
+.dsh-theme-operation-progress-label { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dsh-theme-operation-progress-label span { min-width: 0; overflow-wrap: anywhere; }
+.dsh-theme-operation-progress-label strong { flex: 0 0 auto; color: var(--settings-ink); font-variant-numeric: tabular-nums; font-size: 11px; }
+.dsh-theme-operation-progress-track { position: relative; height: 5px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--settings-line) 68%, transparent); }
+.dsh-theme-operation-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--settings-accent); transition: width 180ms ease; }
+.dsh-theme-operation-progress-track.indeterminate span { width: 34%; animation: dsh-theme-progress-slide 1.15s ease-in-out infinite; }
+@keyframes dsh-theme-progress-slide { 0% { transform: translateX(-120%); } 50% { transform: translateX(190%); } 100% { transform: translateX(320%); } }
 
 .dsh-theme-primary-button,
 .dsh-theme-library-actions button,

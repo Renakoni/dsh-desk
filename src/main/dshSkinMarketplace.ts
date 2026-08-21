@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
   DshSkinAction,
@@ -10,17 +11,21 @@ import type {
   DshSkinMarketplaceSnapshot,
   DshSkinMutationInput,
   DshSkinMutationResult,
+  DshSkinOperationPhase,
+  DshSkinOperationProgress,
   DshSkinRuntimeState
 } from "../shared/dshSkins";
 import type { DshAppearanceComponent, DshAppearanceKind, DshAppearanceMetadata } from "../shared/dshResources";
-import { writeTextFileAtomic } from "./filePersistence";
+import { writeFileAtomic, writeTextFileAtomic } from "./filePersistence";
 
 export const DSH_SKIN_CATALOG_URL = "https://raw.githubusercontent.com/Renakoni/awesome-dsh-themes/main/data/catalog.json";
 export const DSH_SKIN_MARKET_INSTALL_SPEC = "";
 export const DSH_SKIN_MARKET_PACKAGE = "dsh-desk-plugin";
 export const DSH_SKIN_MARKET_REFRESH_MS = 12 * 60 * 60 * 1000;
 export const DEFAULT_DSH_WEB_ORIGIN = "http://127.0.0.1:3080";
+export const DSH_SKIN_PREVIEW_PROTOCOL = "dsh-theme-asset";
 const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
+const MAX_PREVIEW_BYTES = 5 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 5_000;
 export const OPERATION_TIMEOUT_MS = 10 * 60 * 1000;
 const CACHE_VERSION = 1;
@@ -30,6 +35,7 @@ type FetchResponse = {
   status: number;
   headers: { get(name: string): string | null };
   text(): Promise<string>;
+  arrayBuffer?: () => Promise<ArrayBuffer>;
 };
 
 type Fetcher = (url: string, init?: RequestInit) => Promise<FetchResponse>;
@@ -51,6 +57,9 @@ type RuntimePayload = {
 type OperationPayload = {
   phase?: unknown;
   message?: unknown;
+  progress?: unknown;
+  receivedBytes?: unknown;
+  totalBytes?: unknown;
 };
 
 type WebProfileManifest = {
@@ -72,10 +81,35 @@ export type DshSkinMarketplaceOptions = {
   pollDelay?: (milliseconds: number) => Promise<void>;
   installPlugin?: (input: { installSpec: string; profiles: string[] }) => Promise<{ ok: boolean; restartRequired: boolean; error?: string }>;
   authoritativeTheme?: () => string | null | undefined;
+  previewCacheDir?: string;
+  previewAssetBaseUrl?: string;
 };
 
 const APPEARANCE_KINDS: DshAppearanceKind[] = ["theme", "appearance-extension", "theme-bundle"];
 const APPEARANCE_COMPONENTS: DshAppearanceComponent[] = ["base-theme", "wallpaper", "motion", "sound", "settings"];
+const OPERATION_PHASES: DshSkinOperationPhase[] = ["queued", "downloading", "installing", "registering", "activating", "deactivating", "uninstalling", "done", "failed"];
+
+function operationProgress(input: DshSkinMutationInput, operation: OperationPayload): DshSkinOperationProgress | null {
+  if (typeof operation.phase !== "string" || !OPERATION_PHASES.includes(operation.phase as DshSkinOperationPhase)) return null;
+  const rawProgress = typeof operation.progress === "number" && Number.isFinite(operation.progress)
+    ? Math.max(0, Math.min(100, operation.progress))
+    : operation.phase === "done" ? 100 : null;
+  const receivedBytes = typeof operation.receivedBytes === "number" && Number.isFinite(operation.receivedBytes) && operation.receivedBytes >= 0
+    ? Math.floor(operation.receivedBytes)
+    : undefined;
+  const totalBytes = typeof operation.totalBytes === "number" && Number.isFinite(operation.totalBytes) && operation.totalBytes > 0
+    ? Math.floor(operation.totalBytes)
+    : undefined;
+  return {
+    skinId: input.skinId,
+    action: input.action,
+    phase: operation.phase as DshSkinOperationPhase,
+    progress: rawProgress,
+    ...(typeof operation.message === "string" ? { message: operation.message } : {}),
+    ...(receivedBytes !== undefined ? { receivedBytes } : {}),
+    ...(totalBytes !== undefined ? { totalBytes } : {})
+  };
+}
 
 function parseAppearance(value: unknown, themeId: string): DshAppearanceMetadata {
   const row = objectValue(value);
@@ -286,6 +320,45 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function previewSource(skin: DshSkinCatalogEntry): string | undefined {
+  return skin.listScreenshot ?? skin.screenshots[0];
+}
+
+function previewDigest(source: string): string {
+  return createHash("sha256").update(source).digest("hex");
+}
+
+function previewExtension(response: FetchResponse): "png" | "webp" | "jpeg" | "gif" | "avif" | null {
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  if (contentType === "image/jpeg") return "jpeg";
+  if (contentType === "image/gif") return "gif";
+  if (contentType === "image/avif") return "avif";
+  return null;
+}
+
+async function readPreviewBytes(response: FetchResponse): Promise<Uint8Array | null> {
+  if (!response.arrayBuffer) return null;
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_PREVIEW_BYTES) return null;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return bytes.byteLength > 0 && bytes.byteLength <= MAX_PREVIEW_BYTES ? bytes : null;
+}
+
+export function resolveDshSkinPreviewPath(urlString: string, cacheDir: string): string | null {
+  let url: URL;
+  try { url = new URL(urlString); } catch { return null; }
+  if (url.protocol !== `${DSH_SKIN_PREVIEW_PROTOCOL}:` || url.hostname !== "previews" || url.search || url.hash) return null;
+  const match = url.pathname.match(/^\/([a-f0-9]{64})\.(png|webp|jpeg|gif|avif)$/i);
+  if (!match) return null;
+  const root = resolve(cacheDir);
+  const filePath = resolve(root, `${match[1].toLowerCase()}.${match[2].toLowerCase()}`);
+  const relativePath = relative(root, filePath);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith("..\\") || relativePath.startsWith("../") || isAbsolute(relativePath)) return null;
+  return existsSync(filePath) ? filePath : null;
+}
+
 function readCache(path: string): CatalogCache | null {
   if (!existsSync(path)) return null;
   try {
@@ -317,6 +390,9 @@ export class DshSkinMarketplace {
   private readonly now: () => number;
   private readonly webOrigin: string;
   private readonly pollDelay: (milliseconds: number) => Promise<void>;
+  private readonly previewCacheDir?: string;
+  private readonly previewAssetBaseUrl?: string;
+  private readonly previewInflight = new Map<string, Promise<void>>();
   private catalog: CatalogCache | null;
   private catalogSource: "remote" | "cache" = "cache";
   private lastError?: string;
@@ -327,6 +403,8 @@ export class DshSkinMarketplace {
     this.now = options.now ?? Date.now;
     this.webOrigin = (options.webOrigin ?? DEFAULT_DSH_WEB_ORIGIN).replace(/\/$/, "");
     this.pollDelay = options.pollDelay ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)));
+    this.previewCacheDir = options.previewCacheDir;
+    this.previewAssetBaseUrl = options.previewAssetBaseUrl?.replace(/\/$/, "");
     this.catalog = readCache(options.cachePath);
   }
 
@@ -334,10 +412,11 @@ export class DshSkinMarketplace {
     await this.refreshCatalog(force);
     const marketInstalled = this.options.marketInstalled();
     const host = marketInstalled ? await this.hostState() : this.offlineHost(false);
+    await this.cacheInstalledPreviews(host);
     return this.createSnapshot(host);
   }
 
-  async mutate(input: DshSkinMutationInput): Promise<DshSkinMutationResult> {
+  async mutate(input: DshSkinMutationInput, reportProgress?: (progress: DshSkinOperationProgress) => void): Promise<DshSkinMutationResult> {
     if (!input || typeof input.skinId !== "string" || input.skinId === ""
       || !["install", "activate", "deactivate", "update", "uninstall", "restart"].includes(input.action)) {
       return { ok: false, error: "Invalid theme operation.", snapshot: await this.snapshot() };
@@ -366,9 +445,13 @@ export class DshSkinMarketplace {
         body: JSON.stringify({ skinId: input.skinId, skin, catalog: this.catalog?.skins ?? [] })
       }));
       const operationId = requiredString(started?.operationId, "operation id");
+      const startedProgress = operationProgress(input, started as OperationPayload);
+      if (startedProgress) reportProgress?.(startedProgress);
       const deadline = this.now() + OPERATION_TIMEOUT_MS;
       while (this.now() < deadline) {
         const operation = await this.hostRequest(`/dsh-appearance-manager/operations/${encodeURIComponent(operationId)}`) as OperationPayload;
+        const currentProgress = operationProgress(input, operation);
+        if (currentProgress) reportProgress?.(currentProgress);
         if (operation.phase === "done") {
           const snapshot = await this.snapshot();
           if (input.action === "activate" || input.action === "update") {
@@ -397,9 +480,55 @@ export class DshSkinMarketplace {
     return { ok: false, restartRequired: false, error: "主题管理已内置于 dsh-desk-plugin，无需安装额外市场插件。", snapshot: await this.snapshot() };
   }
 
+  private cachedPreviewUrl(skin: DshSkinCatalogEntry): string | undefined {
+    const source = previewSource(skin);
+    if (!source || !this.previewCacheDir || !this.previewAssetBaseUrl) return undefined;
+    const digest = previewDigest(source);
+    for (const extension of ["webp", "png", "jpeg", "gif", "avif"] as const) {
+      if (existsSync(join(this.previewCacheDir, `${digest}.${extension}`))) {
+        return `${this.previewAssetBaseUrl}/${digest}.${extension}`;
+      }
+    }
+    return undefined;
+  }
+
+  private async cachePreview(skin: DshSkinCatalogEntry): Promise<void> {
+    const source = previewSource(skin);
+    if (!source || !this.previewCacheDir || !this.previewAssetBaseUrl || this.cachedPreviewUrl(skin)) return;
+    const pending = this.previewInflight.get(source);
+    if (pending) return pending;
+    const task = (async () => {
+      try {
+        const response = await this.fetcher(source, {
+          headers: { accept: "image/avif,image/webp,image/png,image/jpeg,image/*", "user-agent": "dsh-desk/theme-preview" },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        });
+        if (!response.ok) return;
+        const extension = previewExtension(response);
+        const bytes = extension ? await readPreviewBytes(response) : null;
+        if (!extension || !bytes) return;
+        writeFileAtomic(join(this.previewCacheDir!, `${previewDigest(source)}.${extension}`), bytes);
+      } catch {
+        // A preview is optional. The renderer keeps the catalog URL as a fallback.
+      }
+    })().finally(() => { this.previewInflight.delete(source); });
+    this.previewInflight.set(source, task);
+    await task;
+  }
+
+  private async cacheInstalledPreviews(host: DshSkinHostState): Promise<void> {
+    if (!this.catalog || !this.previewCacheDir || !this.previewAssetBaseUrl) return;
+    const installed = new Set(host.skins.filter(state => state.installation === "installed").map(state => state.skinId));
+    await Promise.all(this.catalog.skins.filter(skin => installed.has(skin.id)).map(skin => this.cachePreview(skin)));
+  }
+
   private createSnapshot(host: DshSkinHostState): DshSkinMarketplaceSnapshot {
+    const installed = new Set(host.skins.filter(state => state.installation === "installed").map(state => state.skinId));
     return {
-      skins: this.catalog?.skins ?? [],
+      skins: this.catalog?.skins.map(skin => {
+        const previewLocalUrl = installed.has(skin.id) ? this.cachedPreviewUrl(skin) : undefined;
+        return previewLocalUrl ? { ...skin, previewLocalUrl } : skin;
+      }) ?? [],
       localSkins: this.localSkins(),
       generatedAt: this.catalog?.generatedAt ?? null,
       catalogSource: this.catalog ? this.catalogSource : "unavailable",
