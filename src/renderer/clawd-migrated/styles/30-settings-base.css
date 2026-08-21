@@ -164,6 +164,14 @@ pre { margin: 0; max-height: 280px; overflow: auto; padding: 13px; color: #f9e6b
   object-position: 50% 10%;
   box-shadow: 0 16px 38px rgba(43, 31, 21, 0.18);
 }
+.settings-about-app-icon {
+  width: 128px;
+  height: 104px;
+  padding: 8px;
+  object-fit: contain;
+  object-position: center;
+  background: var(--settings-surface-raised, rgba(255, 255, 255, 0.72));
+}
 .settings-about-portrait-fallback {
   display: grid;
   place-items: center;

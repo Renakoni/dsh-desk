@@ -128,6 +128,33 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByRole("button", { name: "Models" })).toBeNull();
   });
 
+  it("uses the DSH Desk alarm-clock icon on the About page", () => {
+    const view = render(
+      <I18nProvider initialLocale="en">
+        <SettingsSection
+          settings={defaultSettings}
+          updateSettings={vi.fn()}
+          connection={{ serverListening: false, error: null }}
+          now={Date.now()}
+          hookStatus={null}
+          activeSettingsSubsection="about"
+          setActiveSettingsSubsection={vi.fn()}
+          sectionContentRef={React.createRef<HTMLDivElement>()}
+          locale="en"
+          setLocale={vi.fn()}
+          appVersion="0.1.0"
+          updateStatus={{}}
+          checkingUpdate={false}
+          handleCheckUpdate={vi.fn()}
+        />
+      </I18nProvider>
+    );
+
+    const icon = view.container.querySelector(".settings-about-app-icon") as HTMLImageElement | null;
+    expect(icon?.getAttribute("src")).toContain("kuaclock.png");
+    expect(screen.getByText("v0.1.0")).toBeTruthy();
+  });
+
   it("keeps internal route details out of the add-provider form", async () => {
     render(
       <I18nProvider initialLocale="en">
