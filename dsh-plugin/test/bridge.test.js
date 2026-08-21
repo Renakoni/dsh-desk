@@ -546,6 +546,64 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('rolls back an active theme update when the new bundle is unverified', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-update-rollback-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'active-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    const oldManifest = {
+      name: 'active-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }
+    const oldPackageJson = JSON.stringify({ dependencies: { 'active-skin': 'github:demo/active#old' } })
+    const oldLockfile = 'lockfileVersion: 9\npackages:\n  active-skin: old\n'
+    const oldState = JSON.stringify({
+      version: 1,
+      skins: { 'active.skin': { active: true, packageName: 'active-skin', themeId: 'active.skin', version: '1.0.0', compatibility: { status: 'adapted', code: 'legacy-keyed-settings-item' } } },
+    })
+    writeFileSync(join(profile, 'package.json'), oldPackageJson)
+    writeFileSync(join(profile, 'pnpm-lock.yaml'), oldLockfile)
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), oldState)
+    writeFileSync(join(profile, 'cordis.patch.yml'), '---\n- id: active-row\n  disabled: false\n')
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify(oldManifest))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", id: "active" }, Card)')
+
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async () => {
+        writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'active-skin': 'github:demo/active#new' } }))
+        writeFileSync(join(profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9\npackages:\n  active-skin: new\n')
+        writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ ...oldManifest, version: '2.0.0' }))
+        writeFileSync(join(packageDir, 'lib', 'client.js'), 'const options = { name: "settings.plugin.item" }; ctx.slots.register(options, Card)')
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const update = routes.find(route => route.path === '/dsh-appearance-manager/update')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(update, { method: 'POST', body: {
+      skin: { id: 'active.skin', packageName: 'active-skin', rowId: 'active-row', install: { target: 'github:demo/active#new', version: '2.0.0' } },
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'failed') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'failed')
+    assert.match(operation.body.message, /could not be verified safely/)
+    assert.equal(readFileSync(join(profile, 'package.json'), 'utf8'), oldPackageJson)
+    assert.equal(readFileSync(join(profile, 'pnpm-lock.yaml'), 'utf8'), oldLockfile)
+    assert.equal(readFileSync(join(packageDir, 'package.json'), 'utf8'), JSON.stringify(oldManifest))
+    assert.equal(readFileSync(join(packageDir, 'lib', 'client.js'), 'utf8'), 'ctx.slots.register({ name: "settings.plugin.item", id: "active" }, Card)')
+    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), '---\n- id: active-row\n  disabled: false\n')
+    assert.equal(readFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), 'utf8'), oldState)
+    dispose()
+  })
+
   it('keeps downloader progress on the live theme operation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-progress-'))
     temporaryDirectories.add(root)

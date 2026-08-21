@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse, stringify } from 'yaml'
@@ -8,6 +9,15 @@ import { parse, stringify } from 'yaml'
 const MAX_BODY_BYTES = 512 * 1024
 const OPERATION_TTL_MS = 30 * 60 * 1000
 const PROFILE_NAME = /^[A-Za-z0-9._-]+$/
+const ROLLBACK_FILES = [
+  'package.json',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'cordis.patch.yml',
+  '.dsh-appearance-manager/state.json',
+]
 
 function objectValue(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null
@@ -61,6 +71,42 @@ function compatibilityActivationError(compatibility) {
     return 'Theme uses a keyed settings slot without a stable legacy id and cannot be adapted safely.'
   }
   return 'Theme compatibility could not be verified safely, so activation was not applied.'
+}
+
+function snapshotFile(file) {
+  if (!existsSync(file)) return { exists: false, content: null }
+  return { exists: true, content: readFileSync(file) }
+}
+
+function restoreFile(file, snapshot) {
+  if (snapshot.exists) {
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, snapshot.content)
+  } else if (existsSync(file)) {
+    rmSync(file, { force: true })
+  }
+}
+
+function createActiveThemeUpdateRollback(profileDir, packageName) {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'dsh-theme-update-rollback-'))
+  const packagePath = packageDir(profileDir, packageName)
+  const packageBackup = join(temporaryDirectory, 'package')
+  const packageExists = existsSync(packagePath)
+  if (packageExists) cpSync(packagePath, packageBackup, { recursive: true, force: true, verbatimSymlinks: true })
+  const files = new Map(ROLLBACK_FILES.map(relative => [relative, snapshotFile(join(profileDir, relative))]))
+  return {
+    restore() {
+      for (const [relative, snapshot] of files) restoreFile(join(profileDir, relative), snapshot)
+      if (packageExists) {
+        rmSync(packagePath, { recursive: true, force: true })
+        mkdirSync(dirname(packagePath), { recursive: true })
+        cpSync(packageBackup, packagePath, { recursive: true, force: true, verbatimSymlinks: true })
+      } else if (existsSync(packagePath)) {
+        rmSync(packagePath, { recursive: true, force: true })
+      }
+    },
+    cleanup() { rmSync(temporaryDirectory, { recursive: true, force: true }) },
+  }
 }
 
 /**
@@ -354,11 +400,13 @@ class AppearanceManager {
     return operation
   }
   async execute(operation, skin, catalog) {
+    let rollback
     try {
       const stored = readState(this.profileDir)
       const legacyState = jsonFile(join(this.profileDir, '.dsh-skin-market', 'state.json'), {})
       const existing = stored.skins[skin.id] ?? { active: legacyState?.activeSkinId === skin.id }
       if (operation.kind === 'install' || operation.kind === 'update') {
+        if (operation.kind === 'update' && existing.active === true) rollback = createActiveThemeUpdateRollback(this.profileDir, skin.packageName)
         if (operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName)) {
           operation.phase = 'downloading'
           const result = await this.pluginRunner(this.profile, ['add', skin.install.target], progress => {
@@ -424,8 +472,15 @@ class AppearanceManager {
       writeState(this.profileDir, stored)
       operation.phase = 'done'; operation.progress = 100; operation.message = `${operation.kind} completed`
     } catch (error) {
-      operation.phase = 'failed'; operation.message = error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error)
+      if (rollback) {
+        try { rollback.restore() } catch (restoreError) {
+          operation.message = `${message} Rollback failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`
+        }
+      }
+      operation.phase = 'failed'; operation.message ??= message
     } finally {
+      rollback?.cleanup()
       operation.finishedAt = new Date().toISOString(); this.activeOperation = null
       const timer = setTimeout(() => this.operations.delete(operation.id), OPERATION_TTL_MS); timer.unref?.()
     }
