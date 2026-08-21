@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Check, ExternalLink, Palette, Power, RefreshCw, Store, Trash2, X } from "lucide-react";
-import type { DshSkinAction, DshSkinCatalogEntry, DshSkinMarketplaceSnapshot } from "../../../../shared/dshSkins";
+import type { DshSkinAction, DshSkinCatalogEntry, DshSkinMarketplaceSnapshot, DshSkinOperationProgress } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
-import { DshThemeMarketPanel, ThemePreview, runtimeFor } from "./DshThemeMarketPanel";
+import { DshThemeMarketPanel, DshThemeOperationProgress, ThemePreview, runtimeFor } from "./DshThemeMarketPanel";
 
 type DshThemesPageProps = { active: boolean };
 
@@ -12,6 +12,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   const [marketOpen, setMarketOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [operationProgress, setOperationProgress] = useState<DshSkinOperationProgress | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function refresh(force = false) {
@@ -28,6 +29,11 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   useEffect(() => {
     if (!active) setMarketOpen(false);
   }, [active]);
+
+  useEffect(() => {
+    const subscribe = window.companion.onDshSkinProgress;
+    return subscribe ? subscribe(setOperationProgress) : undefined;
+  }, []);
 
   const installed = useMemo(() => {
     if (!snapshot) return [];
@@ -49,6 +55,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       || snapshot.localSkins?.some(item => item.id === skin.id && item.active) === true
     );
     setBusy(`${skin.id}:${action}`);
+    setOperationProgress({ skinId: skin.id, action, phase: "queued", progress: null });
     setNotice(null);
     try {
       const result = await window.companion.mutateDshSkin({ skinId: skin.id, action });
@@ -70,7 +77,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
-    } finally { setBusy(null); }
+    } finally { setBusy(null); setOperationProgress(null); }
   }
 
   if (marketOpen) {
@@ -97,6 +104,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       </header>
 
       {notice ? <div className="dsh-theme-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div> : null}
+      {operationProgress ? <DshThemeOperationProgress progress={operationProgress} t={t} /> : null}
 
       <section className="dsh-theme-library-content" aria-live="polite">
         {loading && !snapshot ? <div className="dsh-theme-empty"><RefreshCw size={20} className="spinning" /><span>{t("dshThemes.loadingLibrary", "正在读取本机主题…")}</span></div> : null}

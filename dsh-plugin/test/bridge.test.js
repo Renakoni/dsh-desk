@@ -363,6 +363,42 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('keeps downloader progress on the live theme operation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-progress-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {} }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async (profileName, args, onProgress) => {
+        assert.deepEqual([profileName, args], ['web', ['add', 'github:demo/skin#1234567890123456789012345678901234567890']])
+        onProgress?.({ progress: 42, receivedBytes: 42, totalBytes: 100 })
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const installRoute = routes.find(route => route.path === '/dsh-appearance-manager/install')
+    const started = await invokeRoute(installRoute, { method: 'POST', body: {
+      skin: {
+        id: 'demo.skin', packageName: 'demo-skin', rowId: 'demo-skin',
+        install: { target: 'github:demo/skin#1234567890123456789012345678901234567890', version: '1.0.0' },
+      },
+    } })
+    const operations = routes.find(route => route.kind === 'prefix')
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.equal(operation.body.progress, 100)
+    dispose()
+  })
+
   it('only disables appearance entries in the same activation group', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-mutual-exclusion-'))
     temporaryDirectories.add(root)

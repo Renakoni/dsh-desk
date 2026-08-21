@@ -203,13 +203,43 @@ function invocation() {
   if (entry && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) return { file: process.execPath, prefix: [...process.execArgv, resolve(entry)] }
   return { file: 'dsh', prefix: [] }
 }
-function runPlugin(profile, args) {
+function parsePnpmOutput(chunk, packages, onProgress, parserState) {
+  if (typeof onProgress !== 'function') return
+  const text = `${parserState.value}${String(chunk)}`.replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '')
+  const lines = text.split(/\r?\n/)
+  parserState.value = lines.pop() ?? ''
+  for (const line of lines) {
+    if (!line.trim()) continue
+    let event
+    try { event = JSON.parse(line) } catch { continue }
+    if (event?.name !== 'pnpm:fetching-progress' || typeof event.packageId !== 'string') continue
+    const current = packages.get(event.packageId) ?? { size: null, downloaded: 0 }
+    if (typeof event.size === 'number' && Number.isFinite(event.size) && event.size > 0) current.size = Math.floor(event.size)
+    if (typeof event.downloaded === 'number' && Number.isFinite(event.downloaded) && event.downloaded >= 0) current.downloaded = Math.floor(event.downloaded)
+    if (event.status === 'finished' || event.status === 'fetched') current.downloaded = current.size ?? current.downloaded
+    packages.set(event.packageId, current)
+    const entries = [...packages.values()]
+    const totalBytes = entries.every(item => item.size !== null) ? entries.reduce((sum, item) => sum + item.size, 0) : null
+    if (totalBytes === null || totalBytes <= 0) {
+      onProgress({ progress: null })
+      continue
+    }
+    const receivedBytes = entries.reduce((sum, item) => sum + Math.min(item.downloaded, item.size), 0)
+    onProgress({ progress: Math.max(0, Math.min(100, receivedBytes / totalBytes * 100)), receivedBytes, totalBytes })
+  }
+}
+
+function runPlugin(profile, args, onProgress) {
   return new Promise(resolvePromise => {
     const command = invocation()
-    const child = spawn(command.file, [...command.prefix, 'plugin', '--profile', profile, ...args], { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CI: 'true' } })
+    const reporterArgs = args.some(argument => argument === '--reporter' || argument.startsWith('--reporter=')) ? args : [...args, '--reporter', 'ndjson']
+    const child = spawn(command.file, [...command.prefix, 'plugin', '--profile', profile, ...reporterArgs], { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CI: 'true' } })
     let stdout = ''; let stderr = ''
-    child.stdout?.on('data', chunk => { stdout += String(chunk) })
-    child.stderr?.on('data', chunk => { stderr += String(chunk) })
+    const packages = new Map()
+    const stdoutParserState = { value: '' }
+    const stderrParserState = { value: '' }
+    child.stdout?.on('data', chunk => { stdout += String(chunk); parsePnpmOutput(chunk, packages, onProgress, stdoutParserState) })
+    child.stderr?.on('data', chunk => { stderr += String(chunk); parsePnpmOutput(chunk, packages, onProgress, stderrParserState) })
     const timer = setTimeout(() => child.kill(), 10 * 60 * 1000)
     child.on('error', error => { stderr += error.message })
     child.on('close', exitCode => { clearTimeout(timer); resolvePromise({ exitCode, stdout, stderr }) })
@@ -282,12 +312,24 @@ class AppearanceManager {
       if (operation.kind === 'install' || operation.kind === 'update') {
         if (operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName)) {
           operation.phase = 'downloading'
-          const result = await this.pluginRunner(this.profile, ['add', skin.install.target])
+          const result = await this.pluginRunner(this.profile, ['add', skin.install.target], progress => {
+            operation.progress = typeof progress?.progress === 'number' && Number.isFinite(progress.progress)
+              ? Math.max(0, Math.min(100, progress.progress))
+              : null
+            if (typeof progress?.receivedBytes === 'number' && Number.isFinite(progress.receivedBytes)) operation.receivedBytes = progress.receivedBytes
+            if (typeof progress?.totalBytes === 'number' && Number.isFinite(progress.totalBytes)) operation.totalBytes = progress.totalBytes
+            if (operation.progress === null) {
+              delete operation.receivedBytes
+              delete operation.totalBytes
+            }
+          })
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
+        operation.phase = 'registering'
         ensureRegistration(this.profileDir, skin, existing.active !== true)
         stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? { activationGroup: skin.activationGroup } : {}) }
       } else if (operation.kind === 'activate' || operation.kind === 'deactivate') {
+        operation.phase = operation.kind === 'activate' ? 'activating' : 'deactivating'
         if (!Object.hasOwn(dependencies(this.profileDir), skin.packageName)) throw new Error('install the theme before using it')
         const active = operation.kind === 'activate'
         const activationGroup = typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? skin.activationGroup : null
@@ -304,6 +346,7 @@ class AppearanceManager {
         ensureRegistration(this.profileDir, skin, !active)
         stored.skins[skin.id] = { active, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(activationGroup ? { activationGroup } : {}) }
       } else {
+        operation.phase = 'uninstalling'
         await disableLoaderEntries(this.loader, skin)
         if (Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
           const result = await this.pluginRunner(this.profile, ['remove', skin.packageName])
@@ -313,7 +356,7 @@ class AppearanceManager {
         delete stored.skins[skin.id]
       }
       writeState(this.profileDir, stored)
-      operation.phase = 'done'; operation.message = `${operation.kind} completed`
+      operation.phase = 'done'; operation.progress = 100; operation.message = `${operation.kind} completed`
     } catch (error) {
       operation.phase = 'failed'; operation.message = error instanceof Error ? error.message : String(error)
     } finally {

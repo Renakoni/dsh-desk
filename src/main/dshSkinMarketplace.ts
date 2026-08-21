@@ -10,6 +10,8 @@ import type {
   DshSkinMarketplaceSnapshot,
   DshSkinMutationInput,
   DshSkinMutationResult,
+  DshSkinOperationPhase,
+  DshSkinOperationProgress,
   DshSkinRuntimeState
 } from "../shared/dshSkins";
 import type { DshAppearanceComponent, DshAppearanceKind, DshAppearanceMetadata } from "../shared/dshResources";
@@ -51,6 +53,9 @@ type RuntimePayload = {
 type OperationPayload = {
   phase?: unknown;
   message?: unknown;
+  progress?: unknown;
+  receivedBytes?: unknown;
+  totalBytes?: unknown;
 };
 
 type WebProfileManifest = {
@@ -76,6 +81,29 @@ export type DshSkinMarketplaceOptions = {
 
 const APPEARANCE_KINDS: DshAppearanceKind[] = ["theme", "appearance-extension", "theme-bundle"];
 const APPEARANCE_COMPONENTS: DshAppearanceComponent[] = ["base-theme", "wallpaper", "motion", "sound", "settings"];
+const OPERATION_PHASES: DshSkinOperationPhase[] = ["queued", "downloading", "installing", "registering", "activating", "deactivating", "uninstalling", "done", "failed"];
+
+function operationProgress(input: DshSkinMutationInput, operation: OperationPayload): DshSkinOperationProgress | null {
+  if (typeof operation.phase !== "string" || !OPERATION_PHASES.includes(operation.phase as DshSkinOperationPhase)) return null;
+  const rawProgress = typeof operation.progress === "number" && Number.isFinite(operation.progress)
+    ? Math.max(0, Math.min(100, operation.progress))
+    : operation.phase === "done" ? 100 : null;
+  const receivedBytes = typeof operation.receivedBytes === "number" && Number.isFinite(operation.receivedBytes) && operation.receivedBytes >= 0
+    ? Math.floor(operation.receivedBytes)
+    : undefined;
+  const totalBytes = typeof operation.totalBytes === "number" && Number.isFinite(operation.totalBytes) && operation.totalBytes > 0
+    ? Math.floor(operation.totalBytes)
+    : undefined;
+  return {
+    skinId: input.skinId,
+    action: input.action,
+    phase: operation.phase as DshSkinOperationPhase,
+    progress: rawProgress,
+    ...(typeof operation.message === "string" ? { message: operation.message } : {}),
+    ...(receivedBytes !== undefined ? { receivedBytes } : {}),
+    ...(totalBytes !== undefined ? { totalBytes } : {})
+  };
+}
 
 function parseAppearance(value: unknown, themeId: string): DshAppearanceMetadata {
   const row = objectValue(value);
@@ -337,7 +365,7 @@ export class DshSkinMarketplace {
     return this.createSnapshot(host);
   }
 
-  async mutate(input: DshSkinMutationInput): Promise<DshSkinMutationResult> {
+  async mutate(input: DshSkinMutationInput, reportProgress?: (progress: DshSkinOperationProgress) => void): Promise<DshSkinMutationResult> {
     if (!input || typeof input.skinId !== "string" || input.skinId === ""
       || !["install", "activate", "deactivate", "update", "uninstall", "restart"].includes(input.action)) {
       return { ok: false, error: "Invalid theme operation.", snapshot: await this.snapshot() };
@@ -366,9 +394,13 @@ export class DshSkinMarketplace {
         body: JSON.stringify({ skinId: input.skinId, skin, catalog: this.catalog?.skins ?? [] })
       }));
       const operationId = requiredString(started?.operationId, "operation id");
+      const startedProgress = operationProgress(input, started as OperationPayload);
+      if (startedProgress) reportProgress?.(startedProgress);
       const deadline = this.now() + OPERATION_TIMEOUT_MS;
       while (this.now() < deadline) {
         const operation = await this.hostRequest(`/dsh-appearance-manager/operations/${encodeURIComponent(operationId)}`) as OperationPayload;
+        const currentProgress = operationProgress(input, operation);
+        if (currentProgress) reportProgress?.(currentProgress);
         if (operation.phase === "done") {
           const snapshot = await this.snapshot();
           if (input.action === "activate" || input.action === "update") {

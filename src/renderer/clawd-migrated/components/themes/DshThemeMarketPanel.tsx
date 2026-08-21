@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, ImageOff, Power, RefreshCw, Search, Star, Trash2, X } from "lucide-react";
-import type { DshSkinAction, DshSkinCatalogEntry, DshSkinMarketplaceSnapshot, DshSkinRuntimeState } from "../../../../shared/dshSkins";
+import type { DshSkinAction, DshSkinCatalogEntry, DshSkinMarketplaceSnapshot, DshSkinOperationProgress, DshSkinRuntimeState } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
 
 type SortMode = "stars" | "latest";
@@ -26,6 +26,35 @@ function formatDate(value: string, locale: string) {
   return Number.isNaN(date.getTime()) ? "-" : new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium" }).format(date);
 }
 
+export function DshThemeOperationProgress({ progress, t }: {
+  progress: DshSkinOperationProgress;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  const label = progress.phase === "queued"
+    ? t("dshThemes.progressPreparing", "准备操作…")
+    : progress.phase === "downloading"
+      ? t("dshThemes.progressDownloading", "下载主题…")
+      : progress.phase === "installing"
+        ? t("dshThemes.progressInstalling", "安装主题…")
+        : progress.phase === "registering"
+          ? t("dshThemes.progressRegistering", "注册主题入口…")
+          : progress.phase === "activating"
+            ? t("dshThemes.progressActivating", "启用主题…")
+            : progress.phase === "deactivating"
+              ? t("dshThemes.progressDeactivating", "停用主题…")
+              : progress.phase === "uninstalling"
+                ? t("dshThemes.progressUninstalling", "卸载主题…")
+                : progress.message ?? t("dshThemes.working", "处理中…");
+  const determinate = typeof progress.progress === "number" && Number.isFinite(progress.progress);
+  const percent = determinate ? Math.round(progress.progress!) : null;
+  return <div className="dsh-theme-operation-progress" role="status" aria-live="polite">
+    <div className="dsh-theme-operation-progress-label"><span>{label}</span><strong>{percent === null ? t("dshThemes.progressIndeterminate", "处理中…") : `${percent}%`}</strong></div>
+    <div className={`dsh-theme-operation-progress-track ${determinate ? "determinate" : "indeterminate"}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} {...(percent === null ? { "aria-valuetext": t("dshThemes.progressIndeterminate", "处理中…") } : { "aria-valuenow": percent })}>
+      <span style={determinate ? { width: `${percent}%` } : undefined} />
+    </div>
+  </div>;
+}
+
 export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
   initialSnapshot: DshSkinMarketplaceSnapshot | null;
   onBack: () => void;
@@ -40,6 +69,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
   const [shotIndex, setShotIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [operationProgress, setOperationProgress] = useState<DshSkinOperationProgress | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const detailsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -56,6 +86,10 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
 
   useEffect(() => { if (!initialSnapshot) void refresh(false); }, []);
   useEffect(() => setVisibleCount(PAGE_SIZE), [query, sort]);
+  useEffect(() => {
+    const subscribe = window.companion.onDshSkinProgress;
+    return subscribe ? subscribe(setOperationProgress) : undefined;
+  }, []);
 
   const rows = useMemo(() => {
     if (!snapshot) return [];
@@ -75,6 +109,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     }
     const wasActive = snapshot !== null && runtimeFor(snapshot, skin.id)?.activation === "active";
     setBusy(`${skin.id}:${action}`);
+    setOperationProgress({ skinId: skin.id, action, phase: "queued", progress: null });
     setNotice(null);
     try {
       const result = await window.companion.mutateDshSkin({ skinId: skin.id, action });
@@ -99,7 +134,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
         }
       } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
     } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(null); }
+    finally { setBusy(null); setOperationProgress(null); }
   }
 
   function openDetails(skin: DshSkinCatalogEntry, trigger?: HTMLButtonElement) {
@@ -126,6 +161,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
 
       {snapshot?.catalogError ? <div className="dsh-theme-catalog-note">{snapshot.skins.length > 0 ? t("dshThemes.cachedCatalog", "正在显示上次成功加载的主题目录。") : t("dshThemes.catalogUnavailable", "主题目录暂时无法加载。")}</div> : null}
       {notice ? <div className="dsh-theme-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div> : null}
+      {operationProgress ? <DshThemeOperationProgress progress={operationProgress} t={t} /> : null}
 
       <section className="dsh-theme-market-toolbar" aria-label={t("dshThemes.filters", "主题筛选")}>
         <label className="dsh-theme-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t("dshThemes.search", "搜索主题或作者")} /></label>

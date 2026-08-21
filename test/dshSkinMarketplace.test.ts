@@ -221,6 +221,30 @@ describe("DshSkinMarketplace", () => {
     expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:3080/dsh-appearance-manager/operations/op-1", expect.anything());
   });
 
+  it("reports operation phases and real byte progress while polling", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-progress-"));
+    let polls = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
+      if (url.endsWith("/install")) return response({ operationId: "progress-op" }, 202);
+      if (url.endsWith("/operations/progress-op")) {
+        polls += 1;
+        return polls === 1
+          ? response({ phase: "downloading", progress: 37, receivedBytes: 37, totalBytes: 100 })
+          : response({ phase: "done" });
+      }
+      return response({ skins: [], restartAvailable: false });
+    });
+    const progress: unknown[] = [];
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
+
+    await expect(market.mutate({ skinId: "demo.skin", action: "install" }, value => progress.push(value))).resolves.toMatchObject({ ok: true });
+    expect(progress).toEqual(expect.arrayContaining([
+      expect.objectContaining({ phase: "downloading", progress: 37, receivedBytes: 37, totalBytes: 100 }),
+      expect.objectContaining({ phase: "done", progress: 100 })
+    ]));
+  });
+
   it("uses the configured DSH Web origin for theme operations", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-custom-origin-"));
     const origin = "http://127.0.0.1:3199";

@@ -4370,7 +4370,9 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-skill-install", (_, skill: DshMarketplaceSkill) => dshSkillMarketplace().install(skill));
   ipcMain.handle("companion:dsh-skins-marketplace", (_, force?: boolean) => dshSkinMarketplace().snapshot(Boolean(force)));
   ipcMain.handle("companion:dsh-skins-market-install", () => dshSkinMarketplace().installMarket());
-  ipcMain.handle("companion:dsh-skins-mutate", (_, input: DshSkinMutationInput) => dshSkinMarketplace().mutate(input));
+  ipcMain.handle("companion:dsh-skins-mutate", (event, input: DshSkinMutationInput) => dshSkinMarketplace().mutate(input, progress => {
+    if (!event.sender.isDestroyed()) event.sender.send("companion:dsh-skin-progress", progress);
+  }));
   ipcMain.handle("companion:dsh-skill-reveal", (_, targetPath: unknown) => {
     if (typeof targetPath !== "string" || !canRevealDshSkillPath(targetPath)) return false;
     if (existsSync(targetPath) && statSync(targetPath).isFile()) shell.showItemInFolder(targetPath);

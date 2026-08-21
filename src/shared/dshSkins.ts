@@ -87,6 +87,28 @@ export type DshSkinMutationInput = {
   action: DshSkinAction;
 };
 
+export type DshSkinOperationPhase =
+  | "queued"
+  | "downloading"
+  | "installing"
+  | "registering"
+  | "activating"
+  | "deactivating"
+  | "uninstalling"
+  | "done"
+  | "failed";
+
+export type DshSkinOperationProgress = {
+  skinId: string;
+  action: DshSkinAction;
+  phase: DshSkinOperationPhase;
+  message?: string;
+  /** A real byte-derived percentage, or null when the downloader has no total. */
+  progress: number | null;
+  receivedBytes?: number;
+  totalBytes?: number;
+};
+
 export type DshSkinMutationResult = {
   ok: boolean;
   snapshot: DshSkinMarketplaceSnapshot;
