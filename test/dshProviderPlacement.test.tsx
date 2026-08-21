@@ -176,6 +176,47 @@ describe("DSH model routing placement", () => {
     expect(screen.getByRole("switch", { name: "Enable reasoning effort selection" }).getAttribute("aria-checked")).toBe("false");
   });
 
+  it("keeps model compatibility settings when submitting provider edits", () => {
+    const onSave = vi.fn();
+    const compat = {
+      supportsDeveloperRole: false,
+      maxTokensField: "max_tokens",
+      chatTemplateKwargs: {
+        enable_thinking: { $var: "thinking.enabled", omitWhenOff: false }
+      }
+    };
+    render(
+      <I18nProvider initialLocale="en">
+        <ProviderEditPanel
+          open
+          mode="edit"
+          provider={{
+            id: "manual-gateway",
+            name: "Manual Gateway",
+            baseUrl: "https://gateway.example/v1",
+            protocol: "openai-completions",
+            models: [{ id: "reasoning-model", compat }],
+            inheritModels: false,
+            catalogProvider: false,
+            enabled: true
+          }}
+          catalogProviders={[]}
+          onSave={onSave}
+          onClose={vi.fn()}
+          onProbe={vi.fn(async () => ({ ok: true }))}
+        />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByDisplayValue("Manual Gateway"), { target: { value: "Manual Gateway renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Manual Gateway renamed",
+      models: [expect.objectContaining({ id: "reasoning-model", compat })]
+    }), "manual-gateway");
+  });
+
   it("enables the common reasoning efforts for every model on a manual route", () => {
     const onSave = vi.fn();
     render(

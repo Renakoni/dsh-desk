@@ -243,6 +243,70 @@ describe("DSH provider settings", () => {
     expect(settings).toContain("api: openai-responses");
   });
 
+  it("preserves model compatibility settings while editing a provider", async () => {
+    const dshHome = home();
+    const compat = {
+      supportsDeveloperRole: false,
+      supportsStore: false,
+      supportsUsageInStreaming: false,
+      maxTokensField: "max_tokens",
+      thinkingFormat: "qwen-chat-template",
+      requiresToolResultName: true,
+      requiresAssistantAfterToolResult: true,
+      chatTemplateKwargs: {
+        enable_thinking: { $var: "thinking.enabled", omitWhenOff: false }
+      }
+    };
+    writeFileSync(join(dshHome, "settings.yaml"), [
+      "llm-pi-ai:",
+      "  providers:",
+      "    team-gateway:",
+      "      displayName: Team",
+      "      apiKeyEnv: TEAM_GATEWAY_KEY",
+      "      api: openai-completions",
+      "      baseURL: https://gateway.example/v1",
+      "      models:",
+      "        - id: team-model",
+      "          maxTokens: 8192",
+      "          compat:",
+      "            supportsDeveloperRole: false",
+      "            supportsStore: false",
+      "            supportsUsageInStreaming: false",
+      "            maxTokensField: max_tokens",
+      "            thinkingFormat: qwen-chat-template",
+      "            requiresToolResultName: true",
+      "            requiresAssistantAfterToolResult: true",
+      "            chatTemplateKwargs:",
+      "              enable_thinking:",
+      "                $var: thinking.enabled",
+      "                omitWhenOff: false",
+      ""
+    ].join("\n"));
+    writeFileSync(join(dshHome, ".credentials.yaml"), [
+      "version: 1",
+      "refs:",
+      "  TEAM_GATEWAY_KEY: old-secret",
+      "records: {}",
+      ""
+    ].join("\n"));
+
+    const existing = (await listDshProviders({ dshHome })).providers.find(provider => provider.id === "team-gateway");
+    expect(existing?.models[0]?.compat).toEqual(compat);
+
+    const result = await saveDshProvider({
+      ...existing!,
+      name: "Team renamed",
+      apiKey: "new-secret",
+      inheritModels: existing!.modelsInherited
+    }, { dshHome });
+
+    expect(result.ok).toBe(true);
+    const saved = (await listDshProviders({ dshHome })).providers.find(provider => provider.id === "team-gateway");
+    expect(saved?.name).toBe("Team renamed");
+    expect(saved?.models[0]?.compat).toEqual(compat);
+    expect(readFileSync(join(dshHome, ".credentials.yaml"), "utf8")).toContain("TEAM_GATEWAY_KEY: new-secret");
+  });
+
   it("preserves the current reasoning effort selected in DSH Web", async () => {
     const dshHome = home();
     writeFileSync(join(dshHome, "settings.yaml"), [
