@@ -374,8 +374,8 @@ class AppearanceManager {
           })
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
-        let compatibility = existing.compatibility
-        if (operation.kind === 'update' || existing.active === true) {
+        let compatibility = operation.kind === 'update' ? undefined : existing.compatibility
+        if (existing.active === true) {
           operation.phase = 'checking'
           compatibility = detectThemeCompatibility(this.profileDir, skin.packageName)
           operation.compatibility = compatibility

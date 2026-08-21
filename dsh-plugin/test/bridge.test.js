@@ -497,6 +497,55 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('does not run compatibility detection while updating an inactive theme', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-update-compatibility-inactive-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'inactive-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'inactive-skin': '1.0.0' } }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'inactive.skin': { active: false, packageName: 'inactive-skin', compatibility: { status: 'native' } } },
+    }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'inactive-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'export const apply = () => undefined')
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async () => {
+        writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+          name: 'inactive-skin', version: '2.0.0',
+          exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+        }))
+        writeFileSync(join(packageDir, 'lib', 'client.js'), 'const options = { name: "settings.plugin.item" }; ctx.slots.register(options, Card)')
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const update = routes.find(route => route.path === '/dsh-appearance-manager/update')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(update, { method: 'POST', body: {
+      skin: { id: 'inactive.skin', packageName: 'inactive-skin', rowId: 'inactive-row', install: { target: 'github:demo/inactive', version: '2.0.0' } },
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.equal(Object.hasOwn(operation.body, 'compatibility'), false)
+    const state = await invokeRoute(routes.find(route => route.path === '/dsh-appearance-manager/state'))
+    assert.equal(Object.hasOwn(state.body.skins[0], 'compatibility'), false)
+    dispose()
+  })
+
   it('keeps downloader progress on the live theme operation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-progress-'))
     temporaryDirectories.add(root)
