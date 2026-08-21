@@ -279,12 +279,14 @@ function modelList(value: unknown, fallback: DshProviderModel[] = []): DshProvid
             : {})
         }
       : undefined;
+    const compat = isObject(item.compat) ? { ...item.compat } : undefined;
     models.push({
       id: item.id.trim(),
       ...(typeof item.name === "string" && item.name.trim() ? { name: item.name.trim() } : {}),
       ...(typeof item.contextWindow === "number" && Number.isSafeInteger(item.contextWindow) && item.contextWindow > 0 ? { contextWindow: item.contextWindow } : {}),
       ...(typeof item.maxTokens === "number" && Number.isSafeInteger(item.maxTokens) && item.maxTokens > 0 ? { maxTokens: item.maxTokens } : {}),
       ...(reasoningEfforts === false || (reasoningEfforts && Object.keys(reasoningEfforts).length > 0) ? { reasoningEfforts } : {}),
+      ...(compat ? { compat } : {}),
       ...(reasoning ? { reasoning } : {})
     });
   }
@@ -701,7 +703,8 @@ function serializeModels(models: DshProviderModel[]) {
       ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
       ...(reasoningEfforts === undefined
         ? {}
-        : { reasoningEfforts: reasoningEfforts === false ? false : { ...reasoningEfforts } })
+        : { reasoningEfforts: reasoningEfforts === false ? false : { ...reasoningEfforts } }),
+      ...(model.compat ? { compat: { ...model.compat } } : {})
     };
   });
 }

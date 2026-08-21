@@ -33,6 +33,7 @@ export type DshProviderModel = {
   contextWindow?: number;
   maxTokens?: number;
   reasoningEfforts?: DshReasoningEfforts | false;
+  compat?: Record<string, unknown>;
   reasoning?: DshProviderModelReasoning;
 };
 
