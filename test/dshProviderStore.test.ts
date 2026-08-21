@@ -70,6 +70,50 @@ afterEach(() => {
 });
 
 describe("DSH provider settings", () => {
+  it("reads DSH versioned credentials documents", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, ".credentials.yaml"), [
+      "version: 1",
+      "refs:",
+      "  DEEPSEEK_API_KEY: test-secret",
+      "records:",
+      "  llm-pi-ai/example:",
+      "    kind: api-key",
+      ""
+    ].join("\n"));
+
+    const result = await listDshProviders({ dshHome });
+    expect(result.ok).toBe(true);
+    expect(result.providers[0]).toEqual(expect.objectContaining({ credentialRef: "DEEPSEEK_API_KEY", apiKey: "test-secret", hasCredential: true }));
+  });
+
+  it("writes provider credentials under refs without dropping DSH records", async () => {
+    const dshHome = home();
+    writeFileSync(join(dshHome, ".credentials.yaml"), [
+      "version: 1",
+      "refs:",
+      "  DEEPSEEK_API_KEY: existing-secret",
+      "records:",
+      "  llm-pi-ai/example:",
+      "    kind: api-key",
+      ""
+    ].join("\n"));
+
+    const result = await saveDshProvider({
+      id: "team-gateway",
+      name: "Team Gateway",
+      baseUrl: "https://gateway.example/v1",
+      protocol: "openai-completions",
+      apiKey: "new-secret"
+    }, { dshHome });
+    expect(result.ok).toBe(true);
+    const credentials = readFileSync(join(dshHome, ".credentials.yaml"), "utf8");
+    expect(credentials).toContain("version: 1");
+    expect(credentials).toContain("refs:");
+    expect(credentials).toContain("CHARA_DSH_TEAM_GATEWAY_API_KEY: new-secret");
+    expect(credentials).toContain("records:");
+  });
+
   it("projects the official DSH route when the user files are absent", async () => {
     const result = await listDshProviders({ dshHome: home() });
     expect(result.ok).toBe(true);

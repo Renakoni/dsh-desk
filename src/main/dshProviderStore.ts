@@ -299,7 +299,9 @@ function configuredReasoningEffort(value: unknown): DshReasoningEffort | undefin
 
 function credentialMap(root: JsonObject, filePath: string) {
   const values = new Map<string, string>();
-  for (const [key, value] of Object.entries(root)) {
+  const section = root.version === 1 && isObject(root.refs) ? root.refs : root;
+  for (const [key, value] of Object.entries(section)) {
+    if (root.version === 1 && (key === "version" || key === "records")) continue;
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || !value) {
       throw new Error(`DeepSeek Harness credentials file is invalid at ${filePath}`);
     }
@@ -762,7 +764,11 @@ function fallbackSelection(providers: DshProvider[], excludingId: string) {
 }
 
 async function setCredential(ref: string, value: string, options?: DshProviderStoreOptions) {
-  await mutateYaml(credentialsPath(options), document => document.setIn([ref], value), true);
+  await mutateYaml(credentialsPath(options), document => {
+    const root = asObject(document.toJS());
+    const path = root.version === 1 ? ["refs", ref] : [ref];
+    document.setIn(path, value);
+  }, true);
 }
 
 export async function saveDshProvider(input: DshProviderSaveInput, options?: DshProviderStoreOptions): Promise<DshProviderMutationResult> {
@@ -931,7 +937,10 @@ export async function deleteDshProvider(id: string, options?: DshProviderStoreOp
       ? listing.providers.some(provider => provider.id !== id && provider.credentialRef === ownedRef)
       : false;
     if (ownedRef && !credentialStillUsed) {
-      await mutateYaml(credentialsPath(options), document => document.deleteIn([ownedRef]), true);
+      await mutateYaml(credentialsPath(options), document => {
+        const root = asObject(document.toJS());
+        document.deleteIn(root.version === 1 ? ["refs", ownedRef] : [ownedRef]);
+      }, true);
     }
     await mutateDeskState(options, state => {
       delete state.providers[id];
