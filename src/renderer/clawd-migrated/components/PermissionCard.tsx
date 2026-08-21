@@ -21,6 +21,7 @@ const toolMeta: Record<string, { color: string; icon: string }> = {
   Edit: { color: "coral", icon: "E" },
   Write: { color: "coral", icon: "W" },
   Bash: { color: "ink", icon: "$" },
+  PowerShell: { color: "ink", icon: "PS" },
   Shell: { color: "ink", icon: "$" },
   Grep: { color: "blue", icon: "G" },
   Glob: { color: "blue", icon: "G" },
@@ -39,7 +40,7 @@ const toolMeta: Record<string, { color: string; icon: string }> = {
 };
 
 function riskForTool(tool: ToolName, detail?: string): Risk {
-  if (tool === "Bash" || tool === "Shell") {
+  if (tool === "Bash" || tool === "PowerShell" || tool === "Shell") {
     const command = detail?.toLowerCase() ?? "";
     if (/rm\s|reset --hard|push --force|del\s|rmdir|kill|shutdown|format\s|mkfs|dd\s/i.test(command)) return "high";
     return "medium";

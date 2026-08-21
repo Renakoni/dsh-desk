@@ -37,6 +37,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   notificationsEnabled: true,
   theme: "system",
   uiStyle: "classic",
+  dshWebOrigin: "http://127.0.0.1:3080",
   language: "zh",
   displayCurrency: "CNY",
   notificationRules: [

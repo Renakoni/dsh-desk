@@ -397,6 +397,8 @@
     "overallOpacity": "Overall opacity"
   },
   "connection": {
+    "webOrigin": "DSH Web address",
+    "webOriginNote": "Theme management requests go to the running DSH Web. Set the matching port when DSH is started with --port.",
     "webProfile": "Web profile",
     "headlessProfile": "Headless profile",
     "pluginBundle": "Plugin installer",
@@ -667,7 +669,18 @@
     "duplicateSchemeName": "A scheme with this name already exists.",
     "inactiveScheme": "Switch to this scheme before changing a live resource.",
     "missingResource": "This resource is no longer installed.",
-    "requiredResource": "This resource is required and can't be disabled."
+    "requiredResource": "This resource is required and can't be disabled.",
+    "baseTheme": "Base theme",
+    "themeSlot": "Base theme",
+    "noTheme": "No theme",
+    "missingThemeOption": "Missing: {id}",
+    "baseThemeHint": "A scheme can select one base theme. Wallpaper, motion, sound, and settings components remain part of that theme package.",
+    "schemeTheme": "Scheme theme",
+    "themeManagedInAppearance": "Managed in Appearance",
+    "multipleThemes": "A scheme can select only one base theme.",
+    "missingTheme": "The selected theme is not installed. Install it from the theme market first.",
+    "themeApplyFailed": "The selected theme could not be applied.",
+    "invalidThemeOverride": "The temporary theme override is invalid."
   },
   "dshThemes": {
     "libraryTitle": "Theme library",
@@ -717,7 +730,7 @@
     "restartWeb": "Restart DSH",
     "restarting": "DSH is restarting.",
     "restartToApply": "The theme state is saved. Restart DSH to apply it.",
-    "refreshToApply": "The theme state is saved. Refresh the DSH page to finish applying it.",
+    "refreshToApply": "The theme state is saved. Restart DSH to apply it.",
     "broken": "Incomplete installation",
     "registrationMissing": "Theme entry not found",
     "operationFailed": "The operation failed."

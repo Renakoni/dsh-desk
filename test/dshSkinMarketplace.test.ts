@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { DshSkinMarketplace, DSH_SKIN_CATALOG_URL, parseDshSkinCatalog } from "../src/main/dshSkinMarketplace";
+import { DshSkinMarketplace, DSH_SKIN_CATALOG_URL, parseDshSkinCatalog, readManagedDshThemePackages } from "../src/main/dshSkinMarketplace";
 
 function response(body: unknown, status = 200) {
   const text = JSON.stringify(body);
@@ -155,6 +155,7 @@ describe("DshSkinMarketplace", () => {
       "demo.skin": { active: true, packageName: "demo-skin", version: "1.0.0" },
       "local:local-skin": { active: false, packageName: "local-skin", version: "2.0.0" }
     } }));
+    expect(readManagedDshThemePackages(webProfileDir)["demo-skin"]).toMatchObject({ themeId: "demo.skin", components: ["base-theme"] });
     const market = new DshSkinMarketplace({
       cachePath: join(root, "catalog.json"),
       webProfileDir,
@@ -166,6 +167,30 @@ describe("DshSkinMarketplace", () => {
     expect(snapshot.host).toMatchObject({ connected: false, marketInstalled: false, skins: [{ skinId: "demo.skin", installation: "installed", activation: "active" }] });
     expect(snapshot.localSkins).toMatchObject([{ id: "local:local-skin", packageName: "local-skin", version: "2.0.0" }]);
     expect(snapshot.localSkins?.some(skin => skin.packageName === "dsh-file-upload")).toBe(false);
+  });
+
+  it("uses the authoritative theme for uncatalogued local themes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-local-authority-"));
+    const webProfileDir = join(root, "web");
+    const localPackageDir = join(webProfileDir, "node_modules", "local-skin");
+    mkdirSync(localPackageDir, { recursive: true });
+    mkdirSync(join(webProfileDir, ".dsh-appearance-manager"), { recursive: true });
+    writeFileSync(join(webProfileDir, "package.json"), JSON.stringify({ dependencies: { "local-skin": "file:local-skin" } }));
+    writeFileSync(join(webProfileDir, "cordis.patch.yml"), "- insert:\n    - id: local-skin-row\n      name: local-skin\n");
+    writeFileSync(join(localPackageDir, "package.json"), JSON.stringify({ name: "local-skin", version: "2.0.0", dsh: { client: {} } }));
+    writeFileSync(join(webProfileDir, ".dsh-appearance-manager", "state.json"), JSON.stringify({ version: 1, skins: {
+      "local:local-skin": { active: true, packageName: "local-skin", themeId: "local:local-skin", version: "2.0.0", activationGroup: "base-theme" }
+    } }));
+    const market = new DshSkinMarketplace({
+      cachePath: join(root, "catalog.json"),
+      webProfileDir,
+      marketInstalled: () => false,
+      authoritativeTheme: () => "demo.skin",
+      fetcher: async () => response(skinCatalog())
+    });
+
+    const snapshot = await market.snapshot();
+    expect(snapshot.localSkins).toMatchObject([{ id: "local:local-skin", active: false }]);
   });
 
   it("preserves an unstarred bundled catalog entry as null", async () => {
@@ -194,6 +219,31 @@ describe("DshSkinMarketplace", () => {
     const result = await market.mutate({ skinId: "demo.skin", action: "install" });
     expect(result.ok).toBe(true);
     expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:3080/dsh-appearance-manager/operations/op-1", expect.anything());
+  });
+
+  it("uses the configured DSH Web origin for theme operations", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-custom-origin-"));
+    const origin = "http://127.0.0.1:3199";
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
+      if (url.endsWith("/install")) {
+        expect(init?.headers).toMatchObject({ origin });
+        return response({ operationId: "custom-op" }, 202);
+      }
+      if (url.endsWith("/operations/custom-op")) return response({ phase: "done" });
+      return response({ skins: [], restartAvailable: false });
+    });
+    const market = new DshSkinMarketplace({
+      cachePath: join(root, "catalog.json"),
+      webProfileDir: join(root, "web"),
+      webOrigin: origin,
+      marketInstalled: () => true,
+      fetcher,
+      pollDelay: async () => undefined
+    });
+
+    await expect(market.mutate({ skinId: "demo.skin", action: "install" })).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith(`${origin}/dsh-appearance-manager/operations/custom-op`, expect.anything());
   });
 
   it("resolves an uncatalogued local theme to its registered loader row", async () => {

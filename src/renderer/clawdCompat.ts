@@ -35,7 +35,8 @@ import type {
   DshResourceMutationResult,
   DshResourceSchemeSaveInput,
   DshResourceSchemesSnapshot,
-  DshResourceStateInput
+  DshResourceStateInput,
+  DshThemeOverrideInput
 } from "../shared/dshResources";
 import { createEmptyDshResourceSchemesSnapshot } from "../shared/dshResources";
 import type { DshSkinMarketInstallResult, DshSkinMarketplaceSnapshot, DshSkinMutationInput, DshSkinMutationResult } from "../shared/dshSkins";
@@ -134,6 +135,7 @@ type CompanionApi = {
   saveDshResourceScheme: (input: DshResourceSchemeSaveInput) => Promise<DshResourceMutationResult>;
   deleteDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
   applyDshResourceScheme: (schemeId: string) => Promise<DshResourceMutationResult>;
+  setDshThemeOverride: (input: DshThemeOverrideInput) => Promise<DshResourceMutationResult>;
   setDshResourceState: (input: DshResourceStateInput) => Promise<DshResourceMutationResult>;
   setDshPluginComponentState: (input: DshPluginComponentStateInput) => Promise<DshResourceMutationResult>;
   onDshResourcesUpdated: (callback: Listener<void>) => Unsubscribe;
@@ -486,7 +488,8 @@ function emit<T>(listeners: Set<Listener<T>>, payload: T) {
 function normalizeTool(tool?: string): ToolName {
   if (!tool) return "Unknown";
   const normalized = tool.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (normalized.includes("bash") || normalized.includes("shell") || normalized.includes("pwsh") || normalized.includes("powershell")) return "Bash";
+  if (normalized.includes("pwsh") || normalized.includes("powershell")) return "PowerShell";
+  if (normalized.includes("bash") || normalized.includes("shell")) return "Bash";
   if (normalized.includes("edit") || normalized.includes("replace")) return "Edit";
   if (normalized.includes("write")) return "Write";
   if (normalized.includes("read")) return "Read";
@@ -855,6 +858,13 @@ export function installClawdCompat() {
         }
       };
       return { ok: true, schemeId, snapshot: mockDshResourceSchemes };
+    },
+    setDshThemeOverride: async input => {
+      mockDshResourceSchemes = {
+        ...mockDshResourceSchemes,
+        themeOverride: input.mode === "follow-scheme" ? undefined : input
+      };
+      return { ok: true, schemeId: mockDshResourceSchemes.appliedSchemeId ?? "", snapshot: mockDshResourceSchemes };
     },
     setDshResourceState: async input => {
       const resource = [...mockDshResourceSchemes.inventory.skills, ...mockDshResourceSchemes.inventory.plugins].find(item => item.id === input.resourceId);

@@ -582,6 +582,7 @@ const toolColorMap: Record<string, string> = {
   Edit: "coral",
   Write: "coral",
   Bash: "ink",
+  PowerShell: "ink",
   Grep: "blue",
   Glob: "blue",
   WebFetch: "blue",

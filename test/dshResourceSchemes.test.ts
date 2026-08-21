@@ -994,4 +994,118 @@ describe("DSH resource schemes", () => {
     expect(result.ok).toBe(true);
     expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([missingId]);
   });
+
+  it("keeps base themes out of plugin state and enforces one theme per scheme", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-themes-"));
+    roots.push(root);
+    const themes: DshResourceInventory["plugins"] = [
+      {
+        id: "plugin:package:theme-a",
+        kind: "plugin",
+        name: "Theme A",
+        packageName: "theme-a",
+        enabled: true,
+        manageable: true,
+        appearance: { kind: "theme-bundle", components: ["base-theme", "wallpaper"], themeId: "theme-a", active: true }
+      },
+      {
+        id: "plugin:package:theme-b",
+        kind: "plugin",
+        name: "Theme B",
+        packageName: "theme-b",
+        enabled: false,
+        manageable: true,
+        appearance: { kind: "theme-bundle", components: ["base-theme"], themeId: "theme-b", active: false }
+      },
+      { id: "plugin:package:feature", kind: "plugin", name: "Feature", packageName: "feature", enabled: true, manageable: true }
+    ];
+    const desired: Array<Record<string, boolean>> = [];
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({ skills: [], plugins: themes, scannedAt: 1, runtimeConnected: true }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")).toMatchObject({ themeId: "theme-a", plugins: ["plugin:package:feature"] });
+    expect(dshDesiredPluginStates(themes, new Set(["plugin:package:theme-a", "plugin:package:feature"]), new Set())).toEqual({ feature: true });
+    expect(manager.save({ name: "Two themes", skills: [], plugins: ["plugin:package:theme-a", "plugin:package:theme-b"] })).toMatchObject({ ok: false, issues: [{ code: "multiple-themes" }] });
+
+    const created = manager.save({ name: "Theme B scheme", skills: [], plugins: [], themeId: "theme-b" });
+    expect(created).toMatchObject({ ok: true });
+    const schemeId = created.ok ? created.schemeId : "";
+    const order: string[] = [];
+    const asyncManager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({ skills: [], plugins: themes, scannedAt: 1, runtimeConnected: true }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: states => desired.push(states),
+      applyTheme: async themeId => { order.push(`theme:${themeId}`); return undefined; },
+      now: () => 10
+    });
+    await expect(asyncManager.applyAsync(schemeId)).resolves.toMatchObject({ ok: true, schemeId });
+    expect(order).toEqual(["theme:theme-b"]);
+  });
+
+  it("migrates legacy theme package selections into the scheme theme slot", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-theme-migration-"));
+    roots.push(root);
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:package:theme-a", "plugin:package:theme-b"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:package:theme-a", "plugin:package:theme-b"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [],
+        plugins: [
+          { id: "plugin:package:theme-a", kind: "plugin", name: "Theme A", packageName: "theme-a", enabled: true, manageable: true, appearance: { kind: "theme", components: ["base-theme"], themeId: "theme-a", active: false } },
+          { id: "plugin:package:theme-b", kind: "plugin", name: "Theme B", packageName: "theme-b", enabled: true, manageable: true, appearance: { kind: "theme", components: ["base-theme"], themeId: "theme-b", active: true } }
+        ],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    expect(manager.snapshot().schemes.find(scheme => scheme.id === "default")).toMatchObject({ themeId: "theme-b", plugins: [] });
+    expect(JSON.parse(readFileSync(storePath, "utf8")).schemes[0].themeId).toBe("theme-b");
+  });
+
+  it("persists a temporary theme override without downloading a package", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-theme-override-"));
+    roots.push(root);
+    const inventory = (): DshResourceInventory => ({
+      skills: [],
+      plugins: [{
+        id: "plugin:package:theme-a",
+        kind: "plugin",
+        name: "Theme A",
+        packageName: "theme-a",
+        enabled: true,
+        manageable: true,
+        appearance: { kind: "theme", components: ["base-theme"], themeId: "theme-a", active: true }
+      }],
+      scannedAt: 1,
+      runtimeConnected: true
+    });
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+    expect(manager.setThemeOverride({ mode: "temporary", themeId: "not-installed" })).toMatchObject({ ok: false, issues: [{ code: "missing-theme" }] });
+    expect(manager.setThemeOverride({ mode: "disabled" })).toMatchObject({ ok: true });
+    expect(JSON.parse(readFileSync(join(root, "schemes.json"), "utf8")).themeOverride).toEqual({ mode: "disabled" });
+  });
 });

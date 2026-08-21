@@ -778,7 +778,7 @@
   min-height: 0;
   flex: 1 1 auto;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 10px;
 }
 .claude-profile-editor-header {
@@ -820,6 +820,32 @@
 .claude-resource-subtabs.compact.claude-profile-editor-tabs .claude-resource-subtab {
   grid-template-columns: 18px minmax(0, 1fr);
 }
+.dsh-scheme-theme-field {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 11px;
+  border: 1px solid oklch(27% 0.006 75);
+  border-radius: 8px;
+  background: oklch(18.5% 0.006 75);
+}
+.dsh-scheme-theme-field label { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.dsh-scheme-theme-field label > span { color: oklch(76% 0.01 78); font-size: 12px; font-weight: 680; white-space: nowrap; }
+.dsh-scheme-theme-field select {
+  min-width: 180px;
+  min-height: 32px;
+  padding: 0 28px 0 9px;
+  border: 1px solid oklch(31% 0.006 75);
+  border-radius: 6px;
+  color: oklch(88% 0.01 78);
+  background: oklch(21% 0.006 75);
+  font: inherit;
+  font-size: 12px;
+}
+.dsh-scheme-theme-field select:focus-visible { border-color: oklch(48% 0.04 78); outline: 0; box-shadow: 0 0 0 2px oklch(48% 0.04 78 / .18); }
+.dsh-scheme-theme-field small { min-width: 0; color: oklch(57% 0.009 78); font-size: 10px; line-height: 1.4; text-align: right; }
 .claude-profile-editor-toolbar {
   display: block;
 }
@@ -905,6 +931,10 @@
   .claude-profile-editor-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .claude-profile-editor-tabs .claude-resource-subtab:not(.active) { display: grid !important; }
   .claude-profile-live-state { display: none; }
+  .dsh-scheme-theme-field { align-items: stretch; flex-direction: column; gap: 7px; }
+  .dsh-scheme-theme-field label { justify-content: space-between; }
+  .dsh-scheme-theme-field select { flex: 1 1 auto; min-width: 0; }
+  .dsh-scheme-theme-field small { text-align: left; }
 }
 
 /* DSH resource workbench: retain the established resource hierarchy while
@@ -1799,6 +1829,19 @@
   color: var(--settings-muted);
   background: var(--settings-surface);
 }
+
+.dsh-plugins-page .dsh-scheme-theme-field {
+  border-color: var(--settings-line);
+  background: var(--settings-surface-raised);
+}
+.dsh-plugins-page .dsh-scheme-theme-field label > span { color: var(--settings-ink); }
+.dsh-plugins-page .dsh-scheme-theme-field select {
+  border-color: var(--settings-line);
+  color: var(--settings-ink);
+  background: var(--settings-surface);
+}
+.dsh-plugins-page .dsh-scheme-theme-field select:focus-visible { border-color: var(--settings-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--settings-accent) 18%, transparent); }
+.dsh-plugins-page .dsh-scheme-theme-field small { color: var(--settings-muted); }
 
 .dsh-plugins-page .claude-profile-transfer {
   border-color: var(--settings-line);

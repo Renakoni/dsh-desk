@@ -467,6 +467,51 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('disables the live Loader entry before uninstalling a theme', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-uninstall-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'demo-theme')
+    mkdirSync(packageDir, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'demo-theme': 'github:demo/theme' },
+    }))
+    writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+      version: 1,
+      skins: { 'demo.skin': { active: true, packageName: 'demo-theme', themeId: 'demo.skin', version: '1.0.0' } },
+    }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '- insert:\n    - id: demo-theme-row\n      name: demo-theme\n')
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ name: 'demo-theme', version: '1.0.0', dsh: { client: {} } }))
+    const updates = []
+    const calls = []
+    const fixture = loaderFixture([{ options: { id: 'demo-theme-row', name: 'demo-theme' }, update: async patch => { calls.push('disable'); updates.push(patch) } }])
+    fixture.include.options.config.path = join(profile, 'cordis.patch.yml')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: fixture.loader,
+      runPlugin: async () => { calls.push('remove'); return { exitCode: 0, stdout: '', stderr: '' } },
+    })
+    const uninstall = routes.find(route => route.path === '/dsh-appearance-manager/uninstall')
+    const started = await invokeRoute(uninstall, { method: 'POST', body: {
+      skin: { id: 'demo.skin', packageName: 'demo-theme', rowId: 'demo-theme-row' },
+    } })
+    assert.equal(started.status, 202)
+    const operations = routes.find(route => route.kind === 'prefix')
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(updates, [{ disabled: true }])
+    assert.deepEqual(calls, ['disable', 'remove'])
+    assert.doesNotMatch(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), /demo-theme-row/)
+    dispose()
+  })
+
   it('waits for the initial policy exchange before plugin startup settles', async () => {
     let release
     const { port } = await listen((_request, response) => {

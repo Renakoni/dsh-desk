@@ -10,7 +10,8 @@ import type {
   DshResourceSchemeSaveInput,
   DshResourceSchemesSnapshot,
   DshResourceSchemeStore,
-  DshResourceStateInput
+  DshResourceStateInput,
+  DshThemeOverrideInput
 } from "../shared/dshResources";
 import {
   ALL_DSH_SCHEME_ID,
@@ -18,6 +19,7 @@ import {
   DSH_RESOURCE_SCHEME_VERSION,
   isDshResourceSchemeSelectable
 } from "../shared/dshResources";
+import { normalizeDshThemeOverride, resolveDshThemeId } from "../shared/dshThemes";
 import { writeTextFileAtomic } from "./filePersistence";
 
 type JsonObject = Record<string, unknown>;
@@ -30,6 +32,7 @@ export type DshResourceSchemeManagerOptions = {
   setDesiredPlugins: (states: Record<string, boolean>) => void;
   setDesiredPluginComponents?: (states: Record<string, Record<string, boolean>>) => void;
   getDesiredPluginComponents?: () => Readonly<Record<string, Readonly<Record<string, boolean>>>>;
+  applyTheme?: (themeId: string | null) => Promise<string | undefined>;
   now?: () => number;
 };
 
@@ -89,6 +92,7 @@ function parseScheme(value: unknown): DshResourceScheme | null {
     ...(row.description ? { description: row.description } : {}),
     skills,
     plugins,
+    ...(typeof row.themeId === "string" && row.themeId.trim() ? { themeId: row.themeId.trim() } : {}),
     pluginComponentOverrides: componentOverrides,
     isProtected: row.isProtected,
     createdAt: row.createdAt,
@@ -134,13 +138,49 @@ function parseStore(value: unknown): DshResourceSchemeStore | null {
   const legacyRuntimePluginIds = parseLegacyRuntimePluginIds(row, typed, pluginRuntimePackages);
   if (legacyRuntimePluginIds === null) return null;
   if (row.appliedSchemeId !== null && typeof row.appliedSchemeId !== "string") return null;
+  const themeOverride = row.themeOverride === undefined ? undefined : normalizeDshThemeOverride(row.themeOverride);
+  if (row.themeOverride !== undefined && !themeOverride) return null;
   return {
     schemaVersion: DSH_RESOURCE_SCHEME_VERSION,
     schemes: typed,
     pluginRuntimePackages,
     legacyRuntimePluginIds,
-    appliedSchemeId: row.appliedSchemeId as string | null
+    appliedSchemeId: row.appliedSchemeId as string | null,
+    ...(themeOverride ? { themeOverride } : {})
   };
+}
+
+function isBaseThemeResource(resource: DshResourceInventory["plugins"][number]): boolean {
+  return resource.appearance?.components.includes("base-theme") === true
+    && typeof resource.appearance.themeId === "string"
+    && resource.appearance.themeId !== "";
+}
+
+function themeResourceForId(inventory: DshResourceInventory, themeId: string | undefined) {
+  return themeId
+    ? inventory.plugins.find(resource => isBaseThemeResource(resource) && resource.appearance?.themeId === themeId)
+    : undefined;
+}
+
+function activeThemeId(inventory: DshResourceInventory): string | undefined {
+  return inventory.plugins.find(resource => isBaseThemeResource(resource) && resource.appearance?.active === true)?.appearance?.themeId;
+}
+
+function migratedThemeId(
+  scheme: DshResourceScheme,
+  canonicalPluginIdsForScheme: string[],
+  inventory: DshResourceInventory
+): string | undefined {
+  if (scheme.themeId) return scheme.themeId;
+  const selected = inventory.plugins.filter(resource => isBaseThemeResource(resource)
+    && (canonicalPluginIdsForScheme.includes(resource.id)
+      || canonicalPluginIdsForScheme.includes(`${PACKAGE_PLUGIN_PREFIX}${resource.packageName ?? resource.name}`)));
+  const selectedThemeIds = [...new Set(selected
+    .map(resource => resource.appearance?.themeId)
+    .filter((themeId): themeId is string => typeof themeId === "string" && themeId !== ""))];
+  if (selectedThemeIds.length === 0) return undefined;
+  const active = activeThemeId(inventory);
+  return active && selectedThemeIds.includes(active) ? active : selectedThemeIds[0];
 }
 
 function initialStore(inventory: DshResourceInventory, now: number): DshResourceSchemeStore {
@@ -148,6 +188,7 @@ function initialStore(inventory: DshResourceInventory, now: number): DshResource
   const all = (kind: "skills" | "plugins") => inventory[kind].map(item => item.id);
   const pluginRuntimePackages = runtimePluginPackages(inventory);
   const pluginAliases = (enabledOnly: boolean) => [...new Set(inventory.plugins
+    .filter(item => !isBaseThemeResource(item))
     .filter(item => !enabledOnly || item.enabled)
     .map(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX)
       ? item.id
@@ -159,6 +200,7 @@ function initialStore(inventory: DshResourceInventory, now: number): DshResource
       name: "Default",
       skills: enabled("skills"),
       plugins: pluginAliases(true),
+      ...(activeThemeId(inventory) ? { themeId: activeThemeId(inventory) } : {}),
       pluginComponentOverrides: [],
       isProtected: true,
       createdAt: now,
@@ -168,6 +210,7 @@ function initialStore(inventory: DshResourceInventory, now: number): DshResource
       name: "All",
       skills: all("skills"),
       plugins: pluginAliases(false),
+      ...(activeThemeId(inventory) ? { themeId: activeThemeId(inventory) } : {}),
       pluginComponentOverrides: [],
       isProtected: true,
       createdAt: now,
@@ -274,6 +317,7 @@ function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory
   const allowPluginDisable = !scheme.plugins.some(id => store.legacyRuntimePluginIds.includes(id));
   const desiredPlugins = dshDesiredPluginStates(inventory.plugins, selectedPlugins, dshPluginPackageNames(all?.plugins ?? []), allowPluginDisable);
   const packageDrift = inventory.plugins.some(item => {
+    if (isBaseThemeResource(item)) return false;
     if (!item.manageable) return false;
     const stateId = item.id.startsWith(PACKAGE_PLUGIN_PREFIX)
       ? item.id.slice(PACKAGE_PLUGIN_PREFIX.length)
@@ -290,7 +334,12 @@ function driftFor(store: DshResourceSchemeStore, inventory: DshResourceInventory
       && states[component.key] !== component.enabled);
   });
   const plugins = packageDrift || componentDrift;
-  return { schemeId, isDrifted: skills || plugins, skills, plugins };
+  const desiredThemeId = resolveDshThemeId(scheme, store.themeOverride);
+  const activeThemes = inventory.plugins.filter(isBaseThemeResource).filter(item => item.appearance?.active === true);
+  const theme = desiredThemeId !== null
+    ? activeThemes.length !== 1 || activeThemes[0]?.appearance?.themeId !== desiredThemeId
+    : activeThemes.length > 0;
+  return { schemeId, isDrifted: skills || plugins || theme, skills, plugins, ...(theme ? { theme: true } : {}) };
 }
 
 function nextId(name: string, schemes: DshResourceScheme[]): string {
@@ -337,29 +386,36 @@ export class DshResourceSchemeManager {
       const migrated = packageAliases.get(packageName);
       return migrated ? `${PACKAGE_PLUGIN_PREFIX}${migrated}` : id;
     }))];
+    const themePluginIds = new Set(inventory.plugins.filter(isBaseThemeResource).flatMap(item => [
+      item.id,
+      `${PACKAGE_PLUGIN_PREFIX}${item.packageName ?? item.name}`
+    ]));
+    const withoutThemePlugins = (ids: string[]) => ids.filter(id => !themePluginIds.has(id));
     const skills = inventory.skills.map(item => item.id);
     const runtimePlugins = inventory.plugins.map(item => item.id);
-    const offlinePackageIds = inventory.plugins.filter(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX)).map(item => item.id);
+    const offlinePackageIds = inventory.plugins.filter(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX) && !isBaseThemeResource(item)).map(item => item.id);
     const offlinePackageSet = new Set(offlinePackageIds);
-    const canonicalAllPlugins = canonicalize(all.plugins);
-    const plugins = packageOnlyInventory
+    const canonicalAllPlugins = withoutThemePlugins(canonicalize(all.plugins));
+    const plugins = withoutThemePlugins(packageOnlyInventory
       ? offlinePackageIds
       : inventory.runtimeConnected
         ? canonicalPluginIds([...canonicalAllPlugins, ...runtimePlugins], pluginRuntimePackages)
         : canonicalPluginIds([
           ...canonicalAllPlugins.filter(id => !id.startsWith(PACKAGE_PLUGIN_PREFIX) || offlinePackageSet.has(id)),
           ...offlinePackageIds
-        ], pluginRuntimePackages);
+        ], pluginRuntimePackages));
     const timestamp = this.now();
     const schemes = store.schemes.map(scheme => {
       const nextSkills = migrateSkillIds(scheme.skills, inventory);
       const nextPlugins = canonicalize(scheme.plugins);
+      const nextThemeId = migratedThemeId(scheme, nextPlugins, inventory);
       if (scheme.id === ALL_DSH_SCHEME_ID) {
-        if (arraysEqual(scheme.skills, skills) && arraysEqual(scheme.plugins, plugins)) return scheme;
-        return { ...scheme, skills, plugins, updatedAt: timestamp };
+        if (arraysEqual(scheme.skills, skills) && arraysEqual(scheme.plugins, plugins) && scheme.themeId === nextThemeId) return scheme;
+        return { ...scheme, skills, plugins, ...(nextThemeId ? { themeId: nextThemeId } : { themeId: undefined }), updatedAt: timestamp };
       }
-      if (arraysEqual(scheme.skills, nextSkills) && arraysEqual(scheme.plugins, nextPlugins)) return scheme;
-      return { ...scheme, skills: nextSkills, plugins: nextPlugins, updatedAt: timestamp };
+      const filteredPlugins = withoutThemePlugins(nextPlugins);
+      if (arraysEqual(scheme.skills, nextSkills) && arraysEqual(scheme.plugins, filteredPlugins) && scheme.themeId === nextThemeId) return scheme;
+      return { ...scheme, skills: nextSkills, plugins: filteredPlugins, ...(nextThemeId ? { themeId: nextThemeId } : { themeId: undefined }), updatedAt: timestamp };
     });
     const pendingLegacyRuntimePluginIds = retainedLegacyRuntimePluginIds(schemes, store.legacyRuntimePluginIds);
     const next = {
@@ -404,10 +460,22 @@ export class DshResourceSchemeManager {
       ? existing?.pluginComponentOverrides ?? []
       : parsePluginComponentOverrides(input.pluginComponentOverrides);
     if (!name || requestedSkills === null || requestedPlugins === null || requestedComponentOverrides === null) return { ok: false, issues: [issue("invalid-scheme-input", "Scheme content is invalid.")] };
+    const requestedThemePackages = inventory.plugins
+      .filter(isBaseThemeResource)
+      .filter(resource => requestedPlugins.includes(resource.id) || requestedPlugins.includes(`${PACKAGE_PLUGIN_PREFIX}${resource.packageName}`));
+    if (requestedThemePackages.length > 1) {
+      return { ok: false, issues: [issue("multiple-themes", "A scheme can contain only one base theme.")] };
+    }
+    const requestedThemeId = typeof input.themeId === "string" && input.themeId.trim()
+      ? input.themeId.trim()
+      : requestedThemePackages[0]?.appearance?.themeId;
+    if (requestedThemeId && input.themeId !== undefined && !themeResourceForId(inventory, requestedThemeId)) {
+      return { ok: false, issues: [issue("missing-theme", "The selected theme is not installed.", requestedThemeId)] };
+    }
     const withFixed = (requested: string[], kind: "skills" | "plugins") => [...new Set([
       ...inventory[kind].filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id),
       ...requested
-    ])];
+    ])].filter(id => kind !== "plugins" || !inventory.plugins.some(item => isBaseThemeResource(item) && (item.id === id || `${PACKAGE_PLUGIN_PREFIX}${item.packageName}` === id)));
     const skills = withFixed(requestedSkills, "skills");
     const plugins = canonicalPluginIds(withFixed(requestedPlugins, "plugins"), currentStore.pluginRuntimePackages);
     const selectedPackages = dshPluginPackageNames(plugins);
@@ -426,6 +494,7 @@ export class DshResourceSchemeManager {
       ...(input.description?.trim() ? { description: input.description.trim() } : { description: undefined }),
       skills,
       plugins,
+      ...(requestedThemeId ? { themeId: requestedThemeId } : { themeId: undefined }),
       pluginComponentOverrides: componentOverrides,
       updatedAt: timestamp
     } : {
@@ -434,6 +503,7 @@ export class DshResourceSchemeManager {
       ...(input.description?.trim() ? { description: input.description.trim() } : {}),
       skills,
       plugins,
+      ...(requestedThemeId ? { themeId: requestedThemeId } : {}),
       pluginComponentOverrides: componentOverrides,
       isProtected: false,
       createdAt: timestamp,
@@ -444,7 +514,8 @@ export class DshResourceSchemeManager {
       schemes: existing ? currentStore.schemes.map(item => item.id === scheme.id ? scheme : item) : [...currentStore.schemes, scheme],
       pluginRuntimePackages: currentStore.pluginRuntimePackages,
       legacyRuntimePluginIds: currentStore.legacyRuntimePluginIds,
-      appliedSchemeId: currentStore.appliedSchemeId
+      appliedSchemeId: currentStore.appliedSchemeId,
+      themeOverride: currentStore.themeOverride
     };
     saveStore(this.options.storePath, store);
     return { ok: true, schemeId: scheme.id, snapshot: this.snapshot() };
@@ -494,12 +565,37 @@ export class DshResourceSchemeManager {
         store.schemes.find(item => item.id === ALL_DSH_SCHEME_ID)?.plugins ?? [],
         !scheme.plugins.some(id => store.legacyRuntimePluginIds.includes(id))
       );
-      const appliedStore = { ...store, appliedSchemeId: scheme.id };
+      const appliedStore = { ...store, appliedSchemeId: scheme.id, themeOverride: undefined };
       saveStore(this.options.storePath, appliedStore);
       return { ok: true, schemeId: scheme.id, snapshot: this.snapshot() };
     } catch (error) {
       return { ok: false, issues: [issue("scheme-apply-failed", error instanceof Error ? error.message : String(error))] };
     }
+  }
+
+  async applyAsync(schemeId: string): Promise<DshResourceMutationResult> {
+    const { store } = this.state();
+    const scheme = store.schemes.find(item => item.id === schemeId);
+    if (!scheme) return { ok: false, issues: [issue("scheme-not-found", "Scheme no longer exists.")] };
+    if (this.options.applyTheme) {
+      const error = await this.options.applyTheme(scheme.themeId ?? null);
+      if (error) return { ok: false, issues: [issue("theme-apply-failed", error, scheme.themeId)] };
+    }
+    return this.apply(schemeId);
+  }
+
+  setThemeOverride(input: DshThemeOverrideInput): DshResourceMutationResult {
+    const { store, inventory } = this.state();
+    const parsed = normalizeDshThemeOverride(input);
+    if (!parsed) return { ok: false, issues: [issue("invalid-theme-override", "Theme override is invalid.")] };
+    if (parsed.mode === "temporary" && !themeResourceForId(inventory, parsed.themeId)) {
+      return { ok: false, issues: [issue("missing-theme", "The selected theme is not installed.", parsed.themeId)] };
+    }
+    const nextStore = parsed.mode === "follow-scheme"
+      ? { ...store, themeOverride: undefined }
+      : { ...store, themeOverride: parsed };
+    saveStore(this.options.storePath, nextStore);
+    return { ok: true, schemeId: store.appliedSchemeId ?? "", snapshot: this.projectSnapshot(nextStore, inventory) };
   }
 
   setResourceState(input: DshResourceStateInput): DshResourceMutationResult {
@@ -613,7 +709,7 @@ export function dshDesiredPluginStates(
 ): Record<string, boolean> {
   const selectedPackages = dshPluginPackageNames(selected);
   const states: Record<string, boolean> = {};
-  for (const resource of resources.filter(item => item.manageable)) {
+  for (const resource of resources.filter(item => item.manageable && !isBaseThemeResource(item))) {
     const packageName = resource.packageName ?? resource.name;
     const explicitlySelected = selected.has(resource.id) || selectedPackages.has(packageName);
     if (!explicitlySelected && !allowDisable) continue;

@@ -10,7 +10,7 @@ import type {
   ClaudeResourcesSnapshot
 } from "../shared/claudeProfiles";
 import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
-import type { DshPluginComponentStateInput, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
+import type { DshPluginComponentStateInput, DshResourceSchemeSaveInput, DshResourceStateInput, DshThemeOverrideInput } from "../shared/dshResources";
 import type { DshSkinMutationInput } from "../shared/dshSkins";
 import type { PetPackInstallScan } from "../shared/petPackTransport";
 
@@ -146,6 +146,7 @@ contextBridge.exposeInMainWorld("companion", {
   saveDshResourceScheme: (input: DshResourceSchemeSaveInput) => ipcRenderer.invoke("companion:dsh-resource-scheme-save", input),
   deleteDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-delete", schemeId),
   applyDshResourceScheme: (schemeId: string) => ipcRenderer.invoke("companion:dsh-resource-scheme-apply", schemeId),
+  setDshThemeOverride: (input: DshThemeOverrideInput) => ipcRenderer.invoke("companion:dsh-theme-override", input),
   setDshResourceState: (input: DshResourceStateInput) => ipcRenderer.invoke("companion:dsh-resource-state", input),
   setDshPluginComponentState: (input: DshPluginComponentStateInput) => ipcRenderer.invoke("companion:dsh-plugin-component-state", input),
   onDshResourcesUpdated: (callback: () => void) => onChannel("companion:dsh-resources-updated", callback),
