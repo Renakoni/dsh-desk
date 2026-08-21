@@ -124,6 +124,18 @@ describe("DshThemesPage", () => {
     expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "temporary", themeId: "ocean.theme" });
   });
 
+  it("shows the active legacy compatibility adapter above the theme actions", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: null, updateAvailable: false, compatibility: { status: "adapted", code: "legacy-keyed-settings-item" } }] }));
+    const card = await screen.findByText("海洋主题");
+    expect(within(card.closest("article")!).getByText("已启用兼容适配：这个旧版主题正在使用 Desk 的 keyed slot 兼容层。")).not.toBeNull();
+  });
+
+  it("shows an unverified compatibility warning above the active theme actions", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false, compatibility: { status: "unverified", code: "settings-slot-registration-unreadable" } }] }));
+    const card = await screen.findByText("海洋主题");
+    expect(within(card.closest("article")!).getByText("未能确认该主题的兼容性，启用时会继续尝试；如果 DSH 拒绝加载，错误会显示在这里。")).not.toBeNull();
+  });
+
   it("opens installed library theme details with runtime and catalog metadata", async () => {
     const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: "2026-08-18T00:00:00.000Z", updateAvailable: true }] }));
     await screen.findByText("海洋主题");

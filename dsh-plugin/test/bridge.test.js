@@ -18,6 +18,7 @@ import {
   bundleConfigOwners,
   createAgentSkillPolicy,
   createPluginPackageController,
+  detectThemeCompatibility,
   loaderInventory,
   mountAppearanceManager,
   runtimeEntryOwners,
@@ -360,6 +361,94 @@ describe('DSH Loader inventory bridge', () => {
     }
     assert.equal(operation.body.phase, 'done')
     assert.deepEqual(calls, [['web', ['add', 'github:demo/skin#1234567890123456789012345678901234567890']]])
+    dispose()
+  })
+
+  it('detects the old Aqua keyed-settings registration at activation time', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-compatibility-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', '@deepseek-ai', 'dsh-client-ui-aqua')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { '@deepseek-ai/dsh-client-ui-aqua': '1.3.0' } }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: '@deepseek-ai/dsh-client-ui-aqua', version: '1.3.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", id: "aqua" }, AquaPluginCard)')
+    assert.deepEqual(detectThemeCompatibility(profile, '@deepseek-ai/dsh-client-ui-aqua'), {
+      status: 'adapted', code: 'legacy-keyed-settings-item',
+    })
+  })
+
+  it('does not classify a current keyed-settings registration as legacy', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-compatibility-native-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'current-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'current-skin': '1.0.0' } }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'current-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", key: "current" }, CurrentCard)')
+    assert.deepEqual(detectThemeCompatibility(profile, 'current-skin'), { status: 'native' })
+  })
+
+  it('leaves a dynamically assembled settings registration unverified', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-compatibility-unknown-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'dynamic-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'dynamic-skin': '1.0.0' } }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'dynamic-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'const options = { name: "settings.plugin.item" }; ctx.slots.register(options, Card)')
+    assert.deepEqual(detectThemeCompatibility(profile, 'dynamic-skin'), {
+      status: 'unverified', code: 'settings-slot-registration-unreadable',
+    })
+  })
+
+  it('runs compatibility detection when an installed legacy theme is activated', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-activation-compatibility-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'legacy-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'legacy-skin': '1.0.0' } }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'legacy-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", id: "legacy" }, Card)')
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+    })
+    const activate = routes.find(route => route.path === '/dsh-appearance-manager/activate')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'legacy.skin', packageName: 'legacy-skin', rowId: 'legacy-row', install: { target: 'github:demo/legacy', version: '1.0.0' } },
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(operation.body.compatibility, { status: 'adapted', code: 'legacy-keyed-settings-item' })
+    const state = await invokeRoute(routes.find(route => route.path === '/dsh-appearance-manager/state'))
+    assert.deepEqual(state.body.skins[0].compatibility, { status: 'adapted', code: 'legacy-keyed-settings-item' })
     dispose()
   })
 

@@ -45,6 +45,45 @@ function validThemePackage(profileDir, packageName) {
   return typeof manifest?.version === 'string' && objectValue(manifest.dsh)?.client !== undefined
 }
 
+function clientBundlePath(profileDir, packageName, manifest) {
+  const exportsField = objectValue(manifest?.exports)
+  const client = typeof exportsField?.['./client'] === 'string'
+    ? exportsField['./client']
+    : objectValue(exportsField?.['./client'])?.default
+  return typeof client === 'string' && client !== ''
+    ? resolve(packageDir(profileDir, packageName), client)
+    : null
+}
+
+/**
+ * Detect the one legacy slot migration the Desk shim can prove safe. The
+ * check runs against the installed bundle immediately before activation, so a
+ * catalog commit or package update cannot stale the compatibility decision.
+ */
+export function detectThemeCompatibility(profileDir, packageName) {
+  const manifest = packageManifest(profileDir, packageName)
+  const clientPath = clientBundlePath(profileDir, packageName, manifest)
+  if (!clientPath) return { status: 'unverified', code: 'client-bundle-unreadable' }
+  let source
+  try { source = readFileSync(clientPath, 'utf8') } catch { return { status: 'unverified', code: 'client-bundle-unreadable' } }
+
+  const registrations = [...source.matchAll(/slots\.register\(\s*\{\s*name\s*:\s*["']settings\.plugin\.item["'][\s\S]{0,900}?\}/g)]
+  const keyless = registrations.some(match => {
+    const block = match[0]
+    return /\bid\s*:\s*["'][^"']+["']/.test(block) && !/\bkey\s*:/.test(block)
+  })
+  const unsupported = registrations.some(match => {
+    const block = match[0]
+    return !/\bid\s*:\s*["'][^"']+["']/.test(block) && !/\bkey\s*:/.test(block)
+  })
+  if (unsupported) return { status: 'unverified', code: 'legacy-keyed-settings-item-without-id' }
+  if (keyless) return { status: 'adapted', code: 'legacy-keyed-settings-item' }
+  if (source.includes('settings.plugin.item') && registrations.length === 0) {
+    return { status: 'unverified', code: 'settings-slot-registration-unreadable' }
+  }
+  return { status: 'native' }
+}
+
 function stateFile(profileDir) { return join(profileDir, '.dsh-appearance-manager', 'state.json') }
 function readState(profileDir) {
   const value = objectValue(jsonFile(stateFile(profileDir), null))
@@ -259,6 +298,7 @@ function skinState(profileDir, skin, stored) {
     installedVersion: valid ? manifest.version : null,
     installedAt: null,
     updateAvailable: valid && manifest.version !== skin.install.version,
+    ...(stored?.compatibility && typeof stored.compatibility.status === 'string' ? { compatibility: stored.compatibility } : {}),
     ...(!valid && installed ? { error: 'Installed theme package is incomplete.' } : {})
   }
 }
@@ -290,6 +330,7 @@ class AppearanceManager {
           installedVersion: valid && typeof manifest?.version === 'string' ? manifest.version : null,
           installedAt: null,
           updateAvailable: false,
+          ...(saved.compatibility && typeof saved.compatibility.status === 'string' ? { compatibility: saved.compatibility } : {}),
           ...(!valid && installed ? { error: 'Installed theme package is incomplete.' } : {})
         }
       })
@@ -325,13 +366,25 @@ class AppearanceManager {
           })
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
+        let compatibility = existing.compatibility
+        if (operation.kind === 'update' || existing.active === true) {
+          operation.phase = 'checking'
+          compatibility = detectThemeCompatibility(this.profileDir, skin.packageName)
+          operation.compatibility = compatibility
+        }
         operation.phase = 'registering'
         ensureRegistration(this.profileDir, skin, existing.active !== true)
-        stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? { activationGroup: skin.activationGroup } : {}) }
+        stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(compatibility ? { compatibility } : {}), ...(typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? { activationGroup: skin.activationGroup } : {}) }
       } else if (operation.kind === 'activate' || operation.kind === 'deactivate') {
-        operation.phase = operation.kind === 'activate' ? 'activating' : 'deactivating'
+        operation.phase = operation.kind === 'activate' ? 'checking' : 'deactivating'
         if (!Object.hasOwn(dependencies(this.profileDir), skin.packageName)) throw new Error('install the theme before using it')
         const active = operation.kind === 'activate'
+        const compatibility = active ? detectThemeCompatibility(this.profileDir, skin.packageName) : existing.compatibility
+        if (active) operation.compatibility = compatibility
+        if (active && compatibility.status === 'unverified' && compatibility.code === 'legacy-keyed-settings-item-without-id') {
+          throw new Error('Theme uses a keyed settings slot without a stable legacy id and cannot be adapted safely.')
+        }
+        operation.phase = active ? 'activating' : 'deactivating'
         const activationGroup = typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? skin.activationGroup : null
         if (active && activationGroup && Array.isArray(catalog)) {
           for (const other of catalog) {
@@ -339,12 +392,12 @@ class AppearanceManager {
             if (other.activationGroup !== activationGroup) continue
             if (!Object.hasOwn(dependencies(this.profileDir), other.packageName)) continue
             ensureRegistration(this.profileDir, other, true)
-            stored.skins[other.id] = { active: false, packageName: other.packageName, themeId: other.id, version: other.install?.version, appearance: other.appearance, activationGroup }
+            stored.skins[other.id] = { ...stored.skins[other.id], active: false, packageName: other.packageName, themeId: other.id, version: other.install?.version, appearance: other.appearance, activationGroup }
           }
           await disableUncataloguedThemes(this.profileDir, this.loader, catalog, skin.packageName, activationGroup)
         }
         ensureRegistration(this.profileDir, skin, !active)
-        stored.skins[skin.id] = { active, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(activationGroup ? { activationGroup } : {}) }
+        stored.skins[skin.id] = { active, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(compatibility ? { compatibility } : {}), ...(activationGroup ? { activationGroup } : {}) }
       } else {
         operation.phase = 'uninstalling'
         await disableLoaderEntries(this.loader, skin)

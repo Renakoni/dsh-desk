@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
   DshSkinAction,
+  DshSkinCompatibility,
   DshSkinCatalogEntry,
   DshLocalSkin,
   DshSkinHostState,
@@ -68,7 +69,7 @@ type WebProfileManifest = {
 
 type PersistedSkinState = {
   activeSkinId?: unknown;
-  skins?: Record<string, { active?: unknown; packageName?: unknown; themeId?: unknown; activationGroup?: unknown; appearance?: unknown }>;
+  skins?: Record<string, { active?: unknown; packageName?: unknown; themeId?: unknown; activationGroup?: unknown; appearance?: unknown; compatibility?: unknown }>;
 };
 
 export type DshSkinMarketplaceOptions = {
@@ -87,7 +88,7 @@ export type DshSkinMarketplaceOptions = {
 
 const APPEARANCE_KINDS: DshAppearanceKind[] = ["theme", "appearance-extension", "theme-bundle"];
 const APPEARANCE_COMPONENTS: DshAppearanceComponent[] = ["base-theme", "wallpaper", "motion", "sound", "settings"];
-const OPERATION_PHASES: DshSkinOperationPhase[] = ["queued", "downloading", "installing", "registering", "activating", "deactivating", "uninstalling", "done", "failed"];
+const OPERATION_PHASES: DshSkinOperationPhase[] = ["queued", "downloading", "installing", "checking", "registering", "activating", "deactivating", "uninstalling", "done", "failed"];
 
 function operationProgress(input: DshSkinMutationInput, operation: OperationPayload): DshSkinOperationProgress | null {
   if (typeof operation.phase !== "string" || !OPERATION_PHASES.includes(operation.phase as DshSkinOperationPhase)) return null;
@@ -297,6 +298,15 @@ function parseRuntimeSkin(value: unknown): DshSkinRuntimeState | null {
   if (!source || typeof source.skinId !== "string"
     || !["missing", "installed", "updating", "broken"].includes(String(source.installation))
     || !["inactive", "active", "switching", "restart-required"].includes(String(source.activation))) return null;
+  const compatibility = objectValue(source.compatibility);
+  const compatibilityStatus = compatibility?.status;
+  const parsedCompatibility: DshSkinCompatibility | undefined = compatibility
+    && (compatibilityStatus === "native" || compatibilityStatus === "adapted" || compatibilityStatus === "unverified")
+    ? {
+      status: compatibilityStatus,
+      ...(typeof compatibility.code === "string" ? { code: compatibility.code } : {})
+    }
+    : undefined;
   return {
     skinId: source.skinId,
     installation: source.installation as DshSkinRuntimeState["installation"],
@@ -304,6 +314,7 @@ function parseRuntimeSkin(value: unknown): DshSkinRuntimeState | null {
     installedVersion: typeof source.installedVersion === "string" ? source.installedVersion : null,
     installedAt: typeof source.installedAt === "string" ? source.installedAt : null,
     updateAvailable: source.updateAvailable === true,
+    ...(parsedCompatibility ? { compatibility: parsedCompatibility } : {}),
     ...(typeof source.error === "string" ? { error: source.error } : {})
   };
 }
@@ -569,6 +580,7 @@ export class DshSkinMarketplace {
         installedVersion,
         installedAt,
         updateAvailable: installed && (installedVersion !== skin.install.version || !spec.includes(skin.install.commit)),
+        ...(objectValue(state.skins?.[skin.id]?.compatibility) ? { compatibility: state.skins?.[skin.id]?.compatibility as DshSkinCompatibility } : {}),
         ...(!installed ? { error: "Installed package is incomplete." } : {})
       } satisfies DshSkinRuntimeState];
     });
@@ -687,6 +699,7 @@ export class DshSkinMarketplace {
             updateAvailable: local.updateAvailable || state.updateAvailable,
             installedVersion: state.installedVersion ?? local.installedVersion,
             installedAt: state.installedAt ?? local.installedAt,
+            compatibility: state.compatibility ?? local.compatibility,
             ...(local.installation === "broken" && local.error ? { error: local.error } : {})
           }
           : state);
