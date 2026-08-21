@@ -112,6 +112,20 @@ describe("DshThemesPage", () => {
     expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "temporary", themeId: "ocean.theme" });
   });
 
+  it("opens installed library theme details with runtime and catalog metadata", async () => {
+    renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: "2026-08-18T00:00:00.000Z", updateAvailable: true }] }));
+    await screen.findByText("海洋主题");
+
+    fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "海洋主题" });
+    expect(within(dialog).getByText("使用中")).not.toBeNull();
+    expect(within(dialog).getByText("可更新")).not.toBeNull();
+    expect(within(dialog).getByText("0.9.0")).not.toBeNull();
+    expect(within(dialog).getByText("1.0.0")).not.toBeNull();
+    expect(within(dialog).getByText("123456789012")).not.toBeNull();
+  });
+
   it("keeps the active theme when uninstalling an inactive library theme", async () => {
     const value = snapshot({ skins: [
       { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
