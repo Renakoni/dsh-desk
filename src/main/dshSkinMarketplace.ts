@@ -12,16 +12,17 @@ import type {
   DshSkinMutationResult,
   DshSkinRuntimeState
 } from "../shared/dshSkins";
+import type { DshAppearanceComponent, DshAppearanceKind, DshAppearanceMetadata } from "../shared/dshResources";
 import { writeTextFileAtomic } from "./filePersistence";
 
 export const DSH_SKIN_CATALOG_URL = "https://raw.githubusercontent.com/Renakoni/awesome-dsh-themes/main/data/catalog.json";
 export const DSH_SKIN_MARKET_INSTALL_SPEC = "";
 export const DSH_SKIN_MARKET_PACKAGE = "dsh-desk-plugin";
 export const DSH_SKIN_MARKET_REFRESH_MS = 12 * 60 * 60 * 1000;
-const DEFAULT_DSH_WEB_ORIGIN = "http://127.0.0.1:3080";
+export const DEFAULT_DSH_WEB_ORIGIN = "http://127.0.0.1:3080";
 const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 5_000;
-const OPERATION_TIMEOUT_MS = 120_000;
+export const OPERATION_TIMEOUT_MS = 10 * 60 * 1000;
 const CACHE_VERSION = 1;
 
 type FetchResponse = {
@@ -58,7 +59,7 @@ type WebProfileManifest = {
 
 type PersistedSkinState = {
   activeSkinId?: unknown;
-  skins?: Record<string, { active?: unknown; packageName?: unknown; activationGroup?: unknown }>;
+  skins?: Record<string, { active?: unknown; packageName?: unknown; themeId?: unknown; activationGroup?: unknown; appearance?: unknown }>;
 };
 
 export type DshSkinMarketplaceOptions = {
@@ -70,7 +71,40 @@ export type DshSkinMarketplaceOptions = {
   webOrigin?: string;
   pollDelay?: (milliseconds: number) => Promise<void>;
   installPlugin?: (input: { installSpec: string; profiles: string[] }) => Promise<{ ok: boolean; restartRequired: boolean; error?: string }>;
+  authoritativeTheme?: () => string | null | undefined;
 };
+
+const APPEARANCE_KINDS: DshAppearanceKind[] = ["theme", "appearance-extension", "theme-bundle"];
+const APPEARANCE_COMPONENTS: DshAppearanceComponent[] = ["base-theme", "wallpaper", "motion", "sound", "settings"];
+
+function parseAppearance(value: unknown, themeId: string): DshAppearanceMetadata {
+  const row = objectValue(value);
+  const kind = APPEARANCE_KINDS.includes(row?.kind as DshAppearanceKind) ? row?.kind as DshAppearanceKind : "theme-bundle";
+  const components = Array.isArray(row?.components)
+    ? row.components.filter((item): item is DshAppearanceComponent => APPEARANCE_COMPONENTS.includes(item as DshAppearanceComponent))
+    : ["base-theme" as const];
+  return {
+    kind,
+    components: [...new Set(components.length > 0 ? components : ["base-theme" as const])],
+    themeId,
+    ...(typeof row?.activationGroup === "string" && row.activationGroup.trim() ? { activationGroup: row.activationGroup.trim() } : {}),
+    ...(row?.active === true ? { active: true } : {})
+  };
+}
+
+export function readManagedDshThemePackages(profileDir: string): Record<string, DshAppearanceMetadata> {
+  const state = readJsonFile<PersistedSkinState>(join(profileDir, ".dsh-appearance-manager", "state.json"), {});
+  return Object.entries(state.skins ?? {}).reduce<Record<string, DshAppearanceMetadata>>((result, [storedThemeId, value]) => {
+    const row = objectValue(value);
+    const packageName = typeof row?.packageName === "string" ? row.packageName : "";
+    const themeId = typeof row?.themeId === "string" ? row.themeId : storedThemeId;
+    if (!packageName || !themeId) return result;
+    const packageManifest = readJsonFile<Record<string, unknown> | null>(join(packageDirectory(profileDir, packageName), "package.json"), null);
+    result[packageName] = parseAppearance(objectValue(packageManifest?.dsh)?.appearance ?? row?.appearance, themeId);
+    if (row?.active === true) result[packageName] = { ...result[packageName], active: true };
+    return result;
+  }, {});
+}
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -200,6 +234,7 @@ function parseSkin(value: unknown, fallbackUpdatedAt?: string): DshSkinCatalogEn
     screenshots,
     ...(optionalString(source.listScreenshot) ? { listScreenshot: String(source.listScreenshot) } : {}),
     ...(reviewValue ? { review: reviewValue as DshSkinCatalogEntry["review"] } : {}),
+    ...(source.appearance ? { appearance: parseAppearance(source.appearance, id) } : {}),
     license: {
       code: requiredString(license.code, `${id} license`),
       commercialUse: license.commercialUse === true,
@@ -383,6 +418,7 @@ export class DshSkinMarketplace {
     const dependencies = manifest.dependencies ?? {};
     const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-appearance-manager", "state.json"),
       readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-skin-market", "state.json"), {}));
+    const authoritativeTheme = this.options.authoritativeTheme?.();
     return (this.catalog?.skins ?? []).flatMap(skin => {
       const spec = dependencies[skin.packageName];
       if (typeof spec !== "string") return [];
@@ -398,7 +434,9 @@ export class DshSkinMarketplace {
       return [{
         skinId: skin.id,
         installation: installed ? "installed" : "broken",
-      activation: state.activeSkinId === skin.id || state.skins?.[skin.id]?.active === true ? "active" : "inactive",
+        activation: authoritativeTheme !== undefined
+          ? authoritativeTheme === skin.id ? "active" : "inactive"
+          : state.activeSkinId === skin.id || state.skins?.[skin.id]?.active === true ? "active" : "inactive",
         installedVersion,
         installedAt,
         updateAvailable: installed && (installedVersion !== skin.install.version || !spec.includes(skin.install.commit)),
@@ -412,6 +450,7 @@ export class DshSkinMarketplace {
     const dependencies = manifest.dependencies ?? {};
     const known = new Set((this.catalog?.skins ?? []).map(skin => skin.packageName));
     const state = readJsonFile<PersistedSkinState>(join(this.options.webProfileDir, ".dsh-appearance-manager", "state.json"), {});
+    const authoritativeTheme = this.options.authoritativeTheme?.();
     // dsh.client is shared by themes and ordinary Web features. Only Desk's
     // appearance state proves that an uncatalogued package is a local theme.
     const managed = new Map(Object.values(state.skins ?? {}).flatMap(skin => typeof skin.packageName === "string"
@@ -428,6 +467,7 @@ export class DshSkinMarketplace {
         : objectValue(packageManifest?.repository)?.url;
       const version = typeof packageManifest?.version === "string" ? packageManifest.version : null;
       const registration = localThemeRegistration(this.options.webProfileDir, packageName, packageManifest ?? {});
+      const managedAppearance = parseAppearance(objectValue(dsh)?.appearance, `local:${packageName}`);
       return [{
         id: `local:${packageName}`,
         packageName,
@@ -438,8 +478,11 @@ export class DshSkinMarketplace {
         version,
         repositoryUrl: typeof repository === "string" && /^https:\/\//i.test(repository) ? repository.replace(/^git\+/, "").replace(/\.git$/, "") : null,
         ...(managed.get(packageName) ? { activationGroup: managed.get(packageName) } : {}),
-        active: registration.active,
-        broken: packageManifest === null
+        active: authoritativeTheme !== undefined
+          ? authoritativeTheme === `local:${packageName}`
+          : registration.active,
+        broken: packageManifest === null,
+        appearance: managedAppearance
       } satisfies DshLocalSkin];
     });
   }
@@ -456,6 +499,7 @@ export class DshSkinMarketplace {
       packageName: local.packageName,
       rowId: local.rowId,
       ...(local.activationGroup ? { activationGroup: local.activationGroup } : {}),
+      ...(local.appearance ? { appearance: local.appearance } : {}),
       tags: [],
       modes: ["light", "dark"],
       install: { target: "", version: local.version ?? "0.0.0", commit: "" },
@@ -517,6 +561,12 @@ export class DshSkinMarketplace {
             ...(local.installation === "broken" && local.error ? { error: local.error } : {})
           }
           : state);
+      }
+      const authoritativeTheme = this.options.authoritativeTheme?.();
+      if (authoritativeTheme !== undefined) {
+        for (const state of states.values()) {
+          state.activation = state.skinId === authoritativeTheme ? "active" : "inactive";
+        }
       }
       return {
         connected: true,

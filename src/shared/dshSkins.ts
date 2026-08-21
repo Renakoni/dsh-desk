@@ -1,3 +1,5 @@
+import type { DshAppearanceMetadata } from "./dshResources";
+
 export type DshSkinMode = "light" | "dark";
 
 export type DshSkinReview = {
@@ -25,6 +27,7 @@ export type DshSkinCatalogEntry = {
   license: { code: string; commercialUse: boolean; notice?: string };
   stars: number | null;
   updatedAt: string;
+  appearance?: DshAppearanceMetadata;
 };
 
 export type DshLocalSkin = {
@@ -39,6 +42,7 @@ export type DshLocalSkin = {
   activationGroup?: string;
   active: boolean;
   broken: boolean;
+  appearance?: DshAppearanceMetadata;
 };
 
 export type DshSkinRuntimeState = {

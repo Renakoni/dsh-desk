@@ -397,6 +397,8 @@
     "overallOpacity": "整体透明"
   },
   "connection": {
+    "webOrigin": "DSH Web 地址",
+    "webOriginNote": "主题管理请求发送到正在运行的 DSH Web。使用 --port 启动 DSH 时，请填写对应端口。",
     "webProfile": "Web profile",
     "headlessProfile": "Headless profile",
     "pluginBundle": "插件安装包",
@@ -667,7 +669,18 @@
     "duplicateSchemeName": "已有同名方案。",
     "inactiveScheme": "请先切换到该方案，再调整资源状态。",
     "missingResource": "该资源已不在本机。",
-    "requiredResource": "该资源为必装项，无法禁用。"
+    "requiredResource": "该资源为必装项，无法禁用。",
+    "baseTheme": "基础主题",
+    "themeSlot": "基础主题",
+    "noTheme": "不使用主题",
+    "missingThemeOption": "缺失：{id}",
+    "baseThemeHint": "每个方案只能选择一个基础主题。壁纸、动效、声音和设置组件仍属于该主题包。",
+    "schemeTheme": "方案主题",
+    "themeManagedInAppearance": "在外观中管理",
+    "multipleThemes": "一个方案只能选择一个基础主题。",
+    "missingTheme": "所选主题未安装，请先从主题市场安装。",
+    "themeApplyFailed": "无法应用所选主题。",
+    "invalidThemeOverride": "主题临时覆盖设置无效。"
   },
   "dshThemes": {
     "libraryTitle": "主题库",
@@ -717,7 +730,7 @@
     "restartWeb": "重启 DSH",
     "restarting": "DSH 正在重启。",
     "restartToApply": "主题状态已保存，重启 DSH 后生效。",
-    "refreshToApply": "主题状态已保存，刷新 DSH 页面后完全生效。",
+    "refreshToApply": "主题状态已保存，重启 DSH 后生效。",
     "broken": "安装不完整",
     "registrationMissing": "未找到主题入口",
     "operationFailed": "操作失败。"

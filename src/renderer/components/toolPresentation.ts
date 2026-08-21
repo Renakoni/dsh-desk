@@ -15,7 +15,7 @@ export function actionForTool(tool: string | undefined | null): string {
   const raw = (tool ?? "").toLowerCase();
   const t = raw.replace(/[^a-z0-9]+/g, "");
   if (raw.startsWith("mcp__") || t === "mcp") return "Use an MCP tool";
-  if (t === "bash" || t === "shell" || t === "shellcommand") return "Run a command";
+  if (t === "bash" || t === "shell" || t === "shellcommand" || t === "powershell" || t === "pwsh") return "Run a command";
   if (t === "edit" || t === "write" || t === "multiedit" || t === "update") return "Edit a file";
   if (t === "notebookedit") return "Edit a notebook";
   if (t === "read" || t === "readfile") return "Read a file";

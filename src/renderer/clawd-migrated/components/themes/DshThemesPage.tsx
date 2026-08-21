@@ -52,9 +52,18 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       if (result.supportPrepared) setNotice(t("dshThemes.supportPrepared", "主题管理已准备好。重启 DSH 后继续操作。"));
       else if (!result.ok) setNotice(result.error ?? t("dshThemes.operationFailed", "操作失败。"));
       else if (result.restartRequested) setNotice(t("dshThemes.restarting", "DSH 正在重启。"));
-      else if (result.browserRefreshRequired) setNotice(action === "activate" || action === "update"
-        ? t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。")
-        : t("dshThemes.refreshToApply", "主题状态已保存，刷新 DSH 页面后完全生效。"));
+      else if (action === "activate" || action === "deactivate" || action === "uninstall") {
+        const override = action === "deactivate" || action === "uninstall"
+          ? { mode: "disabled" as const }
+          : { mode: "temporary" as const, themeId: skin.id };
+        const overrideResult = await window.companion.setDshThemeOverride(override).catch(() => null);
+        if (!overrideResult?.ok) setNotice(t("dshThemes.operationFailed", "操作失败。"));
+        else {
+          const nextSnapshot = await window.companion.getDshSkinMarketplace().catch(() => null);
+          if (nextSnapshot) setSnapshot(nextSnapshot);
+          setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
+        }
+      } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
     } finally { setBusy(null); }

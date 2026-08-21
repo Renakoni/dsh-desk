@@ -36,10 +36,15 @@ export function DshSchemeEditor({
   const { t } = useI18n();
   const logicalInventory = useMemo(() => ({
     skills: logicalDshResources(inventory.skills, "skills"),
-    plugins: logicalDshResources(inventory.plugins, "plugins")
+    plugins: logicalDshResources(inventory.plugins, "plugins").filter(item => !item.appearance?.components.includes("base-theme"))
   }), [inventory.plugins, inventory.skills]);
+  const themes = useMemo(
+    () => logicalDshResources(inventory.plugins, "plugins").filter(item => item.appearance?.components.includes("base-theme") && item.appearance.themeId),
+    [inventory.plugins]
+  );
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
+    ...(initial.themeId ? { themeId: initial.themeId } : {}),
     pluginComponentOverrides: [...(initial.pluginComponentOverrides ?? [])],
     skills: [...new Set([...logicalInventory.skills.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.skills])],
     plugins: [...new Set([...logicalInventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
@@ -141,6 +146,18 @@ export function DshSchemeEditor({
           <button type="button" className="claude-profile-primary-button" onClick={() => onSave({ ...draft, name: draft.name.trim(), description: draft.description?.trim() || undefined })} disabled={busy || !draft.name.trim()}>{busy ? t("dshResources.saving", "Saving...") : t("common.save", "Save")}</button>
         </div>
       </header>
+
+      <section className="dsh-scheme-theme-field" aria-label={t("dshResources.themeSlot", "Base theme")}>
+        <label>
+          <span>{t("dshResources.baseTheme", "Base theme")}</span>
+          <select value={draft.themeId ?? ""} onChange={event => setDraft(current => ({ ...current, ...(event.target.value ? { themeId: event.target.value } : { themeId: undefined }) }))} disabled={busy || protectedScheme}>
+            <option value="">{t("dshResources.noTheme", "No theme")}</option>
+            {draft.themeId && !themes.some(theme => theme.appearance?.themeId === draft.themeId) ? <option value={draft.themeId}>{t("dshResources.missingThemeOption", "Missing: {id}", { id: draft.themeId })}</option> : null}
+            {themes.map(theme => <option key={theme.appearance?.themeId} value={theme.appearance?.themeId}>{theme.name}</option>)}
+          </select>
+        </label>
+        <small>{t("dshResources.baseThemeHint", "A scheme can select one base theme. Wallpaper, motion, sound, and settings components remain part of that theme package.")}</small>
+      </section>
 
       <nav className="claude-resource-subtabs compact claude-profile-editor-tabs dsh-scheme-editor-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
         {tabs.map(tab => {

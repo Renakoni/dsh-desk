@@ -110,6 +110,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     const members = new Set(memberIds);
     return [
       ...availableResources.filter(item => members.has(item.id)),
+      ...(activeTab === "plugins" ? availableResources.filter(item => item.appearance?.components.includes("base-theme")) : []),
       ...unavailableDshResources(memberIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
     ];
   }, [activeTab, availableResources, knownPluginIds, selectedScheme, t]);
@@ -130,6 +131,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
         ...(source?.description ? { description: source.description } : {}),
         skills: source ? [...source.skills] : [],
         plugins: source ? [...source.plugins] : [],
+        ...(source?.themeId ? { themeId: source.themeId } : {}),
         pluginComponentOverrides: source ? [...source.pluginComponentOverrides] : []
       },
       protectedScheme: false
@@ -310,6 +312,8 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
           ? t("dshResources.bridgeDescription", "Local bridge between DSH Desk and DeepSeek Harness")
           : presentation.description;
         const components = resource.components ?? [];
+        const baseTheme = resource.appearance?.components.includes("base-theme") === true;
+        const selectedBaseTheme = baseTheme && scheme?.themeId === resource.appearance?.themeId;
         const soleComponent = components.length === 1 ? components[0] : undefined;
         const directComponent = resource.required && soleComponent?.manageable ? soleComponent : undefined;
         const open = components.length > 1 && expanded.has(resource.id);
@@ -317,7 +321,7 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
         const directComponentBusy = directComponent && busyResourceId === `${resource.id}:${directComponent.key}`;
         const canChangeDirectComponent = Boolean(directComponent && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
         const directComponentEnabled = directComponent ? componentEffectiveEnabled(directComponent, scheme) : false;
-        const rowEnabled = directComponent ? directComponentEnabled : resource.enabled;
+        const rowEnabled = baseTheme ? resource.appearance?.active === true : directComponent ? directComponentEnabled : resource.enabled;
         return (
           <div className={`dsh-plugin-bundle ${open ? "expanded" : ""}`} key={resource.id}>
             <article className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : rowEnabled ? "enabled" : "disabled"}`}>
@@ -328,8 +332,8 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
                 {presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}
                 {components.length > 1 ? <button type="button" className="dsh-component-disclosure" aria-expanded={open} aria-label={t("dshResources.showComponents", "View {count} components", { count: components.length })} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id); return next; })}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
               </div>
-              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : rowEnabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : rowEnabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : rowEnabled ? "Enabled" : "Disabled")}</span>
-              {directComponent ? <button
+              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : rowEnabled ? "active" : "idle"}`}>{baseTheme ? selectedBaseTheme ? t("dshResources.schemeTheme", "Scheme theme") : rowEnabled ? t("dshResources.enabled", "Enabled") : t("dshResources.disabled", "Disabled") : t(resource.missing ? "dshResources.missing" : rowEnabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : rowEnabled ? "Enabled" : "Disabled")}</span>
+              {baseTheme ? <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t("dshResources.themeManagedInAppearance", "Managed in Appearance")}</span> : directComponent ? <button
                 type="button"
                 className="claude-profile-resource-action dsh-resource-action"
                 aria-label={`${t(directComponentEnabled ? "dshResources.disable" : "dshResources.enable", directComponentEnabled ? "Disable" : "Enable")} ${directComponent.name}`}
@@ -400,7 +404,7 @@ function componentStateForEnabled(
   return enabled ? "enabled" : "disabled";
 }
 
-function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins], pluginComponentOverrides: [...scheme.pluginComponentOverrides] }; }
+function schemeInput(scheme: DshResourceScheme, t: I18nTranslate): DshResourceSchemeSaveInput { return { id: scheme.id, name: schemeDisplayName(scheme, t), ...(scheme.description ? { description: scheme.description } : {}), skills: [...scheme.skills], plugins: [...scheme.plugins], ...(scheme.themeId ? { themeId: scheme.themeId } : {}), pluginComponentOverrides: [...scheme.pluginComponentOverrides] }; }
 function nextCopyName(name: string, schemes: DshResourceScheme[], t: I18nTranslate) { let index = 1; let value = t("dshResources.copyName", "{name} Copy", { name }); while (schemes.some(scheme => scheme.name.toLocaleLowerCase() === value.toLocaleLowerCase())) value = t("dshResources.copyNameNumbered", "{name} Copy {index}", { name, index: ++index }); return value; }
 function schemeDisplayName(scheme: DshResourceScheme, t: I18nTranslate) { return scheme.id === DEFAULT_DSH_SCHEME_ID ? t("dshResources.defaultScheme", "Default") : scheme.id === ALL_DSH_SCHEME_ID ? t("dshResources.allScheme", "All") : scheme.name; }
 function schemeSortGroup(id: string) { return id === DEFAULT_DSH_SCHEME_ID ? 0 : id === ALL_DSH_SCHEME_ID ? 1 : 2; }
@@ -417,7 +421,11 @@ function issueMessage(issues: Array<{ code: string; message: string }>, t: I18nT
     "component-package-disabled": "updateComponentFailed",
     "component-state-failed": "updateComponentFailed",
     "scheme-apply-failed": "applySchemeFailed",
-    "resource-state-failed": "updateStateFailed"
+    "resource-state-failed": "updateStateFailed",
+    "multiple-themes": "multipleThemes",
+    "missing-theme": "missingTheme",
+    "theme-apply-failed": "themeApplyFailed",
+    "invalid-theme-override": "invalidThemeOverride"
   };
   const key = keys[issues[0]?.code];
   return key ? t(`dshResources.${key}`, issues[0]?.message) : t("dshResources.operationFailed", "The operation failed.");

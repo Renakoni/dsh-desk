@@ -40,6 +40,7 @@ const EXPECTED_CANONICAL_KEYS = [
   "notificationsEnabled",
   "theme",
   "uiStyle",
+  "dshWebOrigin",
   "language",
   "displayCurrency",
   "notificationRules",

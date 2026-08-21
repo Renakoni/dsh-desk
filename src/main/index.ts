@@ -95,7 +95,7 @@ import {
 } from "./dshProviderStore";
 import type { DshProviderSaveInput } from "../shared/dshProviders";
 import type { DshMarketplaceSkill, DshPluginInstallInput, DshPluginRemoveInput, DshPluginStateInput, DshSkillRepo } from "../shared/dshPlugins";
-import type { DshPluginComponentStateInput, DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput } from "../shared/dshResources";
+import type { DshPluginComponentStateInput, DshResourceInventory, DshResourceSchemeSaveInput, DshResourceStateInput, DshThemeOverrideInput } from "../shared/dshResources";
 import { ALL_DSH_SCHEME_ID } from "../shared/dshResources";
 import { emptyDshAnalyticsSnapshot, type DshAnalyticsSnapshot } from "../shared/dshAnalytics";
 import type { CompanionInitialState } from "../renderer/shared/events";
@@ -107,7 +107,8 @@ import { dshDesiredPluginComponentStates, dshDesiredPluginStates, dshDesiredSkil
 import { DshSkillMarketplace } from "./dshSkillMarketplace";
 import { DshDesiredResourceState } from "./dshDesiredResourceState";
 import type { DshSkinMutationInput } from "../shared/dshSkins";
-import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE } from "./dshSkinMarketplace";
+import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE, DEFAULT_DSH_WEB_ORIGIN, readManagedDshThemePackages } from "./dshSkinMarketplace";
+import { normalizeDshThemeOverride, resolveDshThemeId } from "../shared/dshThemes";
 
 type DailyRuntimeStats = {
   events: number;
@@ -992,7 +993,8 @@ type NotificationRule = {
 function normalizeTool(tool?: string) {
   if (!tool) return "Unknown";
   const normalized = tool.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (normalized.includes("bash") || normalized.includes("shell") || normalized.includes("pwsh") || normalized.includes("powershell")) return "Bash";
+  if (normalized.includes("pwsh") || normalized.includes("powershell")) return "PowerShell";
+  if (normalized.includes("bash") || normalized.includes("shell")) return "Bash";
   if (normalized.includes("edit") || normalized.includes("replace")) return "Edit";
   if (normalized.includes("write")) return "Write";
   if (normalized.includes("read")) return "Read";
@@ -3688,6 +3690,7 @@ function dshResourceInventory(): DshResourceInventory {
   const runtimePlugins = new Map(dshRuntimePluginResources(runtimeSnapshot)
     .map(plugin => [plugin.packageName ?? plugin.name, plugin]));
   const staticComponents = scanDshStaticPluginComponents(resolveDshHome());
+  const managedThemes = readManagedDshThemePackages(join(resolveDshHome(), "profiles", "web"));
   const plugins = dshPluginCatalog().snapshot().plugins.map(plugin => {
     const runtime = runtimePlugins.get(plugin.packageName);
     const components = mergeDshPluginComponents(staticComponents[plugin.packageName], runtime?.components).map(component => {
@@ -3708,6 +3711,7 @@ function dshResourceInventory(): DshResourceInventory {
       detail: runtime?.detail ?? plugin.packageName,
       ...(runtime?.sourceIds ? { sourceIds: runtime.sourceIds } : {}),
       ...(components.length ? { components } : {}),
+      ...(managedThemes[plugin.packageName] ? { appearance: managedThemes[plugin.packageName] } : {}),
       enabled: packageEnabled,
       manageable: !plugin.protected,
       schemeSelectable: true,
@@ -3761,8 +3765,51 @@ function dshResourceSchemeManager() {
     setDesiredSkills: setDesiredDshSkills,
     setDesiredPlugins: setDesiredDshPlugins,
     setDesiredPluginComponents: setDesiredDshPluginComponents,
-    getDesiredPluginComponents: () => desiredDshResources.current().pluginComponents
+    getDesiredPluginComponents: () => desiredDshResources.current().pluginComponents,
+    applyTheme: applyDshTheme
   });
+}
+
+function dshAuthoritativeThemeId(): string | null | undefined {
+  try {
+    const snapshot = dshResourceSchemeManager().snapshot();
+    const scheme = snapshot.schemes.find(item => item.id === snapshot.appliedSchemeId);
+    return resolveDshThemeId(scheme, snapshot.themeOverride);
+  } catch {
+    return undefined;
+  }
+}
+
+function dshWebOrigin(): string {
+  const configured = typeof companionSettings.dshWebOrigin === "string" ? companionSettings.dshWebOrigin.trim() : "";
+  const environment = typeof process.env.DSH_WEB_ORIGIN === "string" ? process.env.DSH_WEB_ORIGIN.trim() : "";
+  const value = configured || environment || DEFAULT_DSH_WEB_ORIGIN;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("unsupported protocol");
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return DEFAULT_DSH_WEB_ORIGIN;
+  }
+}
+
+async function applyDshTheme(themeId: string | null): Promise<string | undefined> {
+  const marketplace = dshSkinMarketplace();
+  const snapshot = await marketplace.snapshot();
+  const active = snapshot.host.skins.filter(state => state.activation === "active");
+  if (themeId) {
+    const target = snapshot.host.skins.find(state => state.skinId === themeId);
+    if (!target || target.installation !== "installed") return "The selected theme is not installed. Install it from the theme market first.";
+    if (target.activation === "active" && active.length === 1) return undefined;
+  }
+  for (const state of active) {
+    if (state.skinId === themeId) continue;
+    const result = await marketplace.mutate({ skinId: state.skinId, action: "deactivate" });
+    if (!result.ok) return result.error ?? "The current theme could not be disabled.";
+  }
+  if (!themeId) return undefined;
+  const result = await marketplace.mutate({ skinId: themeId, action: "activate" });
+  return result.ok ? undefined : result.error ?? "The selected theme could not be activated.";
 }
 
 function dshSkillMarketplace() {
@@ -3784,7 +3831,9 @@ function dshSkinMarketplace() {
     cachePath: join(app.getPath("userData"), "dsh-appearance-catalog.json"),
     webProfileDir: join(resolveDshHome(), "profiles", "web"),
     marketInstalled: dshSkinMarketInstalled,
-    installPlugin: input => dshPluginCatalog().install(input)
+    installPlugin: input => dshPluginCatalog().install(input),
+    webOrigin: dshWebOrigin(),
+    authoritativeTheme: dshAuthoritativeThemeId
   });
   return dshSkinMarketplaceInstance;
 }
@@ -4054,6 +4103,7 @@ app.whenReady().then(() => {
     const previousPetScale = companionSettings.petScale;
     const previousFeedbackScale = companionSettings.feedbackScale;
     const previousPermissionScale = companionSettings.permissionScale;
+    const previousDshWebOrigin = companionSettings.dshWebOrigin;
     const previousPetTheme = typeof companionSettings.petTheme === "string" ? companionSettings.petTheme : "";
     const canonicalNext = pickCanonicalSettings(next && typeof next === "object" ? next : {});
     const requestedTheme = canonicalNext.petTheme;
@@ -4063,6 +4113,7 @@ app.whenReady().then(() => {
     if (isRemovedBuiltinPetTheme(requestedTheme, removedBuiltinPetThemes)) delete canonicalNext.petTheme;
     const mergedSettings = { ...companionSettings, ...canonicalNext };
     companionSettings = { ...mergedSettings, ...normalizePetDisplaySettings(mergedSettings) };
+    if (companionSettings.dshWebOrigin !== previousDshWebOrigin) dshSkinMarketplaceInstance = null;
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.setBackgroundColor(panelWindowBackgroundColor());
     }
@@ -4292,7 +4343,25 @@ app.whenReady().then(() => {
   ipcMain.handle("companion:dsh-resource-schemes", () => dshResourceSchemeManager().snapshot());
   ipcMain.handle("companion:dsh-resource-scheme-save", (_, input: DshResourceSchemeSaveInput) => dshResourceSchemeManager().save(input));
   ipcMain.handle("companion:dsh-resource-scheme-delete", (_, schemeId: unknown) => dshResourceSchemeManager().delete(typeof schemeId === "string" ? schemeId : ""));
-  ipcMain.handle("companion:dsh-resource-scheme-apply", (_, schemeId: unknown) => dshResourceSchemeManager().apply(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-resource-scheme-apply", async (_, schemeId: unknown) => dshResourceSchemeManager().applyAsync(typeof schemeId === "string" ? schemeId : ""));
+  ipcMain.handle("companion:dsh-theme-override", async (_, input: DshThemeOverrideInput) => {
+    const parsed = normalizeDshThemeOverride(input);
+    if (!parsed) return { ok: false, issues: [{ code: "invalid-theme-override", message: "Theme override is invalid." }] };
+    const mode = parsed.mode;
+    const schemeSnapshot = mode === "follow-scheme" ? dshResourceSchemeManager().snapshot() : null;
+    const target = mode === "temporary"
+      ? parsed.themeId
+      : mode === "follow-scheme"
+        ? resolveDshThemeId(
+          schemeSnapshot?.schemes.find(item => item.id === schemeSnapshot.appliedSchemeId),
+          undefined
+        )
+        : null;
+    if (mode === "temporary" && !target) return { ok: false, issues: [{ code: "invalid-theme-override", message: "Theme override is invalid." }] };
+    const error = await applyDshTheme(target);
+    if (error) return { ok: false, issues: [{ code: "theme-apply-failed", message: error }] };
+    return dshResourceSchemeManager().setThemeOverride(parsed);
+  });
   ipcMain.handle("companion:dsh-resource-state", (_, input: DshResourceStateInput) => dshResourceSchemeManager().setResourceState(input));
   ipcMain.handle("companion:dsh-plugin-component-state", (_, input: DshPluginComponentStateInput) => dshResourceSchemeManager().setPluginComponentState(input));
   ipcMain.handle("companion:dsh-skill-marketplace", (_, force?: boolean) => dshSkillMarketplace().snapshot(Boolean(force)));

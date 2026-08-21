@@ -2,6 +2,17 @@ import type { DshRuntimePluginPhase } from "./dshPlugins";
 
 export type DshResourceKind = "skill" | "plugin";
 
+export type DshAppearanceKind = "theme" | "appearance-extension" | "theme-bundle";
+export type DshAppearanceComponent = "base-theme" | "wallpaper" | "motion" | "sound" | "settings";
+
+export type DshAppearanceMetadata = {
+  kind: DshAppearanceKind;
+  components: DshAppearanceComponent[];
+  themeId?: string;
+  activationGroup?: string;
+  active?: boolean;
+};
+
 export type DshPluginComponent = {
   key: string;
   name: string;
@@ -28,6 +39,7 @@ export type DshResourceItem = {
   components?: DshPluginComponent[];
   required?: boolean;
   missing?: boolean;
+  appearance?: DshAppearanceMetadata;
 };
 
 export function isDshResourceSchemeSelectable(resource: DshResourceItem): boolean {
@@ -48,6 +60,8 @@ export type DshResourceScheme = {
   description?: string;
   skills: string[];
   plugins: string[];
+  /** One mutually-exclusive base theme package for this scheme. */
+  themeId?: string;
   pluginComponentOverrides: DshPluginComponentOverride[];
   isProtected: boolean;
   createdAt: number;
@@ -72,13 +86,21 @@ export type DshResourceSchemeStore = {
   pluginRuntimePackages: Record<string, string>;
   legacyRuntimePluginIds: string[];
   appliedSchemeId: string | null;
+  /** Omitted means follow the applied scheme. */
+  themeOverride?: DshThemeOverride;
 };
+
+export type DshThemeOverride =
+  | { mode: "follow-scheme" }
+  | { mode: "temporary"; themeId: string }
+  | { mode: "disabled" };
 
 export type DshResourceDrift = {
   schemeId: string | null;
   isDrifted: boolean;
   skills: boolean;
   plugins: boolean;
+  theme?: boolean;
 };
 
 export type DshResourceSchemesSnapshot = DshResourceSchemeStore & {
@@ -92,8 +114,11 @@ export type DshResourceSchemeSaveInput = {
   description?: string;
   skills: string[];
   plugins: string[];
+  themeId?: string;
   pluginComponentOverrides?: DshPluginComponentOverride[];
 };
+
+export type DshThemeOverrideInput = DshThemeOverride;
 
 export type DshPluginComponentStateInput = {
   schemeId: string;

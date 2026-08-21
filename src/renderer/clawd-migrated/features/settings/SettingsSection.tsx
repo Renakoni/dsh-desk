@@ -143,6 +143,17 @@ export function SettingsSection({
               </button>
             ) : undefined}
           >
+            <label className="settings-inline-field">
+              <span>{t("connection.webOrigin", "DSH Web 地址")}</span>
+              <input
+                type="url"
+                value={settings.dshWebOrigin ?? "http://127.0.0.1:3080"}
+                onChange={event => updateSettings({ dshWebOrigin: event.target.value })}
+                placeholder="http://127.0.0.1:3080"
+                spellCheck={false}
+              />
+            </label>
+            <p className="note">{t("connection.webOriginNote", "主题管理请求发送到正在运行的 DSH Web。使用 --port 启动 DSH 时，请填写对应端口。")}</p>
             <ConnectionManagement
               hideSensitive={settings.hideSensitiveContent === true}
               connection={connection}

@@ -78,6 +78,7 @@ export type ToolName =
   | "Edit"
   | "Write"
   | "Bash"
+  | "PowerShell"
   | "Grep"
   | "Glob"
   | "WebFetch"
@@ -310,6 +311,7 @@ export interface CompanionSettings {
   notificationsEnabled: boolean;
   theme: "light" | "dark" | "system";
   uiStyle: "classic" | "liquid";
+  dshWebOrigin?: string;
   language: "auto" | "zh" | "en";
   displayCurrency: DisplayCurrency;
   notificationRules: NotificationRule[];
@@ -680,7 +682,7 @@ export function stateFromEvent(event: CompanionEvent): PetState {
   if (event.event === "tool_start") {
     if (event.tool === "Read" || event.tool === "Notebook" || event.tool === "ViewImage") return "tool_read";
     if (event.tool === "Edit" || event.tool === "Write" || event.tool === "ApplyPatch") return "tool_edit";
-    if (event.tool === "Bash" || event.tool === "Shell") return "tool_bash";
+    if (event.tool === "Bash" || event.tool === "PowerShell" || event.tool === "Shell") return "tool_bash";
     if (event.tool === "Grep" || event.tool === "Glob" || event.tool === "WebFetch" || event.tool === "WebSearch") return "tool_search";
     if (event.tool === "MCP") return "tool_mcp";
     if (event.tool === "Skill") return "skill";
