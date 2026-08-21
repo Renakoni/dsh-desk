@@ -335,6 +335,12 @@ describe('DSH Loader inventory bridge', () => {
       loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
       runPlugin: async (profileName, args) => {
         calls.push([profileName, args])
+        mkdirSync(join(packageDir, 'lib'), { recursive: true })
+        writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+          name: 'demo-skin', version: '1.0.0',
+          exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+        }))
+        writeFileSync(join(packageDir, 'lib', 'client.js'), 'export const apply = () => undefined')
         return { exitCode: 0, stdout: '', stderr: '' }
       },
     })
@@ -452,6 +458,45 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
+  it('rejects an unverified dynamic settings registration before activation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-activation-compatibility-unknown-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    const packageDir = join(profile, 'node_modules', 'dynamic-skin')
+    mkdirSync(join(packageDir, 'lib'), { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'dynamic-skin': '1.0.0' } }))
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'dynamic-skin', version: '1.0.0',
+      exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
+    }))
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'const options = { name: "settings.plugin.item" }; ctx.slots.register(options, Card)')
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+    })
+    const activate = routes.find(route => route.path === '/dsh-appearance-manager/activate')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(activate, { method: 'POST', body: {
+      skin: { id: 'dynamic.skin', packageName: 'dynamic-skin', rowId: 'dynamic-row', install: { target: 'github:demo/dynamic', version: '1.0.0' } },
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'failed') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'failed')
+    assert.match(operation.body.message, /could not be verified safely/)
+    const state = await invokeRoute(routes.find(route => route.path === '/dsh-appearance-manager/state'))
+    assert.deepEqual(state.body.skins, [])
+    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), '[]\n')
+    dispose()
+  })
+
   it('keeps downloader progress on the live theme operation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-progress-'))
     temporaryDirectories.add(root)
@@ -513,12 +558,16 @@ describe('DSH Loader inventory bridge', () => {
     }))
     writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
     writeFileSync(join(localPackage, 'package.json'), JSON.stringify({
-      name: 'local-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+      name: 'local-theme', exports: { './client': './lib/client.js' }, dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
     }))
+    mkdirSync(join(localPackage, 'lib'), { recursive: true })
+    writeFileSync(join(localPackage, 'lib', 'client.js'), 'export const apply = () => undefined')
     writeFileSync(join(localPackage, 'cordis.patch.yml'), '- insert:\n    - id: local-theme\n      name: local-theme\n')
+    mkdirSync(join(catalogPackage, 'lib'), { recursive: true })
     writeFileSync(join(catalogPackage, 'package.json'), JSON.stringify({
-      name: 'catalog-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
+      name: 'catalog-theme', exports: { './client': './lib/client.js' }, dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },
     }))
+    writeFileSync(join(catalogPackage, 'lib', 'client.js'), 'export const apply = () => undefined')
     writeFileSync(join(catalogPackage, 'cordis.patch.yml'), '- insert:\n    - id: catalog-theme\n      name: catalog-theme\n')
     writeFileSync(join(alternatePackage, 'package.json'), JSON.stringify({
       name: 'alternate-theme', dsh: { client: {}, bundle: { patch: './cordis.patch.yml' } },

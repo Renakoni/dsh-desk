@@ -55,6 +55,14 @@ function clientBundlePath(profileDir, packageName, manifest) {
     : null
 }
 
+function compatibilityActivationError(compatibility) {
+  if (compatibility?.status !== 'unverified') return null
+  if (compatibility.code === 'legacy-keyed-settings-item-without-id') {
+    return 'Theme uses a keyed settings slot without a stable legacy id and cannot be adapted safely.'
+  }
+  return 'Theme compatibility could not be verified safely, so activation was not applied.'
+}
+
 /**
  * Detect the one legacy slot migration the Desk shim can prove safe. The
  * check runs against the installed bundle immediately before activation, so a
@@ -372,6 +380,10 @@ class AppearanceManager {
           compatibility = detectThemeCompatibility(this.profileDir, skin.packageName)
           operation.compatibility = compatibility
         }
+        if (existing.active === true) {
+          const compatibilityError = compatibilityActivationError(compatibility)
+          if (compatibilityError) throw new Error(compatibilityError)
+        }
         operation.phase = 'registering'
         ensureRegistration(this.profileDir, skin, existing.active !== true)
         stored.skins[skin.id] = { active: existing.active === true, packageName: skin.packageName, themeId: skin.id, version: skin.install.version, appearance: skin.appearance, ...(compatibility ? { compatibility } : {}), ...(typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? { activationGroup: skin.activationGroup } : {}) }
@@ -381,8 +393,9 @@ class AppearanceManager {
         const active = operation.kind === 'activate'
         const compatibility = active ? detectThemeCompatibility(this.profileDir, skin.packageName) : existing.compatibility
         if (active) operation.compatibility = compatibility
-        if (active && compatibility.status === 'unverified' && compatibility.code === 'legacy-keyed-settings-item-without-id') {
-          throw new Error('Theme uses a keyed settings slot without a stable legacy id and cannot be adapted safely.')
+        if (active) {
+          const compatibilityError = compatibilityActivationError(compatibility)
+          if (compatibilityError) throw new Error(compatibilityError)
         }
         operation.phase = active ? 'activating' : 'deactivating'
         const activationGroup = typeof skin.activationGroup === 'string' && skin.activationGroup !== '' ? skin.activationGroup : null

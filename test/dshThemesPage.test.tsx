@@ -133,7 +133,7 @@ describe("DshThemesPage", () => {
   it("shows an unverified compatibility warning above the active theme actions", async () => {
     renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false, compatibility: { status: "unverified", code: "settings-slot-registration-unreadable" } }] }));
     const card = await screen.findByText("海洋主题");
-    expect(within(card.closest("article")!).getByText("未能确认该主题的兼容性，启用时会继续尝试；如果 DSH 拒绝加载，错误会显示在这里。")).not.toBeNull();
+    expect(within(card.closest("article")!).getByText("未能安全确认该主题的兼容性，因此暂不启用。请更新主题或从仓库确认它是否支持当前 DSH。")).not.toBeNull();
   });
 
   it("opens installed library theme details with runtime and catalog metadata", async () => {

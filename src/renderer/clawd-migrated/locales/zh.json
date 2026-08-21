@@ -737,7 +737,7 @@
     "mode": "模式",
     "compatibility": "DSH",
     "compatibilityAdapted": "已启用兼容适配：这个旧版主题正在使用 Desk 的 keyed slot 兼容层。",
-    "compatibilityUnverified": "未能确认该主题的兼容性，启用时会继续尝试；如果 DSH 拒绝加载，错误会显示在这里。",
+    "compatibilityUnverified": "未能安全确认该主题的兼容性，因此暂不启用。请更新主题或从仓库确认它是否支持当前 DSH。",
     "manualDetail": "该主题暂不支持一键安装，请按仓库说明操作。",
     "openRepository": "打开仓库",
     "uninstall": "卸载",
