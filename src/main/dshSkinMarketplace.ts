@@ -331,8 +331,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function previewSource(skin: DshSkinCatalogEntry): string | undefined {
-  return skin.listScreenshot ?? skin.screenshots[0];
+function previewSources(skin: DshSkinCatalogEntry): string[] {
+  return [...new Set([skin.listScreenshot, ...skin.screenshots].filter((source): source is string => typeof source === "string" && source !== ""))];
 }
 
 function previewDigest(source: string): string {
@@ -491,8 +491,7 @@ export class DshSkinMarketplace {
     return { ok: false, restartRequired: false, error: "主题管理已内置于 dsh-desk-plugin，无需安装额外市场插件。", snapshot: await this.snapshot() };
   }
 
-  private cachedPreviewUrl(skin: DshSkinCatalogEntry): string | undefined {
-    const source = previewSource(skin);
+  private cachedPreviewUrl(source: string): string | undefined {
     if (!source || !this.previewCacheDir || !this.previewAssetBaseUrl) return undefined;
     const digest = previewDigest(source);
     for (const extension of ["webp", "png", "jpeg", "gif", "avif"] as const) {
@@ -503,9 +502,8 @@ export class DshSkinMarketplace {
     return undefined;
   }
 
-  private async cachePreview(skin: DshSkinCatalogEntry): Promise<void> {
-    const source = previewSource(skin);
-    if (!source || !this.previewCacheDir || !this.previewAssetBaseUrl || this.cachedPreviewUrl(skin)) return;
+  private async cachePreview(source: string): Promise<void> {
+    if (!source || !this.previewCacheDir || !this.previewAssetBaseUrl || this.cachedPreviewUrl(source)) return;
     const pending = this.previewInflight.get(source);
     if (pending) return pending;
     const task = (async () => {
@@ -530,15 +528,24 @@ export class DshSkinMarketplace {
   private async cacheInstalledPreviews(host: DshSkinHostState): Promise<void> {
     if (!this.catalog || !this.previewCacheDir || !this.previewAssetBaseUrl) return;
     const installed = new Set(host.skins.filter(state => state.installation === "installed").map(state => state.skinId));
-    await Promise.all(this.catalog.skins.filter(skin => installed.has(skin.id)).map(skin => this.cachePreview(skin)));
+    await Promise.all(this.catalog.skins
+      .filter(skin => installed.has(skin.id))
+      .flatMap(skin => previewSources(skin).map(source => this.cachePreview(source))));
   }
 
   private createSnapshot(host: DshSkinHostState): DshSkinMarketplaceSnapshot {
     const installed = new Set(host.skins.filter(state => state.installation === "installed").map(state => state.skinId));
     return {
       skins: this.catalog?.skins.map(skin => {
-        const previewLocalUrl = installed.has(skin.id) ? this.cachedPreviewUrl(skin) : undefined;
-        return previewLocalUrl ? { ...skin, previewLocalUrl } : skin;
+        if (!installed.has(skin.id)) return skin;
+        const thumbnailSource = skin.listScreenshot ?? skin.screenshots[0];
+        const previewLocalUrl = thumbnailSource ? this.cachedPreviewUrl(thumbnailSource) : undefined;
+        const previewLocalUrls = skin.screenshots.map(source => this.cachedPreviewUrl(source));
+        return {
+          ...skin,
+          ...(previewLocalUrl ? { previewLocalUrl } : {}),
+          ...(previewLocalUrls.some(source => source !== undefined) ? { previewLocalUrls } : {})
+        };
       }) ?? [],
       localSkins: this.localSkins(),
       generatedAt: this.catalog?.generatedAt ?? null,

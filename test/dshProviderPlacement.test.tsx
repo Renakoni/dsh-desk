@@ -46,6 +46,41 @@ afterEach(() => {
 });
 
 describe("DSH model routing placement", () => {
+  it("keeps the connection recheck icon visible for a complete turn", () => {
+    const onHookRecheck = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <SettingsSection
+          settings={defaultSettings}
+          updateSettings={vi.fn()}
+          connection={{ serverListening: false, error: null }}
+          now={Date.now()}
+          hookStatus={null}
+          onHookRecheck={onHookRecheck}
+          activeSettingsSubsection="general"
+          setActiveSettingsSubsection={vi.fn()}
+          sectionContentRef={React.createRef<HTMLDivElement>()}
+          locale="en"
+          setLocale={vi.fn()}
+          appVersion="0.1.0"
+          updateStatus={{}}
+          checkingUpdate={false}
+          handleCheckUpdate={vi.fn()}
+        />
+      </I18nProvider>
+    );
+
+    const button = screen.getByRole("button", { name: "Recheck" });
+    fireEvent.click(button);
+    expect(onHookRecheck).toHaveBeenCalledTimes(1);
+    expect(button.classList.contains("is-checking")).toBe(true);
+    expect(button.querySelector(".spin")).not.toBeNull();
+
+    expect(button.querySelector(".spin")).not.toBeNull();
+    fireEvent.animationEnd(button.querySelector(".spin")!);
+    expect(button.querySelector(".spin")).toBeNull();
+  });
+
   it("renders routing before connection on Overview", async () => {
     const view = render(
       <I18nProvider initialLocale="en">

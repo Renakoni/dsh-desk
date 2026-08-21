@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CircleAlert, FileAudio, Play, RotateCcw, Trash2, Volume2 } from "lucide-react";
 import type { CompanionSettings, NotificationRule } from "../../shared/events";
 import { useI18n } from "../useI18n";
 import { Slider } from "./ui/Slider";
@@ -16,28 +17,35 @@ const builtInByEvent: Record<SoundEventType, BuiltInSound> = {
   permission_wait: "permission"
 };
 
-async function playPreview(dataUrl: string, volume: number, cleanups: Set<() => void>) {
+function playPreview(dataUrl: string, volume: number, cleanups: Set<() => void>) {
   const audio = new Audio(dataUrl);
   audio.volume = volume;
-  let stopped = false;
-  let stopTimer = 0;
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    window.clearTimeout(stopTimer);
-    audio.pause();
-    audio.currentTime = 0;
-    cleanups.delete(stop);
-  };
-  stopTimer = window.setTimeout(stop, maxSoundMilliseconds);
-  cleanups.add(stop);
-  audio.addEventListener("ended", stop, { once: true });
-  try {
-    await audio.play();
-  } catch (error) {
-    stop();
-    throw error;
-  }
+  return new Promise<void>((resolve, reject) => {
+    let stopped = false;
+    let stopTimer = 0;
+    const cleanup = () => {
+      window.clearTimeout(stopTimer);
+      audio.pause();
+      audio.currentTime = 0;
+      cleanups.delete(stop);
+      audio.removeEventListener?.("ended", stop);
+    };
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      cleanup();
+      resolve();
+    };
+    stopTimer = window.setTimeout(stop, maxSoundMilliseconds);
+    cleanups.add(stop);
+    audio.addEventListener("ended", stop, { once: true });
+    void audio.play().catch(error => {
+      if (stopped) return;
+      stopped = true;
+      cleanup();
+      reject(error);
+    });
+  });
 }
 
 export function NotificationRulesPanel({ settings, updateSettings }: { settings: CompanionSettings; updateSettings: (s: Partial<CompanionSettings>) => void }) {
@@ -45,6 +53,7 @@ export function NotificationRulesPanel({ settings, updateSettings }: { settings:
   const rules: NotificationRule[] = settings.notificationRules ?? [];
   const sound = settings.sound;
   const [status, setStatus] = useState<Record<string, { ok: boolean; error?: string } | null>>({});
+  const [playing, setPlaying] = useState<Record<string, boolean>>({});
   const [defaultPaths, setDefaultPaths] = useState<Record<BuiltInSound, string | null> | null>(null);
   const rulesRef = useRef(rules);
   const soundRef = useRef(sound);
@@ -128,23 +137,32 @@ export function NotificationRulesPanel({ settings, updateSettings }: { settings:
   };
 
   const previewEventSound = async (eventType: SoundEventType) => {
+    if (playing[eventType]) return;
     const currentSound = soundRef.current;
     const builtIn = builtInByEvent[eventType];
     const customFile = currentSound.eventFiles?.[eventType];
+    setPlaying(prev => ({ ...prev, [eventType]: true }));
     setStatus(prev => ({ ...prev, [eventType]: null }));
-    const result = customFile ? await window.companion.previewSoundFile(customFile) : await window.companion.previewSound(builtIn);
-    if (!mountedRef.current) return;
-    if (result.ok && result.dataUrl) {
-      try {
-        await playPreview(result.dataUrl, currentSound.volume, previewCleanupsRef.current);
-        if (mountedRef.current) setStatus(prev => ({ ...prev, [eventType]: { ok: true } }));
-      } catch {
-        if (mountedRef.current) setStatus(prev => ({ ...prev, [eventType]: { ok: false, error: t("sound.failed", "播放失败") } }));
+    let nextStatus: { ok: boolean; error?: string } | null = null;
+    try {
+      const result = customFile ? await window.companion.previewSoundFile(customFile) : await window.companion.previewSound(builtIn);
+      if (!mountedRef.current) return;
+      if (result.ok && result.dataUrl) {
+        try {
+          await playPreview(result.dataUrl, currentSound.volume, previewCleanupsRef.current);
+        } catch {
+          nextStatus = { ok: false, error: t("sound.failed", "播放失败") };
+        }
+      } else {
+        nextStatus = result;
       }
-    } else {
-      setStatus(prev => ({ ...prev, [eventType]: result }));
+    } catch {
+      nextStatus = { ok: false, error: t("sound.failed", "播放失败") };
     }
     if (!mountedRef.current) return;
+    setPlaying(prev => ({ ...prev, [eventType]: false }));
+    if (!nextStatus) return;
+    setStatus(prev => ({ ...prev, [eventType]: nextStatus }));
     const timer = window.setTimeout(() => {
       statusTimersRef.current.delete(timer);
       if (mountedRef.current) setStatus(prev => ({ ...prev, [eventType]: null }));
@@ -187,6 +205,7 @@ export function NotificationRulesPanel({ settings, updateSettings }: { settings:
           const rule = rulesByEvent.get(eventType) ?? defaultRule(eventType);
           const builtIn = builtInByEvent[eventType];
           const customFile = sound.eventFiles?.[eventType];
+          const isPlaying = playing[eventType] === true;
           return (
             <div key={eventType} className="notification-rule-row compact">
               <strong>{eventLabels[eventType]}</strong>
@@ -197,11 +216,14 @@ export function NotificationRulesPanel({ settings, updateSettings }: { settings:
                 <span className={`sound-file-pill ${customFile ? "custom" : "default"}`}>
                   {customFile ? t("sound.custom", "自定义") : t("sound.default", "默认")}
                 </span>
-                {customFile ? <button className="ghost-btn" onClick={() => setDefaultSound(eventType)}>{t("sound.useDefault", "使用默认")}</button> : null}
-                <button className="ghost-btn" onClick={() => pickEventSound(eventType)}>{customFile ? t("sound.changeFile", "更换") : t("sound.chooseFile", "选择文件")}</button>
-                <button className="ghost-btn" onClick={() => previewEventSound(eventType)}>{t("sound.preview", "试听")}</button>
-                {customFile ? <button className="ghost-btn danger" onClick={() => clearEventSound(eventType)}>{t("sound.clear", "清除")}</button> : null}
-                {status[eventType] ? <span className={`sound-status ${status[eventType]!.ok ? "ok" : "err"}`}>{status[eventType]!.ok ? t("sound.played", "已播放") : status[eventType]!.error ?? t("common.failed", "失败")}</span> : null}
+                {customFile ? <button className="ghost-btn sound-action-secondary" onClick={() => setDefaultSound(eventType)}><RotateCcw size={13} />{t("sound.useDefault", "使用默认")}</button> : null}
+                <button className="ghost-btn sound-action-secondary" onClick={() => pickEventSound(eventType)}><FileAudio size={13} />{customFile ? t("sound.changeFile", "更换") : t("sound.chooseFile", "选择文件")}</button>
+                <button className={`ghost-btn sound-action-primary sound-action-preview${isPlaying ? " is-playing" : ""}`} onClick={() => void previewEventSound(eventType)} disabled={isPlaying} aria-label={isPlaying ? t("sound.playing", "播放中") : t("sound.preview", "试听")}>
+                  <span className="sound-preview-icon" aria-hidden="true">{isPlaying ? <Volume2 size={14} /> : <Play size={13} fill="currentColor" />}</span>
+                  {isPlaying ? t("sound.playing", "播放中") : t("sound.preview", "试听")}
+                </button>
+                {customFile ? <button className="ghost-btn danger sound-action-icon" onClick={() => clearEventSound(eventType)} aria-label={t("sound.clear", "清除")} title={t("sound.clear", "清除")}><Trash2 size={14} /></button> : null}
+                {status[eventType] && !status[eventType]!.ok ? <span className="sound-status err" role="status"><CircleAlert size={13} />{status[eventType]!.error ?? t("common.failed", "失败")}</span> : null}
               </div>
             </div>
           );

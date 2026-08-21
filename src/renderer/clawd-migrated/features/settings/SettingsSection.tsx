@@ -1,6 +1,6 @@
 // @ts-nocheck
-import React from "react";
-import { Bell, Bot, Cable, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Bell, Bot, Cable, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Save, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
 import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
 import appIcon from "../../../../main/assets/kuaclock.png";
@@ -54,6 +54,29 @@ export function SettingsSection({
 }) {
   const { t } = useI18n();
   const activePetTheme = getPetTheme(settings.petTheme, petPacks);
+  const savedWebOrigin = settings.dshWebOrigin ?? "http://127.0.0.1:3080";
+  const [webOriginDraft, setWebOriginDraft] = useState(savedWebOrigin);
+  const [recheckPulse, setRecheckPulse] = useState(hookChecking);
+  const [recheckSpinCycle, setRecheckSpinCycle] = useState(0);
+  useEffect(() => setWebOriginDraft(savedWebOrigin), [savedWebOrigin]);
+  useEffect(() => {
+    if (hookChecking) setRecheckPulse(true);
+  }, [hookChecking]);
+  const isRechecking = hookChecking || recheckPulse;
+
+  function handleConnectionRecheck() {
+    if (!onHookRecheck || isRechecking) return;
+    setRecheckPulse(true);
+    onHookRecheck();
+  }
+
+  function handleRecheckAnimationEnd() {
+    if (hookChecking) {
+      setRecheckSpinCycle(cycle => cycle + 1);
+    } else {
+      setRecheckPulse(false);
+    }
+  }
   // Mirrors the footer's update state machine faithfully (same priority order)
   // instead of collapsing every in-between state to "idle".
   const aboutUpdateValue = updateStatus.error ? updateStatus.error
@@ -129,27 +152,48 @@ export function SettingsSection({
             action={onHookRecheck ? (
               <button
                 type="button"
-                className="group-reset-button"
-                title={t("connection.recheck", "重新检查")}
-                aria-label={t("connection.recheck", "重新检查")}
-                disabled={hookChecking}
-                onClick={onHookRecheck}
+                className={`group-reset-button${isRechecking ? " is-checking" : ""}`}
+                title={isRechecking ? t("connection.rechecking", "检查中…") : t("connection.recheck", "重新检查")}
+                aria-label={isRechecking ? t("connection.rechecking", "检查中…") : t("connection.recheck", "重新检查")}
+                aria-busy={isRechecking}
+                disabled={isRechecking}
+                onClick={handleConnectionRecheck}
               >
-                <RefreshCw size={14} className={hookChecking ? "spin" : undefined} />
+                <span
+                  key={recheckSpinCycle}
+                  className={isRechecking ? "spin" : undefined}
+                  aria-hidden="true"
+                  onAnimationEnd={handleRecheckAnimationEnd}
+                >
+                  <RefreshCw size={14} />
+                </span>
               </button>
             ) : undefined}
           >
-            <label className="settings-inline-field">
-              <span>{t("connection.webOrigin", "DSH Web 地址")}</span>
-              <input
-                type="url"
-                value={settings.dshWebOrigin ?? "http://127.0.0.1:3080"}
-                onChange={event => updateSettings({ dshWebOrigin: event.target.value })}
-                placeholder="http://127.0.0.1:3080"
-                spellCheck={false}
-              />
-            </label>
-            <p className="note">{t("connection.webOriginNote", "主题管理请求发送到正在运行的 DSH Web。使用 --port 启动 DSH 时，请填写对应端口。")}</p>
+            <div className="settings-web-origin-field">
+              <label className="settings-web-origin-label" htmlFor="dsh-web-origin">
+                <span>{t("connection.webOrigin", "DSH Web 地址")}</span>
+              </label>
+              <div className="settings-web-origin-control">
+                <input
+                  id="dsh-web-origin"
+                  type="url"
+                  value={webOriginDraft}
+                  onChange={event => setWebOriginDraft(event.target.value)}
+                  placeholder="http://127.0.0.1:3080"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="settings-web-origin-save"
+                  onClick={() => void updateSettings({ dshWebOrigin: webOriginDraft.trim() || "http://127.0.0.1:3080" })}
+                  disabled={webOriginDraft.trim() === savedWebOrigin}
+                >
+                  <Save size={14} />
+                  {t("common.save", "保存")}
+                </button>
+              </div>
+            </div>
             <ConnectionManagement
               hideSensitive={settings.hideSensitiveContent === true}
               connection={connection}

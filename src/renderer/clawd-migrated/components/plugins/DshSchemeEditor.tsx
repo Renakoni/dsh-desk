@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Code2, Minus, Package, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Code2, Minus, Package, Palette, Search, Trash2, X } from "lucide-react";
 import { isDshResourceSchemeSelectable, type DshPluginComponentOverrideState, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
@@ -50,6 +50,7 @@ export function DshSchemeEditor({
     plugins: [...new Set([...logicalInventory.plugins.filter(item => item.required || (!isDshResourceSchemeSelectable(item) && item.enabled)).map(item => item.id), ...initial.plugins])]
   }));
   const [activeTab, setActiveTab] = useState<DshResourceTab>("plugins");
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [missingRemoval, setMissingRemoval] = useState<DshResourceItem | null>(null);
   const [componentWarning, setComponentWarning] = useState<{
@@ -63,14 +64,13 @@ export function DshSchemeEditor({
     { id: "plugins" as const, label: t("dshResources.pluginTab", "Plugins"), icon: Package },
     { id: "skills" as const, label: t("dshResources.skillTab", "Skills"), icon: Code2 }
   ];
-  const resourceTab = activeTab;
-  const availableResources = logicalInventory[resourceTab];
+  const availableResources = logicalInventory[activeTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[resourceTab]),
-    [draft, resourceTab]
+    () => visibleDshSchemeResourceIds(draft[activeTab]),
+    [activeTab, draft]
   );
   const visibleKnownCandidateIds = useMemo(
-    () => resourceTab === "plugins"
+    () => activeTab === "plugins"
       ? visibleDshSchemeResourceIds(
         [...new Set([
           ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
@@ -78,7 +78,7 @@ export function DshSchemeEditor({
         ])]
       )
       : [],
-    [initial.plugins, knownPluginIds, resourceTab]
+    [activeTab, initial.plugins, knownPluginIds]
   );
   const candidateIds = useMemo(
     () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],
@@ -86,8 +86,8 @@ export function DshSchemeEditor({
   );
   const resources = useMemo<DshResourceItem[]>(() => [
     ...availableResources,
-    ...unavailableDshResources(candidateIds, availableResources, resourceTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
-  ], [availableResources, candidateIds, knownPluginIds, resourceTab, t]);
+    ...unavailableDshResources(candidateIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+  ], [activeTab, availableResources, candidateIds, knownPluginIds, t]);
   const selected = useMemo(() => new Set(visibleDraftIds), [visibleDraftIds]);
   const filtered = useMemo(() => filterDshResources(resources, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, resources]);
   const unselected = useMemo(() => filtered.filter(resource => !selected.has(resource.id)), [filtered, selected]);
@@ -98,9 +98,9 @@ export function DshSchemeEditor({
     const next = new Set(selected);
     if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id);
     setDraft(current => {
-      const visible = new Set(visibleDshSchemeResourceIds(current[resourceTab]));
-      const hidden = current[resourceTab].filter(id => !visible.has(id));
-      return { ...current, [resourceTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
+      const visible = new Set(visibleDshSchemeResourceIds(current[activeTab]));
+      const hidden = current[activeTab].filter(id => !visible.has(id));
+      return { ...current, [activeTab]: [...hidden, ...resources.filter(item => next.has(item.id)).map(item => item.id)] };
     });
   }
 
@@ -147,23 +147,47 @@ export function DshSchemeEditor({
         </div>
       </header>
 
-      <section className="dsh-scheme-theme-field" aria-label={t("dshResources.themeSlot", "Base theme")}>
-        <label>
-          <span>{t("dshResources.baseTheme", "Base theme")}</span>
-          <select value={draft.themeId ?? ""} onChange={event => setDraft(current => ({ ...current, ...(event.target.value ? { themeId: event.target.value } : { themeId: undefined }) }))} disabled={busy || protectedScheme}>
-            <option value="">{t("dshResources.noTheme", "No theme")}</option>
-            {draft.themeId && !themes.some(theme => theme.appearance?.themeId === draft.themeId) ? <option value={draft.themeId}>{t("dshResources.missingThemeOption", "Missing: {id}", { id: draft.themeId })}</option> : null}
-            {themes.map(theme => <option key={theme.appearance?.themeId} value={theme.appearance?.themeId}>{theme.name}</option>)}
-          </select>
-        </label>
-        <small>{t("dshResources.baseThemeHint", "A scheme can select one base theme. Wallpaper, motion, sound, and settings components remain part of that theme package.")}</small>
-      </section>
-
       <nav className="claude-resource-subtabs compact claude-profile-editor-tabs dsh-scheme-editor-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
         {tabs.map(tab => {
           const Icon = tab.icon;
           return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span></button>;
         })}
+        <div className="dsh-theme-picker" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setThemeMenuOpen(false); }}>
+          <button
+            type="button"
+            className="dsh-theme-picker-trigger"
+            aria-haspopup="listbox"
+            aria-expanded={themeMenuOpen}
+            onClick={() => setThemeMenuOpen(value => !value)}
+            disabled={busy}
+          >
+            <Palette size={16} />
+            <span>
+              <b>{themes.find(theme => theme.appearance?.themeId === draft.themeId)?.name ?? (draft.themeId || t("dshResources.defaultTheme", "默认主题"))}</b>
+              <small>{t("dshResources.baseTheme", "基础主题")}</small>
+            </span>
+            <ChevronDown size={15} />
+          </button>
+          {themeMenuOpen ? <div className="dsh-theme-picker-menu" role="listbox" aria-label={t("dshResources.themeSlot", "基础主题")}>
+            <button type="button" role="option" aria-selected={!draft.themeId} className={!draft.themeId ? "selected" : ""} onClick={() => { setDraft(current => ({ ...current, themeId: undefined })); setThemeMenuOpen(false); }}>
+              <span><b>{t("dshResources.noTheme", "默认主题")}</b><small>{t("dshResources.noThemeHint", "使用 DSH 默认外观")}</small></span>
+              {!draft.themeId ? <Check size={14} /> : null}
+            </button>
+            {draft.themeId && !themes.some(theme => theme.appearance?.themeId === draft.themeId) ? <button type="button" role="option" aria-selected className="selected" onClick={() => setThemeMenuOpen(false)}>
+              <span><b>{draft.themeId}</b><small>{t("dshResources.missingThemeOption", "主题未安装")}</small></span>
+              <Check size={14} />
+            </button> : null}
+            {themes.map(theme => {
+              const themeId = theme.appearance?.themeId as string;
+              const selectedTheme = themeId === draft.themeId;
+              return <button type="button" role="option" aria-selected={selectedTheme} className={selectedTheme ? "selected" : ""} key={themeId} onClick={() => { setDraft(current => ({ ...current, themeId })); setThemeMenuOpen(false); }}>
+                <span><b>{theme.name}</b><small>{theme.packageName ?? themeId}</small></span>
+                {selectedTheme ? <Check size={14} /> : null}
+              </button>;
+            })}
+            {themes.length === 0 && !draft.themeId ? <p className="dsh-theme-picker-empty">{t("dshResources.noInstalledThemes", "尚未安装主题")}</p> : null}
+          </div> : null}
+        </div>
       </nav>
 
       <section className="claude-profile-editor-toolbar"><div className="claude-resource-search dark dsh-plugin-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t(activeTab === "plugins" ? "dshResources.searchPlugins" : "dshResources.searchSkills", activeTab === "plugins" ? "Search plugins" : "Search skills")} /></div></section>

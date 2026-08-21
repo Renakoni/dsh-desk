@@ -265,6 +265,20 @@ describe("DshThemesPage", () => {
     const uninstall = screen.getByRole("button", { name: "卸载" });
     expect(deactivate).toHaveProperty("disabled", true);
     expect(uninstall).toHaveProperty("disabled", true);
+    expect(screen.getByText("启动 DSH 后可管理主题。")).not.toBeNull();
+    expect(deactivate.getAttribute("aria-describedby")).toBe("dsh-theme-host-status");
+    expect(api.mutateDshSkin).not.toHaveBeenCalled();
+  });
+
+  it("uses the cached local image for detail screenshots", async () => {
+    const api = renderPage({
+      ...snapshot({ connected: true, marketInstalled: true, skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }),
+      skins: [{ ...themes[0], previewLocalUrls: ["dsh-theme-asset://previews/detail-1.png"] }]
+    });
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
+    const image = within(await screen.findByRole("dialog", { name: "海洋主题" })).getByRole("img", { name: "海洋主题 界面预览" });
+    expect(image.getAttribute("src")).toBe("dsh-theme-asset://previews/detail-1.png");
     expect(api.mutateDshSkin).not.toHaveBeenCalled();
   });
 

@@ -109,6 +109,11 @@
 }
 .dsh-theme-library-content::-webkit-scrollbar,
 .dsh-theme-market-scroll::-webkit-scrollbar { display: none; }
+.dsh-theme-library-content:focus-visible,
+.dsh-theme-market-scroll:focus-visible,
+.appearance-pet-library:focus-visible { outline: 2px solid color-mix(in srgb, var(--settings-accent) 58%, transparent); outline-offset: -2px; }
+.dsh-theme-connection-note { min-width: 0; min-height: 34px; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid color-mix(in srgb, #b97d25 38%, var(--settings-line)); border-radius: 7px; color: var(--settings-muted); background: color-mix(in srgb, #d9a23c 8%, var(--theme-surface)); font-size: 12px; }
+.dsh-theme-connection-note svg { flex: 0 0 auto; color: #b97d25; }
 
 .dsh-theme-empty {
   min-height: 240px;
