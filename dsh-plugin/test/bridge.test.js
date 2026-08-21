@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,12 +15,15 @@ import {
 } from '../src/bridge.js'
 import {
   apply as applyPlugin,
+  allowGitHostedBuild,
+  blockedBuildPackage,
   bundleConfigOwners,
   createAgentSkillPolicy,
   createPluginPackageController,
   detectThemeCompatibility,
   loaderInventory,
   mountAppearanceManager,
+  runPlugin,
   runtimeEntryOwners,
 } from '../src/index.js'
 
@@ -291,6 +294,45 @@ describe('DSH Desk loopback transport', () => {
 })
 
 describe('DSH Loader inventory bridge', () => {
+  it('extracts and persists the exact git build approval requested by pnpm', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-build-approval-'))
+    temporaryDirectories.add(root)
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - .\n\nnodeLinker: hoisted\n')
+    assert.equal(blockedBuildPackage(`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED\nhint: Add the package to "onlyBuiltDependencies" in your project\nonlyBuiltDependencies:\n  - "@deepseek-ai/dsh-client-ui-aqua"`), '@deepseek-ai/dsh-client-ui-aqua')
+    assert.equal(blockedBuildPackage('The git-hosted package "@deepseek-ai/dsh-client-ui-aqua@1.3.1" needs to execute build scripts'), '@deepseek-ai/dsh-client-ui-aqua')
+    assert.equal(allowGitHostedBuild(root, '@deepseek-ai/dsh-client-ui-aqua'), true)
+    assert.match(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'), /allowBuilds:/)
+    assert.match(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'), /dsh-client-ui-aqua"?: true/)
+    assert.equal(allowGitHostedBuild(root, '@deepseek-ai/dsh-client-ui-aqua'), false)
+  })
+
+  it('retries a git theme install after allowing its blocked prepare build', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-build-retry-'))
+    temporaryDirectories.add(root)
+    const marker = join(root, 'retry.marker')
+    const fakeBin = join(root, 'bin.js')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - .\n')
+    writeFileSync(fakeBin, [
+      "const fs = require('node:fs')",
+      `const marker = ${JSON.stringify(marker)}`,
+      "if (!fs.existsSync(marker)) { fs.writeFileSync(marker, 'first'); console.error('hint: Add the package to \\\"onlyBuiltDependencies\\\" in your project\\nonlyBuiltDependencies:\\n  - \\\"@deepseek-ai/dsh-client-ui-aqua\\\"'); process.exit(1) }",
+    ].join('\n'))
+    const previousEntry = process.argv[1]
+    const previousExecArgv = process.execArgv
+    process.argv[1] = fakeBin
+    process.execArgv = []
+    try {
+      const result = await runPlugin('web', ['add', 'github:demo/aqua#commit'], undefined, root)
+      assert.equal(result.exitCode, 0)
+      assert.equal(existsSync(marker), true)
+      assert.match(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'), /dsh-client-ui-aqua"?: true/)
+    } finally {
+      process.argv[1] = previousEntry
+      process.execArgv = previousExecArgv
+    }
+  })
+
   it('mounts the built-in appearance manager under its own Host route namespace', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-appearance-manager-'))
     temporaryDirectories.add(root)

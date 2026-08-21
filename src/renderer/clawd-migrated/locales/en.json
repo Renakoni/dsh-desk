@@ -713,6 +713,7 @@
     "openDetails": "View {name}",
     "details": "Details",
     "working": "Working…",
+    "operationBusy": "Another theme operation is in progress. Try again when it finishes.",
     "progressPreparing": "Preparing…",
     "progressDownloading": "Downloading theme…",
     "progressInstalling": "Installing theme…",
@@ -744,8 +745,8 @@
     "deactivate": "Deactivate",
     "restartWeb": "Restart DSH",
     "restarting": "DSH is restarting.",
-    "restartToApply": "The theme state is saved. Restart DSH to apply it.",
-    "refreshToApply": "The theme state is saved. Restart DSH to apply it.",
+    "restartToApply": "The theme state is saved. Some features may need a DSH restart.",
+    "refreshToApply": "The theme state is saved. Some features may need a DSH restart.",
     "broken": "Incomplete installation",
     "registrationMissing": "Theme entry not found",
     "operationFailed": "The operation failed."

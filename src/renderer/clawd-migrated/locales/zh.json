@@ -713,6 +713,7 @@
     "openDetails": "查看 {name}",
     "details": "详情",
     "working": "处理中…",
+    "operationBusy": "另一个主题操作正在进行，请完成后再试。",
     "progressPreparing": "准备操作…",
     "progressDownloading": "下载主题…",
     "progressInstalling": "安装主题…",
@@ -744,8 +745,8 @@
     "deactivate": "停用",
     "restartWeb": "重启 DSH",
     "restarting": "DSH 正在重启。",
-    "restartToApply": "主题状态已保存，重启 DSH 后生效。",
-    "refreshToApply": "主题状态已保存，重启 DSH 后生效。",
+    "restartToApply": "主题状态已保存，部分功能可能需要重启 DSH。",
+    "refreshToApply": "主题状态已保存，部分功能可能需要重启 DSH。",
     "broken": "安装不完整",
     "registrationMissing": "未找到主题入口",
     "operationFailed": "操作失败。"

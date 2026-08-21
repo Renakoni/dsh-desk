@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ExternalLink, Palette, Power, RefreshCw, Store, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import type { DshSkinAction, DshSkinCatalogEntry, DshSkinMarketplaceSnapshot, DshSkinOperationProgress } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
 import { DshThemeMarketPanel, DshThemeOperationProgress, ThemeDetailsDialog, ThemePreview, runtimeFor } from "./DshThemeMarketPanel";
@@ -14,6 +15,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [operationProgress, setOperationProgress] = useState<DshSkinOperationProgress | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeFading, setNoticeFading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shotIndex, setShotIndex] = useState(0);
   const detailsTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -41,6 +43,20 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
     const subscribe = window.companion.onDshSkinProgress;
     return subscribe ? subscribe(setOperationProgress) : undefined;
   }, []);
+
+  useEffect(() => {
+    if (!notice) {
+      setNoticeFading(false);
+      return undefined;
+    }
+    setNoticeFading(false);
+    const fadeTimer = window.setTimeout(() => setNoticeFading(true), 9_700);
+    const clearTimer = window.setTimeout(() => setNotice(null), 10_000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [notice]);
 
   const installed = useMemo(() => {
     if (!snapshot) return [];
@@ -70,6 +86,11 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   }
 
   async function mutate(skin: Pick<DshSkinCatalogEntry, "id">, action: DshSkinAction) {
+    if (busy !== null) {
+      toast.info(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"));
+      return;
+    }
+    if (action === "update" && selectedId !== null) closeDetails();
     const wasActive = snapshot !== null && (
       runtimeFor(snapshot, skin.id)?.activation === "active"
       || snapshot.localSkins?.some(item => item.id === skin.id && item.active) === true
@@ -92,9 +113,9 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
         else {
           const nextSnapshot = await window.companion.getDshSkinMarketplace().catch(() => null);
           if (nextSnapshot) setSnapshot(nextSnapshot);
-          setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
+          setNotice(t("dshThemes.restartToApply", "主题状态已保存，部分功能可能需要重启 DSH。"));
         }
-      } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，重启 DSH 后生效。"));
+      } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，部分功能可能需要重启 DSH。"));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
     } finally { setBusy(null); setOperationProgress(null); }
@@ -123,7 +144,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
         </div>
       </header>
 
-      {notice ? <div className="dsh-theme-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div> : null}
+      {notice ? <div className={`dsh-theme-notice${noticeFading ? " fading" : ""}`} role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div> : null}
       {operationProgress ? <DshThemeOperationProgress progress={operationProgress} t={t} /> : null}
 
       <section className="dsh-theme-library-content" aria-live="polite">

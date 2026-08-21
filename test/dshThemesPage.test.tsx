@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshSkinMarketplaceSnapshot } from "../src/shared/dshSkins";
 import { ThemePreview } from "../src/renderer/clawd-migrated/components/themes/DshThemeMarketPanel";
@@ -153,7 +154,37 @@ describe("DshThemesPage", () => {
     expect(within(dialog).getByText("123456789012")).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "停用" })).not.toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "更新" }));
+    expect(screen.queryByRole("dialog", { name: "海洋主题" })).toBeNull();
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "update" }));
+  });
+
+  it("reports a second update request while another theme operation is running", async () => {
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "0.9.0", installedAt: null, updateAvailable: true }] }));
+    const toastInfo = vi.spyOn(toast, "info");
+    api.mutateDshSkin.mockImplementationOnce(() => new Promise(() => undefined));
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "海洋主题" })).getByRole("button", { name: "更新" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "海洋主题" })).getByRole("button", { name: "更新" }));
+    expect(toastInfo).toHaveBeenCalledWith("另一个主题操作正在进行，请完成后再试。");
+    expect(api.mutateDshSkin).toHaveBeenCalledTimes(1);
+  });
+
+  it("fades the saved-state notice after ten seconds", async () => {
+    vi.useFakeTimers();
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "停用" }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "disabled" });
+    const notice = document.querySelector(".dsh-theme-notice");
+    expect(notice?.textContent).toContain("部分功能可能需要重启 DSH");
+    act(() => vi.advanceTimersByTime(9_700));
+    expect(notice?.classList.contains("fading")).toBe(true);
+    act(() => vi.advanceTimersByTime(300));
+    expect(document.querySelector(".dsh-theme-notice")).toBeNull();
+    vi.useRealTimers();
   });
 
   it("keeps use and update as separate actions for an inactive update", async () => {

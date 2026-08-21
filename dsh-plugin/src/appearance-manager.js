@@ -15,6 +15,7 @@ const ROLLBACK_FILES = [
   'package-lock.json',
   'npm-shrinkwrap.json',
   'yarn.lock',
+  'pnpm-workspace.yaml',
   'cordis.patch.yml',
   '.dsh-appearance-manager/state.json',
 ]
@@ -71,6 +72,37 @@ function compatibilityActivationError(compatibility) {
     return 'Theme uses a keyed settings slot without a stable legacy id and cannot be adapted safely.'
   }
   return 'Theme compatibility could not be verified safely, so activation was not applied.'
+}
+
+const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/i
+
+function gitHostedAdd(args) {
+  return args.includes('add') && args.some(argument => /^(?:git\+|github:)|\.git(?:#|$)/.test(argument))
+}
+
+export function blockedBuildPackage(output) {
+  const hint = output.match(/onlyBuiltDependencies:\s*\r?\n\s*-\s*["']?([^"'\s]+)["']?/i)?.[1]
+  if (hint && PACKAGE_NAME.test(hint)) return hint
+  const error = output.match(/The git-hosted package\s+["'](.+)@[^"']+["'] needs to execute build scripts/i)?.[1]
+  return error && PACKAGE_NAME.test(error) ? error : null
+}
+
+export function allowGitHostedBuild(profileDir, packageName) {
+  if (!PACKAGE_NAME.test(packageName)) return false
+  const file = join(profileDir, 'pnpm-workspace.yaml')
+  let workspace
+  try { workspace = objectValue(parse(readFileSync(file, 'utf8'))) ?? {} } catch { return false }
+  const allowBuilds = objectValue(workspace.allowBuilds) ?? {}
+  if (allowBuilds[packageName] === true) return false
+  const temporary = `${file}.${process.pid}.tmp`
+  try {
+    writeFileSync(temporary, stringify({ ...workspace, allowBuilds: { ...allowBuilds, [packageName]: true } }, { lineWidth: 0 }))
+    renameSync(temporary, file)
+    return true
+  } catch {
+    try { rmSync(temporary, { force: true }) } catch { /* Best effort cleanup. */ }
+    return false
+  }
 }
 
 function snapshotFile(file) {
@@ -322,7 +354,7 @@ function parsePnpmOutput(chunk, packages, onProgress, parserState) {
   }
 }
 
-function runPlugin(profile, args, onProgress) {
+function spawnPlugin(profile, args, onProgress) {
   return new Promise(resolvePromise => {
     const command = invocation()
     const reporterArgs = args.some(argument => argument === '--reporter' || argument.startsWith('--reporter=')) ? args : [...args, '--reporter', 'ndjson']
@@ -336,6 +368,15 @@ function runPlugin(profile, args, onProgress) {
     const timer = setTimeout(() => child.kill(), 10 * 60 * 1000)
     child.on('error', error => { stderr += error.message })
     child.on('close', exitCode => { clearTimeout(timer); resolvePromise({ exitCode, stdout, stderr }) })
+  })
+}
+
+export function runPlugin(profile, args, onProgress, profileDir) {
+  return spawnPlugin(profile, args, onProgress).then(result => {
+    if (result.exitCode === 0 || !profileDir || !gitHostedAdd(args)) return result
+    const packageName = blockedBuildPackage(`${result.stderr}\n${result.stdout}`)
+    if (!packageName || !allowGitHostedBuild(profileDir, packageName)) return result
+    return spawnPlugin(profile, args, onProgress)
   })
 }
 
@@ -419,7 +460,7 @@ class AppearanceManager {
               delete operation.receivedBytes
               delete operation.totalBytes
             }
-          })
+          }, this.profileDir)
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
         let compatibility = operation.kind === 'update' ? undefined : existing.compatibility
