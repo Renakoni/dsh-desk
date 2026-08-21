@@ -61,6 +61,40 @@ describe("NotificationRulesPanel concurrent edits", () => {
     expect(window.companion.previewSound).toHaveBeenNthCalledWith(3, "permission");
   });
 
+  it("uses a playing speaker state instead of a persistent success badge", async () => {
+    let ended: (() => void) | undefined;
+    vi.stubGlobal("Audio", class {
+      volume = 1;
+      currentTime = 0;
+      pause = vi.fn();
+      play = vi.fn(async () => undefined);
+      addEventListener = vi.fn((type: string, listener: () => void) => {
+        if (type === "ended") ended = listener;
+      });
+      removeEventListener = vi.fn();
+    });
+    render(
+      <I18nProvider initialLocale="en">
+        <NotificationRulesPanel settings={structuredClone(defaultSettings)} updateSettings={vi.fn()} />
+      </I18nProvider>
+    );
+
+    const preview = screen.getAllByRole("button", { name: "Preview" })[0];
+    await act(async () => {
+      fireEvent.click(preview);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "Playing" })).toBeTruthy();
+    expect(screen.queryByText("Played")).toBeNull();
+
+    await act(async () => {
+      ended?.();
+      await Promise.resolve();
+    });
+    expect(screen.getAllByRole("button", { name: "Preview" })[0]).toBeTruthy();
+  });
+
   it("builds rapid rule and sound updates from the latest local snapshot", () => {
     const updateSettings = vi.fn();
     render(

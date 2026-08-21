@@ -778,7 +778,7 @@
   min-height: 0;
   flex: 1 1 auto;
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 10px;
 }
 .claude-profile-editor-header {
@@ -968,7 +968,7 @@
   border: 1px solid var(--settings-line);
   border-radius: 8px;
   background: var(--settings-surface);
-  box-shadow: 0 10px 28px color-mix(in oklch, var(--settings-ink) 7%, transparent);
+  box-shadow: 0 10px 28px var(--settings-shadow);
 }
 
 .dsh-plugins-page .claude-profile-toolbar {
@@ -1008,7 +1008,7 @@
 .dsh-plugins-page .claude-profile-options {
   border-color: var(--settings-line-strong);
   background: var(--settings-surface-raised);
-  box-shadow: 0 14px 30px color-mix(in oklch, var(--settings-ink) 16%, transparent);
+  box-shadow: 0 14px 30px var(--settings-shadow-strong);
 }
 
 .dsh-plugins-page .claude-profile-options-search {
@@ -1074,7 +1074,7 @@
 .dsh-plugins-page .claude-profile-new-options {
   border-color: var(--settings-line-strong);
   background: var(--settings-surface-raised);
-  box-shadow: 0 16px 34px color-mix(in oklch, var(--settings-ink) 17%, transparent);
+  box-shadow: 0 16px 34px var(--settings-shadow-strong);
 }
 
 .dsh-plugins-page .claude-profile-new-options button {
@@ -1685,7 +1685,7 @@
   border: 1px solid var(--settings-line);
   border-radius: 8px;
   background: var(--settings-surface);
-  box-shadow: 0 10px 28px color-mix(in oklch, var(--settings-ink) 7%, transparent);
+  box-shadow: 0 10px 28px var(--settings-shadow);
 }
 
 .dsh-plugins-page .dsh-market-tabs {
@@ -1911,4 +1911,208 @@
   }
   .dsh-plugins-page .dsh-market-list-head > button:nth-of-type(2),
   .dsh-plugins-page .dsh-market-stars { display: none; }
+}
+
+/* The scheme editor keeps theme selection in the same compact row as the
+   resource tabs. This avoids a second panel and gives the picker a reliable
+   renderer-owned menu in Electron. */
+.dsh-plugins-page .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
+  grid-template-columns: repeat(2, minmax(112px, 1fr)) minmax(170px, .9fr) !important;
+}
+
+.dsh-theme-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.dsh-theme-picker-trigger {
+  width: 100%;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--settings-muted);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.dsh-theme-picker-trigger:hover:not(:disabled),
+.dsh-theme-picker-trigger[aria-expanded="true"] {
+  color: var(--settings-ink);
+  border-color: var(--settings-line-strong);
+  background: var(--settings-surface-hover);
+}
+
+.dsh-theme-picker-trigger > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.dsh-theme-picker-trigger b {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-theme-picker-trigger small {
+  overflow: hidden;
+  color: var(--settings-faint);
+  font-size: 10px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-theme-picker-trigger > svg:last-child {
+  color: var(--settings-faint);
+  transition: transform 160ms ease;
+}
+
+.dsh-theme-picker-trigger[aria-expanded="true"] > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.dsh-theme-picker-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 20;
+  width: min(280px, 100%);
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 8px;
+  background: var(--settings-surface-raised);
+  box-shadow: 0 18px 38px var(--settings-shadow-strong);
+}
+
+.dsh-theme-picker-menu button {
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--settings-muted);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.dsh-theme-picker-menu button:hover,
+.dsh-theme-picker-menu button:focus-visible,
+.dsh-theme-picker-menu button.selected {
+  color: var(--settings-ink);
+  border-color: var(--settings-line);
+  background: var(--settings-surface-hover);
+  outline: 0;
+}
+
+.dsh-theme-picker-menu button > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.dsh-theme-picker-menu button b {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-theme-picker-menu button small {
+  overflow: hidden;
+  color: var(--settings-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-theme-picker-menu button > svg {
+  color: var(--settings-success);
+}
+
+.dsh-theme-picker-empty {
+  margin: 0;
+  padding: 10px 8px;
+  color: var(--settings-faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 620px) {
+  .dsh-plugins-page .claude-resource-subtabs.compact.dsh-scheme-editor-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dsh-theme-picker { grid-column: 1 / -1; }
+  .dsh-theme-picker-menu { left: 0; right: auto; width: min(280px, 100%); }
+}
+
+/* Final control pass: give the resource workbench the same quiet hierarchy
+   as the rest of Settings while keeping controls dense enough for scanning. */
+.dsh-plugins-page {
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.dsh-plugins-page .claude-profile-toolbar,
+.dsh-plugins-page .claude-resource-subtabs.compact,
+.dsh-plugins-page .claude-resource-table,
+.dsh-plugins-page .claude-profile-transfer {
+  box-shadow: 0 8px 22px var(--settings-shadow);
+}
+
+.dsh-plugins-page .claude-profile-icon-button,
+.dsh-plugins-page .claude-profile-text-button,
+.dsh-plugins-page .claude-profile-primary-button,
+.dsh-plugins-page .claude-resource-search-refresh {
+  transition: transform 160ms var(--ease-soft), color 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dsh-plugins-page .claude-profile-icon-button:hover:not(:disabled),
+.dsh-plugins-page .claude-profile-text-button:hover:not(:disabled),
+.dsh-plugins-page .claude-profile-primary-button:hover:not(:disabled),
+.dsh-plugins-page .claude-resource-search-refresh:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px var(--settings-shadow-hover);
+}
+
+.dsh-plugins-page .claude-resource-subtabs.compact .claude-resource-subtab {
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.dsh-plugins-page .claude-resource-subtabs.compact .claude-resource-subtab.active {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--settings-accent) 24%, transparent);
+}
+
+.dsh-plugins-page .claude-resource-search.dark input,
+.dsh-plugins-page .claude-profile-select-button,
+.dsh-plugins-page .claude-profile-options,
+.dsh-plugins-page .claude-profile-options-list > button,
+.dsh-plugins-page .claude-profile-icon-button,
+.dsh-plugins-page .claude-profile-text-button,
+.dsh-plugins-page .claude-profile-primary-button {
+  font-family: inherit;
+  letter-spacing: 0;
 }

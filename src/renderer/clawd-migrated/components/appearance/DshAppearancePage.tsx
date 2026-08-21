@@ -58,7 +58,7 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
         {subsection === "themes" ? (
           <DshThemesPage active={active && subsection === "themes"} />
         ) : (
-          <section className="appearance-pet-library settings-page" aria-label={t("appearance.desktopPet", "桌宠")}>
+          <section className="appearance-pet-library settings-page" aria-label={t("appearance.desktopPet", "桌宠")} tabIndex={0}>
             <header className="appearance-library-header">
               <div>
                 <h2>{t("appearance.petLibraryTitle", "桌宠库")}</h2>

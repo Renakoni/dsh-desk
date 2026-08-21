@@ -18,6 +18,9 @@
   --settings-accent-soft: oklch(82% 0.105 82 / 0.18);
   --settings-success: oklch(64% 0.09 154);
   --settings-danger: oklch(62% 0.11 32);
+  --settings-shadow: oklch(12% 0.006 75 / 0.11);
+  --settings-shadow-strong: oklch(8% 0.006 75 / 0.26);
+  --settings-shadow-hover: oklch(8% 0.006 75 / 0.18);
   color: var(--settings-ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   letter-spacing: 0;
@@ -42,6 +45,9 @@
   --settings-accent-soft: oklch(77% 0.105 82 / 0.13);
   --settings-success: oklch(72% 0.07 154);
   --settings-danger: oklch(76% 0.08 32);
+  --settings-shadow: oklch(0% 0 0 / 0.28);
+  --settings-shadow-strong: oklch(0% 0 0 / 0.48);
+  --settings-shadow-hover: oklch(0% 0 0 / 0.34);
 }
 
 .settings-page-head {
@@ -371,6 +377,87 @@
   font-weight: 700;
 }
 
+.settings-page .settings-web-origin-field {
+  display: grid;
+  gap: 8px;
+  padding: 2px 0 14px;
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.settings-page .settings-web-origin-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.settings-page .settings-web-origin-label span {
+  color: var(--settings-ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.settings-page .settings-web-origin-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-page .settings-web-origin-control input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  color: var(--settings-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.settings-page .settings-web-origin-save {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in oklch, var(--settings-accent) 42%, var(--settings-line-strong));
+  border-radius: 7px;
+  color: var(--settings-ink);
+  background: var(--settings-accent-soft);
+  font-size: 12px;
+  font-weight: 760;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.settings-page .settings-web-origin-save:hover:not(:disabled) {
+  border-color: var(--settings-accent);
+  background: color-mix(in oklch, var(--settings-accent-soft) 70%, var(--settings-surface-hover));
+  transform: translateY(-1px);
+}
+
+.settings-page .settings-web-origin-save:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.settings-page .connection-management {
+  gap: 0;
+}
+
+.settings-page .connection-management .connection-rows {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.settings-page .connection-management .connection-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
 .settings-page .currency-segmented {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -469,7 +556,8 @@
 
 .settings-page .pet-theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 220px));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 220px));
+  align-content: start;
   gap: 12px;
 }
 
@@ -745,7 +833,7 @@
   border: 1px solid var(--settings-line-strong);
   border-radius: 8px;
   background: var(--settings-surface-raised);
-  box-shadow: 0 14px 28px color-mix(in oklch, var(--settings-ink) 15%, transparent);
+  box-shadow: 0 14px 28px var(--settings-shadow-strong);
 }
 
 .settings-page .pet-install-gallery-options button {
@@ -1036,6 +1124,30 @@
 .settings-page .group-reset-button:disabled {
   color: var(--settings-line-strong);
   cursor: default;
+}
+
+.settings-page .group-reset-button.is-checking,
+.settings-page .group-reset-button.is-checking:disabled {
+  color: var(--settings-accent);
+  cursor: wait;
+  opacity: 1;
+}
+
+.settings-page .group-reset-button.is-checking .spin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: connection-recheck-spin 800ms linear 1 both;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.settings-page .group-reset-button.is-checking .spin > svg {
+  display: block;
 }
 
 .settings-page .pet-display-group .group-card-header button.group-reset-button svg {
@@ -1424,6 +1536,75 @@
   flex-wrap: wrap;
 }
 
+.settings-page .sound-action-primary {
+  color: var(--settings-ink);
+  border-color: color-mix(in oklch, var(--settings-accent) 52%, var(--settings-line-strong));
+  background: var(--settings-accent-soft);
+}
+
+.settings-page .sound-action-primary:hover:not(:disabled) {
+  border-color: var(--settings-accent);
+  background: color-mix(in oklch, var(--settings-accent-soft) 75%, var(--settings-surface-hover));
+}
+
+.settings-page .sound-action-preview {
+  min-width: 76px;
+}
+
+.settings-page .sound-action-preview.is-playing {
+  color: var(--settings-accent);
+  border-color: var(--settings-accent);
+  background: var(--settings-accent-soft);
+  cursor: wait;
+}
+
+.settings-page .sound-preview-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-page .sound-preview-icon::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.settings-page .sound-action-preview.is-playing .sound-preview-icon {
+  animation: sound-preview-breathe 900ms ease-in-out infinite;
+}
+
+.settings-page .sound-action-preview.is-playing .sound-preview-icon::after {
+  animation: sound-preview-wave 1100ms ease-out infinite;
+}
+
+@keyframes sound-preview-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes sound-preview-wave {
+  0% { transform: scale(.6); opacity: 0; }
+  24% { opacity: .62; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.settings-page .sound-action-secondary {
+  color: var(--settings-muted);
+}
+
+.settings-page .sound-action-icon {
+  width: 30px;
+  padding: 0;
+}
+
 .settings-page .sound-file-pill {
   max-width: 96px;
   min-height: 22px;
@@ -1457,6 +1638,7 @@
   min-height: 22px;
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 0 7px;
   border-radius: 6px;
   font-size: 11px;
@@ -1471,6 +1653,17 @@
 .settings-page .sound-status.err {
   color: var(--settings-danger);
   background: oklch(76% 0.08 32 / 0.1);
+}
+
+.settings-page .sound-status svg {
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page .sound-action-preview.is-playing .sound-preview-icon,
+  .settings-page .sound-action-preview.is-playing .sound-preview-icon::after {
+    animation: none;
+  }
 }
 
 .settings-page .sound-path-tips {
@@ -1705,9 +1898,23 @@
   .settings-page .notification-sound-actions {
     justify-content: flex-start;
   }
+
+  .settings-page .settings-web-origin-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
 }
 
 @media (max-width: 560px) {
+  .settings-page .settings-web-origin-control {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page .settings-web-origin-save {
+    justify-self: start;
+  }
+
   .settings-page .settings-subtab {
     justify-content: flex-start;
   }

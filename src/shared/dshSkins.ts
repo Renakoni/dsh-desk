@@ -25,6 +25,8 @@ export type DshSkinCatalogEntry = {
   listScreenshot?: string;
   /** A Desk-local thumbnail URL added to installed-theme snapshots. */
   previewLocalUrl?: string;
+  /** Desk-local URLs for the detail screenshots, kept in catalog order. */
+  previewLocalUrls?: (string | undefined)[];
   review?: DshSkinReview;
   license: { code: string; commercialUse: boolean; notice?: string };
   stars: number | null;

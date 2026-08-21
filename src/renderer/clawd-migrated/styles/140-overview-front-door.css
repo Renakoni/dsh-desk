@@ -656,8 +656,17 @@
 }
 .connection-recheck:hover:not(:disabled) { color: var(--overview-ink); border-color: var(--overview-ink); }
 .connection-recheck:disabled { opacity: .6; cursor: default; }
-.connection-recheck .spin { animation: connection-recheck-spin .8s linear infinite; }
-@keyframes connection-recheck-spin { to { transform: rotate(360deg); } }
+.connection-recheck .spin {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: connection-recheck-spin 800ms linear infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+@keyframes connection-recheck-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* Compact header variant: a square icon button matching the badge height. */
 .connection-recheck.icon-only {
@@ -666,9 +675,6 @@
   padding: 0;
   justify-content: center;
 }
-
-/* The settings-page recheck (GroupCard action) reuses the same spinner. */
-.group-reset-button .spin { animation: connection-recheck-spin .8s linear infinite; }
 
 /* Settings → Connection details: the GroupCard provides the outer chrome, so
    the rows sit in their own hairline frame inside it. */
