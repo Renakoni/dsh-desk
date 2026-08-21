@@ -73,6 +73,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
       if (skin.repositoryUrl) await window.companion.openExternal(skin.repositoryUrl);
       return;
     }
+    const wasActive = snapshot !== null && runtimeFor(snapshot, skin.id)?.activation === "active";
     setBusy(`${skin.id}:${action}`);
     setNotice(null);
     try {
@@ -82,7 +83,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
       if (result.supportPrepared) setNotice(t("dshThemes.supportPrepared", "主题管理已准备好。重启 DSH 后再次安装这个主题。"));
       else if (!result.ok) setNotice(result.error ?? t("dshThemes.operationFailed", "操作失败。"));
       else if (result.restartRequested) setNotice(t("dshThemes.restarting", "DSH 正在重启。"));
-      else if (action === "activate" || action === "deactivate" || action === "uninstall") {
+      else if (action === "activate" || ((action === "deactivate" || action === "uninstall") && wasActive)) {
         const override = action === "deactivate" || action === "uninstall"
           ? { mode: "disabled" as const }
           : { mode: "temporary" as const, themeId: skin.id };

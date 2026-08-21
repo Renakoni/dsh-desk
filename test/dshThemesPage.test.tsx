@@ -57,6 +57,7 @@ function renderPage(value = snapshot()) {
     getDshSkinMarketplace: vi.fn(async () => value),
     installDshSkinMarketplace: vi.fn(async () => ({ ok: true, restartRequired: true, snapshot: value })),
     mutateDshSkin: vi.fn(async (): Promise<{ ok: boolean; snapshot: DshSkinMarketplaceSnapshot; supportPrepared?: boolean }> => ({ ok: true, snapshot: value })),
+    setDshThemeOverride: vi.fn(async () => ({ ok: true })),
     openExternal: vi.fn(async () => undefined)
   };
   Object.assign(window, { companion: api });
@@ -108,6 +109,51 @@ describe("DshThemesPage", () => {
     expect(screen.queryByText("纸张主题")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "使用" }));
     await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "activate" }));
+    expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "temporary", themeId: "ocean.theme" });
+  });
+
+  it("keeps the active theme when uninstalling an inactive library theme", async () => {
+    const value = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
+      { skinId: "paper.theme", installation: "installed", activation: "inactive", installedVersion: "2.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const api = renderPage(value);
+    await screen.findByText("纸张主题");
+    const paperCard = screen.getByText("纸张主题").closest("article");
+
+    fireEvent.click(within(paperCard!).getByRole("button", { name: "卸载" }));
+
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "paper.theme", action: "uninstall" }));
+    expect(api.setDshThemeOverride).not.toHaveBeenCalled();
+    expect(within(screen.getByText("海洋主题").closest("article")!).getByText("使用中")).not.toBeNull();
+  });
+
+  it("disables the override when uninstalling the active library theme", async () => {
+    const api = renderPage(snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }
+    ] }));
+    await screen.findByText("海洋主题");
+
+    fireEvent.click(screen.getByRole("button", { name: "卸载" }));
+
+    await waitFor(() => expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "disabled" }));
+  });
+
+  it("keeps the active theme when uninstalling an inactive theme from market details", async () => {
+    const value = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
+      { skinId: "paper.theme", installation: "installed", activation: "inactive", installedVersion: "2.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const api = renderPage(value);
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    const paperCard = (await screen.findByText("纸张主题")).closest("article");
+    fireEvent.click(within(paperCard!).getByRole("button", { name: "详情" }));
+
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "卸载" }));
+
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "paper.theme", action: "uninstall" }));
+    expect(api.setDshThemeOverride).not.toHaveBeenCalled();
   });
 
   it("does not offer lifecycle actions while the built-in manager is offline", async () => {

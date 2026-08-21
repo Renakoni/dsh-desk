@@ -44,6 +44,10 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   const canManageThemes = snapshot?.host.connected === true;
 
   async function mutate(skin: Pick<DshSkinCatalogEntry, "id">, action: DshSkinAction) {
+    const wasActive = snapshot !== null && (
+      runtimeFor(snapshot, skin.id)?.activation === "active"
+      || snapshot.localSkins?.some(item => item.id === skin.id && item.active) === true
+    );
     setBusy(`${skin.id}:${action}`);
     setNotice(null);
     try {
@@ -52,7 +56,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
       if (result.supportPrepared) setNotice(t("dshThemes.supportPrepared", "主题管理已准备好。重启 DSH 后继续操作。"));
       else if (!result.ok) setNotice(result.error ?? t("dshThemes.operationFailed", "操作失败。"));
       else if (result.restartRequested) setNotice(t("dshThemes.restarting", "DSH 正在重启。"));
-      else if (action === "activate" || action === "deactivate" || action === "uninstall") {
+      else if (action === "activate" || ((action === "deactivate" || action === "uninstall") && wasActive)) {
         const override = action === "deactivate" || action === "uninstall"
           ? { mode: "disabled" as const }
           : { mode: "temporary" as const, themeId: skin.id };
