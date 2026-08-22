@@ -29,7 +29,8 @@ const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 5_000;
 export const OPERATION_TIMEOUT_MS = 10 * 60 * 1000;
-const CACHE_VERSION = 1;
+// Version 2 invalidates catalogs generated while Aqua pointed at the temporary fork.
+const CACHE_VERSION = 2;
 
 type FetchResponse = {
   ok: boolean;
@@ -42,7 +43,7 @@ type FetchResponse = {
 type Fetcher = (url: string, init?: RequestInit) => Promise<FetchResponse>;
 
 type CatalogCache = {
-  version: 1;
+  version: 2;
   fetchedAt: number;
   generatedAt: string;
   skins: DshSkinCatalogEntry[];
@@ -50,6 +51,7 @@ type CatalogCache = {
 
 type RuntimePayload = {
   skins?: unknown;
+  operation?: unknown;
   localSkins?: unknown;
   restartAvailable?: unknown;
   runningAgentCount?: unknown;
@@ -319,6 +321,14 @@ function parseRuntimeSkin(value: unknown): DshSkinRuntimeState | null {
   };
 }
 
+function parseRuntimeOperation(value: unknown): DshSkinOperationProgress | null {
+  const source = objectValue(value);
+  const action = source?.kind;
+  if (!source || typeof source.skinId !== "string"
+    || !["install", "activate", "deactivate", "update", "uninstall"].includes(String(action))) return null;
+  return operationProgress({ skinId: source.skinId, action: action as DshSkinAction }, source);
+}
+
 async function responseJson(response: FetchResponse, maxBytes = MAX_CATALOG_BYTES): Promise<unknown> {
   const declared = Number(response.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > maxBytes) throw new Error("Response is too large.");
@@ -390,7 +400,7 @@ function readCache(path: string): CatalogCache | null {
         } : value;
       })
     });
-    return { version: 1, fetchedAt: source.fetchedAt, ...catalog };
+    return { version: CACHE_VERSION, fetchedAt: source.fetchedAt, ...catalog };
   } catch {
     return null;
   }
@@ -427,7 +437,7 @@ export class DshSkinMarketplace {
     return this.createSnapshot(host);
   }
 
-  async mutate(input: DshSkinMutationInput, reportProgress?: (progress: DshSkinOperationProgress) => void): Promise<DshSkinMutationResult> {
+  async mutate(input: DshSkinMutationInput, reportProgress?: (progress: DshSkinOperationProgress | null) => void): Promise<DshSkinMutationResult> {
     if (!input || typeof input.skinId !== "string" || input.skinId === ""
       || !["install", "activate", "deactivate", "update", "uninstall", "restart"].includes(input.action)) {
       return { ok: false, error: "Invalid theme operation.", snapshot: await this.snapshot() };
@@ -470,20 +480,24 @@ export class DshSkinMarketplace {
               ? { ...state, activation: "restart-required" }
               : state);
           }
-          return {
+          const result = {
             ok: true,
             snapshot,
             ...(input.action === "activate" || input.action === "update" || input.action === "deactivate" || input.action === "uninstall"
               ? { browserRefreshRequired: true }
               : {})
           };
+          reportProgress?.(null);
+          return result;
         }
         if (operation.phase === "failed") throw new Error(typeof operation.message === "string" ? operation.message : "Theme operation failed.");
         await this.pollDelay(600);
       }
       throw new Error("Theme operation timed out.");
     } catch (error) {
-      return { ok: false, error: errorMessage(error), snapshot: await this.snapshot() };
+      const snapshot = await this.snapshot();
+      reportProgress?.(snapshot.host.operation ?? null);
+      return { ok: false, error: errorMessage(error), snapshot };
     }
   }
 
@@ -675,7 +689,7 @@ export class DshSkinMarketplace {
       });
       if (!response.ok) throw new Error(`Theme catalog returned HTTP ${response.status}.`);
       const catalog = parseDshSkinCatalog(await responseJson(response));
-      this.catalog = { version: 1, fetchedAt: checkedAt, ...catalog };
+      this.catalog = { version: CACHE_VERSION, fetchedAt: checkedAt, ...catalog };
       this.catalogSource = "remote";
       this.lastError = undefined;
       try { writeTextFileAtomic(this.options.cachePath, JSON.stringify(this.catalog)); } catch { /* Cache writes are best effort. */ }
@@ -721,6 +735,7 @@ export class DshSkinMarketplace {
         connected: true,
         marketInstalled: true,
         skins: [...states.values()],
+        operation: parseRuntimeOperation(payload.operation),
         restartAvailable: payload.restartAvailable === true,
         runningAgentCount: typeof payload.runningAgentCount === "number" && Number.isInteger(payload.runningAgentCount)
           ? payload.runningAgentCount
