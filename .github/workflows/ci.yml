@@ -112,11 +112,13 @@ jobs:
         run: git diff --check HEAD^1 HEAD
 
   # Keep the branch-protection context used by main while the quality checks
-  # remain split into independently visible jobs above.
+  # remain split into independently visible jobs above. Hygiene is included
+  # here because this is the required branch-protection context for the
+  # repository.
   quality:
     name: Quality (Windows, plugin, typecheck, build)
     if: always()
-    needs: [plugin-tests, typecheck, build]
+    needs: [plugin-tests, typecheck, build, repository-hygiene]
     runs-on: windows-latest
     steps:
       - name: Verify quality jobs
@@ -125,8 +127,14 @@ jobs:
           PLUGIN_RESULT: ${{ needs.plugin-tests.result }}
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          HYGIENE_RESULT: ${{ needs.repository-hygiene.result }}
         run: |
-          $results = @($env:PLUGIN_RESULT, $env:TYPECHECK_RESULT, $env:BUILD_RESULT)
+          $results = @(
+            $env:PLUGIN_RESULT,
+            $env:TYPECHECK_RESULT,
+            $env:BUILD_RESULT,
+            $env:HYGIENE_RESULT
+          )
           if ($results -contains 'failure' -or $results -contains 'cancelled' -or $results -contains 'skipped') {
             throw "One or more quality jobs did not succeed: $($results -join ', ')"
           }
