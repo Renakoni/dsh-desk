@@ -83,6 +83,15 @@ function packageNameFromValue(value) {
   return match && PACKAGE_NAME.test(match[1]) ? match[1] : null
 }
 
+function packageNameFromBlockedMessage(value) {
+  if (typeof value !== 'string') return null
+  const hint = value.match(/onlyBuiltDependencies\s*:\s*(?:\\r?\\n|\r?\n)\s*-\s*["']?([^"'\s]+)["']?/i)?.[1]
+  const hintedPackage = packageNameFromValue(hint)
+  if (hintedPackage) return hintedPackage
+  const error = value.match(/git-hosted package\s+["']([^"']+?)@[^"']+["']/i)?.[1]
+  return packageNameFromValue(error)
+}
+
 function gitHostedAdd(args) {
   return args.includes('add') && args.some(argument => /^(?:git\+|github:)|\.git(?:#|$)/.test(argument))
 }
@@ -109,9 +118,12 @@ export function blockedBuildPackage(output) {
         event?.err?.package?.bareSpecifier,
         event?.err?.packageId,
         event?.err?.packageName,
+        event?.hint,
+        event?.message,
+        event?.err?.message,
       ]
       for (const candidate of candidates) {
-        const packageName = packageNameFromValue(candidate)
+        const packageName = packageNameFromValue(candidate) ?? packageNameFromBlockedMessage(candidate)
         if (packageName) return packageName
       }
     } catch {
@@ -119,8 +131,7 @@ export function blockedBuildPackage(output) {
     }
   }
 
-  const error = diagnostic.match(/The git-hosted package\s+["'](.+)@[^"']+["'] needs to execute build scripts/i)?.[1]
-  return packageNameFromValue(error)
+  return packageNameFromBlockedMessage(diagnostic)
 }
 
 export function allowGitHostedBuild(profileDir, packageName) {

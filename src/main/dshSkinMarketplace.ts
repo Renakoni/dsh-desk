@@ -29,7 +29,8 @@ const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 5_000;
 export const OPERATION_TIMEOUT_MS = 10 * 60 * 1000;
-// Version 2 invalidates catalogs generated while Aqua pointed at the temporary fork.
+// Version 2 marks caches written after the Aqua source was restored. Version 1
+// remains readable so offline users do not lose their existing catalog.
 const CACHE_VERSION = 2;
 
 type FetchResponse = {
@@ -384,7 +385,9 @@ function readCache(path: string): CatalogCache | null {
   if (!existsSync(path)) return null;
   try {
     const source = objectValue(JSON.parse(readFileSync(path, "utf8")));
-    if (!source || source.version !== CACHE_VERSION || typeof source.fetchedAt !== "number") return null;
+    // Version 1 used the same official catalog URL. Keep it usable offline and
+    // rewrite it as version 2 after the next successful refresh.
+    if (!source || ![1, CACHE_VERSION].includes(source.version as number) || typeof source.fetchedAt !== "number") return null;
     if (!Array.isArray(source.skins)) return null;
     const catalog = parseDshSkinCatalog({
       schemaVersion: 1,
@@ -446,7 +449,13 @@ export class DshSkinMarketplace {
       return { ok: false, error: "DSH 主题管理组件不可用，请先启动 DSH Desk 插件。", snapshot: await this.snapshot() };
     }
     try {
-      await this.refreshCatalog(false);
+      const requiresCurrentCatalog = input.action === "install" || input.action === "update";
+      await this.refreshCatalog(requiresCurrentCatalog);
+      if (requiresCurrentCatalog && this.catalogSource !== "remote") {
+        throw new Error(this.lastError
+          ? `Theme catalog unavailable; install or update requires a fresh catalog. ${this.lastError}`
+          : "Theme catalog unavailable; install or update requires a fresh catalog.");
+      }
       if (input.action === "restart") {
         await this.hostRequest("/dsh-appearance-manager/restart", {
           method: "POST",
