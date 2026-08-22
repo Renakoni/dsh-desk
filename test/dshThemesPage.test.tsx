@@ -315,6 +315,48 @@ describe("DshThemesPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "使用" })).toHaveProperty("disabled", false));
   });
 
+  it("refreshes the authoritative library after an install completes off-screen", async () => {
+    const empty = snapshot({ skins: [] });
+    const installed: DshSkinMarketplaceSnapshot = { ...snapshot(), host: { ...snapshot().host, skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] } };
+    const api = renderAppearance(empty);
+    let currentSnapshot = empty;
+    let snapshotRequest = 0;
+    let finishStaleRefresh!: () => void;
+    api.getDshSkinMarketplace.mockImplementation(() => {
+      snapshotRequest += 1;
+      if (snapshotRequest === 1) return new Promise(resolve => { finishStaleRefresh = () => resolve(empty); });
+      return Promise.resolve(currentSnapshot);
+    });
+    let finishInstall!: () => void;
+    api.mutateDshSkin.mockImplementationOnce(() => new Promise(resolve => {
+      finishInstall = () => {
+        currentSnapshot = installed;
+        resolve({ ok: true, snapshot: installed });
+      };
+    }));
+
+    await screen.findByRole("button", { name: "浏览主题市场" });
+    fireEvent.click(screen.getByRole("button", { name: "浏览主题市场" }));
+    fireEvent.click(within((await screen.findByText("海洋主题")).closest("article")!).getByRole("button", { name: "安装" }));
+    await waitFor(() => expect(api.mutateDshSkin).toHaveBeenCalledWith({ skinId: "ocean.theme", action: "install" }));
+
+    api.selectSubsection("桌宠");
+    await screen.findByRole("heading", { name: "桌宠库" });
+    api.selectSubsection("DSH 主题");
+    await screen.findByRole("heading", { name: "主题库" });
+    expect(screen.getByRole("button", { name: "主题市场" })).toHaveProperty("disabled", true);
+    await waitFor(() => expect(api.getDshSkinMarketplace.mock.calls.length).toBeGreaterThanOrEqual(1));
+
+    finishInstall();
+    await waitFor(() => expect(api.getDshSkinMarketplace.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText("海洋主题")).not.toBeNull());
+    finishStaleRefresh();
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("海洋主题")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "浏览主题市场" })).toBeNull();
+    expect(screen.getByRole("button", { name: "使用" })).not.toBeNull();
+  });
+
   it("keeps a failed market operation visible after switching appearance pages", async () => {
     const value = snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] });
     const api = renderAppearance(value);

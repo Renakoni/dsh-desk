@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, Palette } from "lucide-react";
-import type { DshSkinOperationProgress } from "../../../../shared/dshSkins";
+import type { DshSkinMarketplaceSnapshot, DshSkinOperationProgress } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
 import { DshThemesPage } from "../themes/DshThemesPage";
 import type { DshThemeOperationNotice } from "../themes/DshThemeMarketPanel";
@@ -21,13 +21,44 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
   const [subsection, setSubsection] = useState<"themes" | "pet">("themes");
   const [themeOperationKey, setThemeOperationKeyState] = useState<string | null>(null);
   const [themeOperationProgress, setThemeOperationProgress] = useState<DshSkinOperationProgress | null>(null);
+  const [themeSnapshot, setThemeSnapshot] = useState<DshSkinMarketplaceSnapshot | null>(null);
+  const [themeSnapshotGeneration, setThemeSnapshotGeneration] = useState(0);
   const [themeNotice, setThemeNotice] = useState<DshThemeOperationNotice | null>(null);
   const [themeNoticeFading, setThemeNoticeFading] = useState(false);
   const themeOperationKeyRef = useRef<string | null>(null);
+  const themeSnapshotGenerationRef = useRef(0);
+  const themeSnapshotRefreshRef = useRef(0);
 
   function setThemeOperationKey(key: string | null) {
+    const previous = themeOperationKeyRef.current;
+    if (key !== null && themeOperationKeyRef.current === null) {
+      themeSnapshotGenerationRef.current += 1;
+      setThemeSnapshotGeneration(themeSnapshotGenerationRef.current);
+    }
     themeOperationKeyRef.current = key;
     setThemeOperationKeyState(key);
+    if (previous !== null && key === null) void refreshThemeSnapshot();
+  }
+
+  function handleThemeSnapshotChange(next: DshSkinMarketplaceSnapshot, generation?: number) {
+    if (themeOperationKeyRef.current !== null) return;
+    if (generation !== undefined && generation !== themeSnapshotGenerationRef.current) return;
+    setThemeSnapshot(next);
+  }
+
+  async function refreshThemeSnapshot() {
+    const requestId = ++themeSnapshotRefreshRef.current;
+    try {
+      const next = await window.companion.getDshSkinMarketplace();
+      if (requestId !== themeSnapshotRefreshRef.current) return;
+      setThemeSnapshot(next);
+      if (next.host.operation) setThemeOperationProgress(next.host.operation);
+    } catch (error) {
+      if (requestId !== themeSnapshotRefreshRef.current) return;
+      setThemeNotice(current => current?.persistent
+        ? current
+        : { message: error instanceof Error ? error.message : String(error), persistent: true });
+    }
   }
 
   useEffect(() => {
@@ -98,6 +129,9 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
         {subsection === "themes" ? (
           <DshThemesPage
             active={active && subsection === "themes"}
+            snapshot={themeSnapshot}
+            snapshotGeneration={themeSnapshotGeneration}
+            onSnapshotChange={handleThemeSnapshotChange}
             operationKey={themeOperationKey}
             operationProgress={themeOperationProgress}
             notice={themeNotice}

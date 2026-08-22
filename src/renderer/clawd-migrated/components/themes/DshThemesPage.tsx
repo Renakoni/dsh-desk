@@ -7,6 +7,9 @@ import { DshThemeFeedback, DshThemeMarketPanel, ThemeDetailsDialog, ThemePreview
 
 type DshThemesPageProps = {
   active: boolean;
+  snapshot?: DshSkinMarketplaceSnapshot | null;
+  snapshotGeneration?: number;
+  onSnapshotChange?: (snapshot: DshSkinMarketplaceSnapshot, generation?: number) => void;
   operationKey?: string | null;
   operationProgress?: DshSkinOperationProgress | null;
   notice?: DshThemeOperationNotice | null;
@@ -16,9 +19,9 @@ type DshThemesPageProps = {
   onNoticeChange?: (notice: DshThemeOperationNotice | null) => void;
 };
 
-export function DshThemesPage({ active, operationKey: sharedOperationKey, operationProgress: sharedOperationProgress, notice: sharedNotice, noticeFading: sharedNoticeFading, onBusyChange: sharedBusyChange, onProgressChange: sharedProgressChange, onNoticeChange: sharedNoticeChange }: DshThemesPageProps) {
+export function DshThemesPage({ active, snapshot: sharedSnapshot, snapshotGeneration, onSnapshotChange: sharedSnapshotChange, operationKey: sharedOperationKey, operationProgress: sharedOperationProgress, notice: sharedNotice, noticeFading: sharedNoticeFading, onBusyChange: sharedBusyChange, onProgressChange: sharedProgressChange, onNoticeChange: sharedNoticeChange }: DshThemesPageProps) {
   const { locale, t } = useI18n();
-  const [snapshot, setSnapshot] = useState<DshSkinMarketplaceSnapshot | null>(null);
+  const [localSnapshot, setLocalSnapshot] = useState<DshSkinMarketplaceSnapshot | null>(null);
   const [marketOpen, setMarketOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [localOperationKey, setLocalOperationKey] = useState<string | null>(null);
@@ -30,6 +33,7 @@ export function DshThemesPage({ active, operationKey: sharedOperationKey, operat
   const detailsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const busyRef = useRef<string | null>(null);
   const operationKey = sharedOperationKey ?? localOperationKey;
+  const snapshot = sharedSnapshot !== undefined ? sharedSnapshot : localSnapshot;
   const operationProgress = sharedOperationProgress ?? localOperationProgress;
   const notice = sharedNotice ?? localNotice;
   const noticeFading = sharedNoticeFading ?? localNoticeFading;
@@ -38,11 +42,19 @@ export function DshThemesPage({ active, operationKey: sharedOperationKey, operat
   const onNoticeChange = sharedNoticeChange ?? setLocalNotice;
   const busy = operationKey;
 
+  function applySnapshot(next: DshSkinMarketplaceSnapshot) {
+    // A remounted page can finish a stale refresh while an operation is still
+    // running. Let the parent publish the post-operation snapshot instead.
+    if (sharedSnapshotChange && (operationKey !== null || busyRef.current !== null)) return;
+    if (sharedSnapshotChange) sharedSnapshotChange(next, snapshotGeneration);
+    else setLocalSnapshot(next);
+  }
+
   async function refresh(force = false) {
     setLoading(true);
     try {
       const next = await window.companion.getDshSkinMarketplace(force);
-      setSnapshot(next);
+      applySnapshot(next);
       if (next.host.operation || operationKey === null) onProgressChange(next.host.operation ?? null);
     }
     catch (error) { onNoticeChange({ message: error instanceof Error ? error.message : String(error), persistent: true }); }
@@ -130,7 +142,7 @@ export function DshThemesPage({ active, operationKey: sharedOperationKey, operat
     try {
       const result = await window.companion.mutateDshSkin({ skinId: skin.id, action });
       const appliesOverride = result.ok && (action === "activate" || ((action === "deactivate" || action === "uninstall") && wasActive));
-      if (!appliesOverride) setSnapshot(result.snapshot);
+      if (!appliesOverride) applySnapshot(result.snapshot);
       if (result.supportPrepared) {
         onProgressChange(null);
         onNoticeChange({ message: t("dshThemes.supportPrepared", "主题管理已准备好。重启 DSH 后继续操作。"), persistent: false });
@@ -147,7 +159,7 @@ export function DshThemesPage({ active, operationKey: sharedOperationKey, operat
           : { mode: "temporary" as const, themeId: skin.id };
         const overrideResult = await window.companion.setDshThemeOverride(override).catch(() => null);
         const nextSnapshot = await window.companion.getDshSkinMarketplace().catch(() => null);
-        setSnapshot(nextSnapshot ?? result.snapshot);
+        applySnapshot(nextSnapshot ?? result.snapshot);
         onProgressChange(null);
         if (!overrideResult?.ok) {
           onNoticeChange({ message: t("dshThemes.operationFailed", "操作失败。"), persistent: true });
@@ -171,7 +183,7 @@ export function DshThemesPage({ active, operationKey: sharedOperationKey, operat
     return <DshThemeMarketPanel
       initialSnapshot={snapshot}
       onBack={() => setMarketOpen(false)}
-      onChanged={setSnapshot}
+      onChanged={applySnapshot}
       operationKey={operationKey}
       operationProgress={operationProgress}
       notice={notice}
