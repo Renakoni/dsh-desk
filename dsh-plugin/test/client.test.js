@@ -4,6 +4,8 @@ import vm from 'node:vm'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
+const packageManifest = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
+
 function loadClientPlugin(SlotRegistry) {
   let registration
   const window = { __ModuleLoader__: { load(value) { registration = value } } }
@@ -16,6 +18,10 @@ function loadClientPlugin(SlotRegistry) {
 }
 
 describe('DSH legacy theme client adapter', () => {
+  it('exports package metadata for DSH client discovery', () => {
+    assert.equal(packageManifest.exports?.['./package.json'], './package.json')
+  })
+
   it('adds a stable key only to legacy keyed settings cards', () => {
     class SlotRegistry {
       register(options) { return options }

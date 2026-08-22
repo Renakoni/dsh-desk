@@ -6,7 +6,8 @@
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./client": "./src/client.js"
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "src",
