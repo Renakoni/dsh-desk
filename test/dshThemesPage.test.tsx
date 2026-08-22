@@ -125,6 +125,67 @@ describe("DshThemesPage", () => {
     expect(api.setDshThemeOverride).toHaveBeenCalledWith({ mode: "temporary", themeId: "ocean.theme" });
   });
 
+  it("keeps activation pending until the authoritative theme state is refreshed", async () => {
+    const initial = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
+      { skinId: "paper.theme", installation: "installed", activation: "inactive", installedVersion: "2.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const final = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
+      { skinId: "paper.theme", installation: "installed", activation: "inactive", installedVersion: "2.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const api = renderPage(initial);
+    let finishOverride!: (value: { ok: boolean }) => void;
+    api.mutateDshSkin.mockResolvedValueOnce({
+      ok: true,
+      snapshot: snapshot({ skins: [
+        { skinId: "ocean.theme", installation: "installed", activation: "restart-required", installedVersion: "1.0.0", installedAt: null, updateAvailable: false },
+        { skinId: "paper.theme", installation: "installed", activation: "inactive", installedVersion: "2.0.0", installedAt: null, updateAvailable: false }
+      ] })
+    });
+    api.setDshThemeOverride.mockImplementationOnce(() => new Promise(resolve => { finishOverride = resolve; }));
+    api.getDshSkinMarketplace.mockResolvedValueOnce(final);
+
+    await screen.findByText("海洋主题");
+    fireEvent.click(within(screen.getByText("海洋主题").closest("article")!).getByRole("button", { name: "使用" }));
+
+    await waitFor(() => expect(api.setDshThemeOverride).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "启用中…" })).toHaveProperty("disabled", true);
+    expect(within(screen.getByText("纸张主题").closest("article")!).getByRole("button", { name: "使用" })).toHaveProperty("disabled", true);
+    expect(document.querySelector(".dsh-theme-feedback")?.getAttribute("data-state")).toBe("progress");
+    expect(screen.getByText("正在同步主题状态…")).not.toBeNull();
+    expect(screen.queryByText("activate completed")).toBeNull();
+
+    finishOverride({ ok: true });
+    await waitFor(() => expect(within(screen.getByText("海洋主题").closest("article")!).getByRole("button", { name: "停用" })).not.toBeNull());
+    expect(screen.getByText("主题状态已保存，部分功能可能需要重启 DSH。")).not.toBeNull();
+    expect(document.querySelector(".dsh-theme-feedback")?.getAttribute("data-state")).toBe("notice");
+  });
+
+  it("keeps deactivation pending until the authoritative theme state is refreshed", async () => {
+    const initial = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const final = snapshot({ skins: [
+      { skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }
+    ] });
+    const api = renderPage(initial);
+    let finishOverride!: (value: { ok: boolean }) => void;
+    api.mutateDshSkin.mockResolvedValueOnce({ ok: true, snapshot: final });
+    api.setDshThemeOverride.mockImplementationOnce(() => new Promise(resolve => { finishOverride = resolve; }));
+    api.getDshSkinMarketplace.mockResolvedValueOnce(final);
+
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "停用" }));
+
+    await waitFor(() => expect(api.setDshThemeOverride).toHaveBeenCalled());
+    expect(screen.getByText("使用中")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "停用中…" })).toHaveProperty("disabled", true);
+
+    finishOverride({ ok: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "使用" })).not.toBeNull());
+  });
+
   it("shows the active legacy compatibility adapter above the theme actions", async () => {
     renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "0.9.0", installedAt: null, updateAvailable: false, compatibility: { status: "adapted", code: "legacy-keyed-settings-item" } }] }));
     const card = await screen.findByText("海洋主题");
@@ -205,6 +266,7 @@ describe("DshThemesPage", () => {
     expect(notice?.classList.contains("fading")).toBe(true);
     act(() => vi.advanceTimersByTime(300));
     expect(document.querySelector(".dsh-theme-notice")).toBeNull();
+    expect(document.querySelector(".dsh-theme-feedback")?.getAttribute("data-state")).toBe("idle");
     vi.useRealTimers();
   });
 

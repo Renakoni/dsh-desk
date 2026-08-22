@@ -44,6 +44,22 @@
 .dsh-theme-icon-button:hover:not(:disabled),
 .dsh-theme-repository-button:hover:not(:disabled) { color: var(--settings-ink); border-color: color-mix(in srgb, var(--settings-accent) 42%, var(--settings-line)); background: var(--settings-surface-hover); }
 
+.dsh-theme-feedback {
+  min-width: 0;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  align-items: stretch;
+}
+.dsh-theme-feedback > * {
+  grid-area: 1 / 1;
+  animation: dsh-theme-feedback-enter 180ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes dsh-theme-feedback-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .dsh-theme-notice,
 .dsh-theme-catalog-note {
   min-width: 0;
@@ -59,13 +75,12 @@
   font-size: 12px;
 }
 .dsh-theme-notice span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
-.dsh-theme-notice { opacity: 1; transition: opacity 300ms ease; }
-.dsh-theme-notice.fading { opacity: 0; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .dsh-theme-notice { transition: none; } }
-.dsh-theme-notice button { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border-radius: 5px; color: var(--settings-muted); transition: color 150ms ease, background-color 150ms ease, transform 120ms ease; }
+.dsh-theme-notice { opacity: 1; transition: opacity 220ms cubic-bezier(.16, 1, .3, 1), transform 220ms cubic-bezier(.16, 1, .3, 1); }
+.dsh-theme-notice.fading { opacity: 0; transform: translateY(-3px); pointer-events: none; }
+.dsh-theme-notice button { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; appearance: none; border: 1px solid transparent; border-radius: 5px; color: var(--settings-muted); background: transparent; box-shadow: none; transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 120ms ease; }
 .dsh-theme-notice button:hover { color: var(--settings-ink); background: var(--settings-surface-hover); }
 .dsh-theme-notice button:active { transform: translateY(1px); }
-.dsh-theme-operation-progress { min-width: 0; display: grid; gap: 6px; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--settings-accent) 35%, var(--settings-line)); border-radius: 7px; color: var(--settings-muted); background: var(--theme-surface); font-size: 12px; }
+.dsh-theme-operation-progress { min-width: 0; min-height: 44px; display: grid; gap: 6px; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--settings-accent) 35%, var(--settings-line)); border-radius: 7px; color: var(--settings-muted); background: var(--theme-surface); font-size: 12px; }
 .dsh-theme-operation-progress-label { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dsh-theme-operation-progress-label span { min-width: 0; overflow-wrap: anywhere; }
 .dsh-theme-operation-progress-label strong { flex: 0 0 auto; color: var(--settings-ink); font-variant-numeric: tabular-nums; font-size: 11px; }
@@ -116,6 +131,7 @@
 .dsh-theme-library-actions button:focus-visible,
 .dsh-theme-market-card-footer button:focus-visible,
 .dsh-theme-dialog-actions button:focus-visible,
+.dsh-theme-notice button:focus-visible,
 .dsh-theme-sort button:focus-visible,
 .dsh-theme-load-more:focus-visible,
 .dsh-theme-dialog-media > button:focus-visible,
@@ -290,6 +306,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dsh-theme-feedback > * { animation: none; }
+  .dsh-theme-notice { transition: none; }
   .dsh-theme-icon-button,
   .dsh-theme-repository-button,
   .dsh-theme-primary-button,
