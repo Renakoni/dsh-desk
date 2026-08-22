@@ -1,8 +1,10 @@
 // @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Bot, Palette } from "lucide-react";
+import type { DshSkinMarketplaceSnapshot, DshSkinOperationProgress } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
 import { DshThemesPage } from "../themes/DshThemesPage";
+import type { DshThemeOperationNotice } from "../themes/DshThemeMarketPanel";
 import { PetThemeGrid } from "../../features/settings/PetThemeGrid";
 
 type DshAppearancePageProps = {
@@ -17,6 +19,97 @@ type DshAppearancePageProps = {
 export function DshAppearancePage({ active, settings, updateSettings, petPacks = [], refreshPetPacks }: DshAppearancePageProps) {
   const { t } = useI18n();
   const [subsection, setSubsection] = useState<"themes" | "pet">("themes");
+  const [themeOperationKey, setThemeOperationKeyState] = useState<string | null>(null);
+  const [themeOperationProgress, setThemeOperationProgressState] = useState<DshSkinOperationProgress | null>(null);
+  const [themeSnapshot, setThemeSnapshot] = useState<DshSkinMarketplaceSnapshot | null>(null);
+  const [themeSnapshotGeneration, setThemeSnapshotGeneration] = useState(0);
+  const [themeNotice, setThemeNotice] = useState<DshThemeOperationNotice | null>(null);
+  const [themeNoticeFading, setThemeNoticeFading] = useState(false);
+  const themeOperationKeyRef = useRef<string | null>(null);
+  const themeOperationProgressRef = useRef<DshSkinOperationProgress | null>(null);
+  const themeSnapshotGenerationRef = useRef(0);
+  const themeSnapshotRefreshRef = useRef(0);
+
+  function setThemeOperationKey(key: string | null) {
+    const previous = themeOperationKeyRef.current;
+    if (key !== null) {
+      if (previous === null) {
+        themeSnapshotGenerationRef.current += 1;
+        setThemeSnapshotGeneration(themeSnapshotGenerationRef.current);
+      }
+      themeOperationKeyRef.current = key;
+      setThemeOperationKeyState(key);
+      return;
+    }
+    if (previous !== null) void finishThemeOperation(previous);
+  }
+
+  async function finishThemeOperation(operationKey: string) {
+    const progress = themeOperationProgressRef.current;
+    if (progress) setThemeOperationProgress({ ...progress, phase: "done", progress: 100 });
+    const snapshot = await refreshThemeSnapshot();
+    if (themeOperationKeyRef.current !== operationKey) return;
+    themeOperationKeyRef.current = null;
+    setThemeOperationKeyState(null);
+    setThemeOperationProgress(snapshot?.host.operation ?? null);
+  }
+
+  function setThemeOperationProgress(progress: DshSkinOperationProgress | null) {
+    if (progress === null && themeOperationKeyRef.current !== null) return;
+    themeOperationProgressRef.current = progress;
+    setThemeOperationProgressState(progress);
+  }
+
+  function handleThemeSnapshotChange(next: DshSkinMarketplaceSnapshot, generation?: number) {
+    if (themeOperationKeyRef.current !== null) return;
+    if (generation !== undefined && generation !== themeSnapshotGenerationRef.current) return;
+    setThemeSnapshot(next);
+  }
+
+  async function refreshThemeSnapshot() {
+    const requestId = ++themeSnapshotRefreshRef.current;
+    try {
+      const next = await window.companion.getDshSkinMarketplace();
+      if (requestId !== themeSnapshotRefreshRef.current) return null;
+      setThemeSnapshot(next);
+      if (next.host.operation) setThemeOperationProgress(next.host.operation);
+      return next;
+    } catch (error) {
+      if (requestId !== themeSnapshotRefreshRef.current) return null;
+      setThemeNotice(current => current?.persistent
+        ? current
+        : { message: error instanceof Error ? error.message : String(error), persistent: true });
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    const subscribe = window.companion.onDshSkinProgress;
+    if (!subscribe) return undefined;
+    return subscribe(progress => {
+      // The host emits null before the temporary override finishes. Keep the
+      // visible progress rail until the operation releases its shared lock.
+      if (progress === null && themeOperationKeyRef.current !== null) return;
+      setThemeOperationProgress(progress);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!themeNotice || themeNotice.persistent) {
+      setThemeNoticeFading(false);
+      return undefined;
+    }
+    setThemeNoticeFading(false);
+    const fadeTimer = window.setTimeout(() => setThemeNoticeFading(true), 9_700);
+    const clearTimer = window.setTimeout(() => {
+      setThemeNotice(null);
+      setThemeNoticeFading(false);
+    }, 10_000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [themeNotice]);
 
   useEffect(() => {
     if (!active) setSubsection("themes");
@@ -56,7 +149,19 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
 
       <div className="appearance-page-content">
         {subsection === "themes" ? (
-          <DshThemesPage active={active && subsection === "themes"} />
+          <DshThemesPage
+            active={active && subsection === "themes"}
+            snapshot={themeSnapshot}
+            snapshotGeneration={themeSnapshotGeneration}
+            onSnapshotChange={handleThemeSnapshotChange}
+            operationKey={themeOperationKey}
+            operationProgress={themeOperationProgress}
+            notice={themeNotice}
+            noticeFading={themeNoticeFading}
+            onBusyChange={setThemeOperationKey}
+            onProgressChange={setThemeOperationProgress}
+            onNoticeChange={setThemeNotice}
+          />
         ) : (
           <section className="appearance-pet-library settings-page" aria-label={t("appearance.desktopPet", "桌宠")} tabIndex={0}>
             <header className="appearance-library-header">
