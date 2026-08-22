@@ -33,6 +33,7 @@ describe("bundled pet packs", () => {
     expect(packs.find(pack => pack.id === "yuexinmiao")?.animations.map(animation => animation.frameCount))
       .toEqual([6, 8, 8, 4, 5, 8, 6, 6, 6]);
     expect(packs.find(pack => pack.id === "maid-deepseek-whale")?.look).toBeDefined();
+    expect(packs.find(pack => pack.id === "maid-deepseek-whale")?.displayOffset).toEqual({ x: 9, y: 0 });
   });
 
   it("does not restore a bundled pet deleted after seeding", () => {
@@ -53,7 +54,7 @@ describe("bundled pet packs", () => {
     legacy.animations = legacy.animations.map((animation: Record<string, unknown>) => ({ ...animation, frameCount: 8 }));
     writeFileSync(manifestPath, JSON.stringify(legacy, null, 2));
     writeFileSync(join(userData, "bundled-pets-v1.seeded"), "bundled-pets-v1\n");
-    unlinkSync(join(userData, "bundled-pets-v2.seeded"));
+    unlinkSync(join(userData, "bundled-pets-v3.seeded"));
 
     seedBundledPetPacks(userData, bundled);
 
@@ -71,12 +72,48 @@ describe("bundled pet packs", () => {
     writeFileSync(manifestPath, JSON.stringify(legacy, null, 2));
     writeFileSync(join(petDir, "spritesheet.webp"), "user replacement");
     writeFileSync(join(userData, "bundled-pets-v1.seeded"), "bundled-pets-v1\n");
-    unlinkSync(join(userData, "bundled-pets-v2.seeded"));
+    unlinkSync(join(userData, "bundled-pets-v3.seeded"));
 
     seedBundledPetPacks(userData, bundled);
 
     const untouched = listPetPacks(join(userData, "pets")).find(pack => pack.id === "yuexinmiao");
     expect(untouched?.animations.every(animation => animation.frameCount === 8)).toBe(true);
+    expect(readFileSync(join(petDir, "spritesheet.webp"), "utf8")).toBe("user replacement");
+  });
+
+  it("adds visual alignment only to an unchanged v2 bundled pack", () => {
+    const { userData, bundled } = fixture();
+    seedBundledPetPacks(userData, bundled);
+    const petDir = join(userData, "pets", "maid-deepseek-whale");
+    const manifestPath = join(petDir, "pack.manifest.json");
+    const previous = JSON.parse(readFileSync(manifestPath, "utf8"));
+    delete previous.displayOffset;
+    writeFileSync(manifestPath, JSON.stringify(previous, null, 2));
+    writeFileSync(join(userData, "bundled-pets-v2.seeded"), "bundled-pets-v2\n");
+    unlinkSync(join(userData, "bundled-pets-v3.seeded"));
+
+    seedBundledPetPacks(userData, bundled);
+
+    expect(listPetPacks(join(userData, "pets")).find(pack => pack.id === "maid-deepseek-whale")?.displayOffset)
+      .toEqual({ x: 9, y: 0 });
+  });
+
+  it("does not add visual alignment after the v2 bundled sheet was replaced", () => {
+    const { userData, bundled } = fixture();
+    seedBundledPetPacks(userData, bundled);
+    const petDir = join(userData, "pets", "maid-deepseek-whale");
+    const manifestPath = join(petDir, "pack.manifest.json");
+    const previous = JSON.parse(readFileSync(manifestPath, "utf8"));
+    delete previous.displayOffset;
+    writeFileSync(manifestPath, JSON.stringify(previous, null, 2));
+    writeFileSync(join(petDir, "spritesheet.webp"), "user replacement");
+    writeFileSync(join(userData, "bundled-pets-v2.seeded"), "bundled-pets-v2\n");
+    unlinkSync(join(userData, "bundled-pets-v3.seeded"));
+
+    seedBundledPetPacks(userData, bundled);
+
+    expect(listPetPacks(join(userData, "pets")).find(pack => pack.id === "maid-deepseek-whale")?.displayOffset)
+      .toBeUndefined();
     expect(readFileSync(join(petDir, "spritesheet.webp"), "utf8")).toBe("user replacement");
   });
 });

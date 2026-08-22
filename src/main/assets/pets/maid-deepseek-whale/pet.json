@@ -4,5 +4,6 @@
   "description": "A tiny chibi blue-haired whale maid Codex pet with a navy dress, white frills, blue eyes, side fins, and a whale tail.",
   "spritesheetPath": "spritesheet.webp",
   "spriteVersionNumber": 2,
+  "displayOffset": { "x": 9, "y": 0 },
   "kind": "object"
 }

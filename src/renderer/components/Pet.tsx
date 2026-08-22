@@ -52,6 +52,9 @@ export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, d
   const dragOverride = dragAnimation && spritesheet?.animations[dragAnimation] ? dragAnimation : null;
   const animationKey = dragOverride ?? resolved.animationKey;
   const imageKey = dragOverride ?? resolved.imageKey;
+  const displayTranslate = spritesheet?.displayOffset
+    ? `${spritesheet.displayOffset.x}px ${spritesheet.displayOffset.y}px`
+    : undefined;
 
   const lookFrame = state === "idle" && !dragOverride && !previewAnimation && spritesheet?.look
     ? lookFrameForTarget(lookTarget, spritesheet.look.startRow, spritesheet.look.columns, spritesheet.look.neutralFrame)
@@ -59,7 +62,7 @@ export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, d
   if (spritesheet && lookFrame) {
     const height = displayedSpriteHeight(spritesheet.cellWidth, spritesheet.cellHeight, PET_IMAGE_SIZE);
     return (
-      <div className={`pet pet-${state}`} style={{ transform: `scale(${scale})`, opacity, height }}>
+      <div className={`pet pet-${state}`} style={{ transform: `scale(${scale})`, opacity, height, translate: displayTranslate }}>
         <SpritesheetSprite
           sheetUrl={spritesheet.sheetUrl}
           columns={spritesheet.columns}
@@ -83,7 +86,7 @@ export function Pet({ state, stateAnimations, idleAnimation, previewAnimation, d
     // aspect ratio (codex-pet cells are taller than square).
     const height = displayedSpriteHeight(spritesheet.cellWidth, spritesheet.cellHeight, PET_IMAGE_SIZE);
     return (
-      <div className={`pet pet-${state}`} style={{ transform: `scale(${scale})`, opacity, height }}>
+      <div className={`pet pet-${state}`} style={{ transform: `scale(${scale})`, opacity, height, translate: displayTranslate }}>
         <SpritesheetSprite
           key={imageKey}
           sheetUrl={spritesheet.sheetUrl}

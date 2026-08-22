@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { PetEvent, PetState } from "../../shared/events";
-import { actionForTool, toolLabel } from "./toolPresentation";
+import { isSessionStartEvent, PetEvent, PetState } from "../../shared/events";
+import { actionForTool, parseMcpTool, toolLabel } from "./toolPresentation";
 
 interface PanelProps {
   state: PetState;
@@ -8,6 +8,7 @@ interface PanelProps {
   /** Status-feedback size (feedbackScale) and opacity (feedbackOpacity). */
   scale?: number;
   opacity?: number;
+  exiting?: boolean;
 }
 
 const stateLabels: Record<PetState, string> = {
@@ -18,33 +19,35 @@ const stateLabels: Record<PetState, string> = {
   error: "Error"
 };
 
-export function Panel({ state, event, scale = 1, opacity = 1 }: PanelProps) {
+export function Panel({ state, event, scale = 1, opacity = 1, exiting = false }: PanelProps) {
   const tool = event?.tool;
   const detail = event?.detail?.trim();
   const isError = state === "error";
+  const isConnected = event ? isSessionStartEvent(event) : false;
   const detailIsProse = !isError
-    && tool?.toLowerCase().replace(/[^a-z0-9]+/g, "") === "askuserquestion";
+    && (tool?.toLowerCase().replace(/[^a-z0-9]+/g, "") === "askuserquestion" || parseMcpTool(tool) !== null);
   const notificationKind = event?.notificationKind;
-  const eyebrow = notificationKind === "attention"
+  const eyebrow = isConnected ? "Connected" : notificationKind === "attention"
     ? "Attention"
     : notificationKind === "info" ? "Notice" : stateLabels[state];
 
   // Errors keep their explicit failure title (e.g. "Tool failed") and reason
   // instead of the generic action — the failure text is the point. Normal tool
   // activity leads with the action ("Read a file") plus the tool chip.
-  const headline = !isError && tool
+  const headline = isConnected ? "DeepSeek Harness" : !isError && tool
     ? actionForTool(tool)
-    : (event?.title ?? (isError ? "Something went wrong" : "DSH Desk is ready"));
+    : (event?.title ?? (isError ? "Something went wrong" : "DSH Desk"));
 
   // Prose note: the message for errors and non-tool events (deduped against the
   // headline). Normal tool events show their target on the mono path line.
   const message = event?.message?.trim();
-  const note = (isError || !tool) && message && message !== headline ? message : undefined;
+  const isRedundantCompletionMessage = state === "completed" && message === "Task finished";
+  const note = !isConnected && !isRedundantCompletionMessage && (isError || !tool) && message && message !== headline ? message : undefined;
 
   return (
     <section
-      className={`pet-bubble panel state-${state}${notificationKind ? ` notification-${notificationKind}` : ""}`}
-      style={{ "--bubble-scale": scale, opacity } as CSSProperties}
+      className={`pet-bubble panel state-${state}${notificationKind ? ` notification-${notificationKind}` : ""}${exiting ? " panel-exiting" : ""}`}
+      style={{ "--bubble-scale": scale, "--bubble-opacity": opacity } as CSSProperties}
       aria-label="Pet status"
     >
       <div className="bubble-eyebrow">
@@ -58,7 +61,7 @@ export function Panel({ state, event, scale = 1, opacity = 1 }: PanelProps) {
       </div>
 
       {!isError && tool && detail && !detailIsProse ? <div className="panel-path" title={detail}><bdi>{detail}</bdi></div> : null}
-      {detailIsProse && detail ? <p className="panel-note" title={detail}>{detail}</p> : null}
+      {detailIsProse && detail ? <p className="panel-note panel-note-prose" title={detail}>{detail}</p> : null}
       {note ? <p className="panel-note" title={note}>{note}</p> : null}
     </section>
   );

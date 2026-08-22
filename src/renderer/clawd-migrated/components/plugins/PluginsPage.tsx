@@ -46,6 +46,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
   const triggerRef = useRef<HTMLButtonElement>(null);
   const newTriggerRef = useRef<HTMLButtonElement>(null);
   const busyRef = useRef<BusyAction>(null);
+  const editorRef = useRef<EditorState | null>(null);
 
   const refresh = useCallback(async () => {
     setBusyAction("refresh");
@@ -55,12 +56,21 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     finally { setLoading(false); setBusyAction(null); }
   }, [t]);
 
+  function updateEditor(next: EditorState | null) {
+    editorRef.current = next;
+    setEditor(next);
+  }
+
   useEffect(() => { busyRef.current = busyAction; }, [busyAction]);
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => window.companion.onDshResourcesUpdated(() => { if (active && busyRef.current === null) void refresh(); }), [active, refresh]);
+  useEffect(() => window.companion.onDshResourcesUpdated(() => {
+    if (active && busyRef.current === null && editorRef.current === null) void refresh();
+  }), [active, refresh]);
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => { if (busyRef.current === null) void refresh(); }, 30_000);
+    const timer = window.setInterval(() => {
+      if (busyRef.current === null && editorRef.current === null) void refresh();
+    }, 30_000);
     return () => window.clearInterval(timer);
   }, [active, refresh]);
   useEffect(() => {
@@ -77,7 +87,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     setSchemeQuery("");
     setSchemeMenuOpen(false);
     setNewMenuOpen(false);
-    setEditor(null);
+    updateEditor(null);
     setDeleteConfirm(false);
     setMarketOpen(false);
     setActionError(null);
@@ -118,13 +128,13 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
   function startEdit(scheme: DshResourceScheme) {
     setActionError(null);
-    setEditor({ key: `edit:${scheme.id}:${scheme.updatedAt}`, initial: schemeInput(scheme, t), protectedScheme: scheme.isProtected });
+    updateEditor({ key: `edit:${scheme.id}:${scheme.updatedAt}`, initial: schemeInput(scheme, t), protectedScheme: scheme.isProtected });
   }
 
   function startCreate(copyCurrent: boolean) {
     const source = copyCurrent ? selectedScheme : undefined;
     setNewMenuOpen(false);
-    setEditor({
+    updateEditor({
       key: `create:${source?.id ?? "empty"}:${Date.now()}`,
       initial: {
         name: source ? nextCopyName(schemeDisplayName(source, t), snapshot.schemes, t) : "",
@@ -143,7 +153,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     const result = await window.companion.saveDshResourceScheme(input).catch(() => null);
     setBusyAction(null);
     if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.saveSchemeFailed", "Couldn't save the scheme."); setActionError(message); toast.error(message); return; }
-    setSnapshot(result.snapshot); setEditor(null);
+    setSnapshot(result.snapshot); updateEditor(null);
     const saved = result.snapshot.schemes.find(scheme => scheme.id === result.schemeId);
     await switchScheme(result.schemeId, saved ? schemeDisplayName(saved, t) : input.name);
   }
@@ -168,7 +178,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     const result = await window.companion.deleteDshResourceScheme(schemeId).catch(() => null);
     setBusyAction(null);
     if (!result?.ok) { const message = result ? issueMessage(result.issues, t) : t("dshResources.deleteSchemeFailed", "Couldn't delete the scheme."); setActionError(message); return; }
-    setSnapshot(result.snapshot); setEditor(null); setSelectedSchemeId(result.snapshot.appliedSchemeId ?? DEFAULT_DSH_SCHEME_ID);
+    setSnapshot(result.snapshot); updateEditor(null); setSelectedSchemeId(result.snapshot.appliedSchemeId ?? DEFAULT_DSH_SCHEME_ID);
   }
 
   async function changeResourceState(resource: DshResourceItem, enabled: boolean) {
@@ -194,7 +204,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
   if (editor) return (
     <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page">
-      <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} knownPluginIds={knownPluginIds} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => setEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
+      <DshSchemeEditor key={editor.key} initial={editor.initial} inventory={snapshot.inventory} knownPluginIds={knownPluginIds} protectedScheme={editor.protectedScheme} canDelete={Boolean(editor.initial.id && !editor.protectedScheme)} busy={busyAction !== null} hideSensitiveContent={hideSensitiveContent} onCancel={() => updateEditor(null)} onSave={input => void saveScheme(input)} onDelete={() => setDeleteConfirm(true)} />
       {deleteConfirm && editorScheme ? <ConfirmDialog title={t("dshResources.deleteSchemeTitle", "Delete scheme?")} cancelLabel={t("common.cancel", "Cancel")} confirmLabel={t("common.delete", "Delete")} danger onCancel={() => setDeleteConfirm(false)} onConfirm={() => void deleteScheme(editorScheme.id)}><p>{t("dshResources.deleteSchemeMessage", "Delete \"{name}\" permanently?", { name: schemeDisplayName(editorScheme, t) })}</p></ConfirmDialog> : null}
     </div>
   );

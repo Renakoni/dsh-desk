@@ -13,6 +13,7 @@ import { defaultSettings } from "../src/renderer/shared/events";
 const EXPECTED_CANONICAL_KEYS = [
   "hideSensitiveContent",
   "showBubbles",
+  "hideIdleStatusCard",
   "editPosition",
   "alwaysOnTop",
   "clickThrough",

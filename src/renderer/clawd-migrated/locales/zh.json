@@ -850,6 +850,7 @@
     "alwaysOnTop": "始终置顶",
     "clickThrough": "完全点击穿透",
     "showBubbles": "显示气泡",
+    "hideIdleStatusCard": "空闲时隐去状态卡片",
     "showStatusProp": "显示状态图标",
     "editPosition": "编辑桌宠位置",
     "resetAll": "重置全部",
