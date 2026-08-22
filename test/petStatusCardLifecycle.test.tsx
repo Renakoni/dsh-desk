@@ -125,6 +125,149 @@ describe("pet status card lifecycle", () => {
     expect(screen.queryByLabelText("Pet status")).toBeNull();
   });
 
+  it.each([3, 4])("keeps the expired idle card hidden after a %d-second info notice", bubbleDuration => {
+    renderPet({ hideIdleStatusCard: true, bubbleDuration });
+    act(() => emitPetEvent?.({
+      id: "session-1",
+      event: "idle",
+      source: "deepseek-harness",
+      hook: "agent/session-start",
+      title: "DSH is online",
+      timestamp: 1
+    }));
+    act(() => vi.advanceTimersByTime(5000));
+
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Profile synchronized",
+      timestamp: 2
+    }));
+    act(() => vi.advanceTimersByTime(bubbleDuration * 1000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+
+    act(() => vi.advanceTimersByTime(5000 - bubbleDuration * 1000 - 220));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+    act(() => vi.advanceTimersByTime(220));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+  });
+
+  it("gives a newer info notice its full duration without replaying idle history", () => {
+    renderPet({ hideIdleStatusCard: true, bubbleDuration: 3 });
+    act(() => emitPetEvent?.({
+      id: "session-1",
+      event: "idle",
+      source: "deepseek-harness",
+      hook: "agent/session-start",
+      title: "DSH is online",
+      timestamp: 1
+    }));
+    act(() => vi.advanceTimersByTime(5000));
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "First notice",
+      timestamp: 2
+    }));
+    act(() => vi.advanceTimersByTime(2000));
+    act(() => emitPetEvent?.({
+      id: "notice-2",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Second notice",
+      timestamp: 3
+    }));
+
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByText("Second notice")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+    act(() => vi.advanceTimersByTime(1780));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+    act(() => vi.advanceTimersByTime(220));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+  });
+
+  it("keeps a real state event that replaces an info notice visible", () => {
+    renderPet({ hideIdleStatusCard: true, bubbleDuration: 3 });
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Profile synchronized",
+      timestamp: 1
+    }));
+    act(() => vi.advanceTimersByTime(1000));
+    act(() => emitPetEvent?.({
+      id: "tool-1",
+      event: "running",
+      source: "deepseek-harness",
+      title: "Reading files",
+      timestamp: 2
+    }));
+
+    act(() => vi.advanceTimersByTime(7000));
+    expect(screen.getByText("Reading files")).toBeTruthy();
+    expect(screen.getByLabelText("Pet status")).toBeTruthy();
+  });
+
+  it("restores the stable idle card after an info notice when idle hiding is off", () => {
+    renderPet({ hideIdleStatusCard: false, bubbleDuration: 3 });
+    act(() => emitPetEvent?.({
+      id: "session-1",
+      event: "idle",
+      source: "deepseek-harness",
+      hook: "agent/session-start",
+      title: "DSH is online",
+      timestamp: 1
+    }));
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Profile synchronized",
+      timestamp: 2
+    }));
+
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.getByText("DeepSeek Harness")).toBeTruthy();
+    expect(screen.getByLabelText("Pet status")).toBeTruthy();
+  });
+
+  it("uses the latest idle-hiding setting when an info notice expires", () => {
+    renderPet({ hideIdleStatusCard: false, bubbleDuration: 3 });
+    act(() => emitPetEvent?.({
+      id: "session-1",
+      event: "idle",
+      source: "deepseek-harness",
+      hook: "agent/session-start",
+      title: "DSH is online",
+      timestamp: 1
+    }));
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Profile synchronized",
+      timestamp: 2
+    }));
+    act(() => vi.advanceTimersByTime(1000));
+    act(() => emitSettings?.({ ...defaultSettings, hideIdleStatusCard: true, bubbleDuration: 3 }));
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+    act(() => vi.advanceTimersByTime(4780));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+  });
+
   it("never expires a pending permission request", () => {
     renderPet({ hideIdleStatusCard: true });
     act(() => emitPermission?.({ id: "permission-1", toolName: "Bash", toolDetail: "npm run build" }));

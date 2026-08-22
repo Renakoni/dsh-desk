@@ -121,7 +121,10 @@ export default function App() {
   const notificationTimer = useRef<number | null>(null);
   const panelFadeTimer = useRef<number | null>(null);
   const panelHideTimer = useRef<number | null>(null);
+  const stateRef = useRef<PetState>("idle");
   const stableEvent = useRef<PetEvent | null>(null);
+  const activeInfoEventId = useRef<string | null>(null);
+  const hideIdleStatusCardRef = useRef(initialSettings.hideIdleStatusCard);
   // "Bubble stay" (bubbleDuration) and sound volume live in refs so the timers
   // and the play-sound handler read the latest value without re-subscribing.
   const bubbleDurationMsRef = useRef(initialSettings.bubbleDurationMs);
@@ -137,40 +140,56 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  function clearPanelTimers() {
+    if (panelFadeTimer.current) window.clearTimeout(panelFadeTimer.current);
+    if (panelHideTimer.current) window.clearTimeout(panelHideTimer.current);
+    panelFadeTimer.current = null;
+    panelHideTimer.current = null;
+  }
+
   function applyEvent(event: PetEvent) {
     if (notificationTimer.current) {
       window.clearTimeout(notificationTimer.current);
       notificationTimer.current = null;
     }
+    activeInfoEventId.current = null;
 
     if (event.notificationKind === "info") {
-      const previous = stableEvent.current;
+      activeInfoEventId.current = event.id;
       setLastEvent(event);
       setPanelEventVersion(version => version + 1);
       notificationTimer.current = window.setTimeout(() => {
-        setLastEvent(current => current?.id === event.id ? previous : current);
+        if (activeInfoEventId.current !== event.id) return;
+        activeInfoEventId.current = null;
         notificationTimer.current = null;
+        if (hideIdleStatusCardRef.current && stateRef.current === "idle") {
+          clearPanelTimers();
+          setPanelVisibility("hidden");
+        }
+        setLastEvent(current => current?.id === event.id ? stableEvent.current : current);
       }, bubbleDurationMsRef.current);
       return;
     }
 
-    setState(current => {
-      const next = nextPetState(current, event);
-      if (next !== current || event.event === current) {
-        stableEvent.current = event;
-        setLastEvent(event);
-        setPanelEventVersion(version => version + 1);
-      }
-      return next;
-    });
+    const current = stateRef.current;
+    const next = nextPetState(current, event);
+    stateRef.current = next;
+    if (next !== current || event.event === current) {
+      stableEvent.current = event;
+      setLastEvent(event);
+      setPanelEventVersion(version => version + 1);
+    }
+    setState(next);
   }
 
   function applyDebugEvent(event: PetEvent) {
     if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
     notificationTimer.current = null;
+    activeInfoEventId.current = null;
     stableEvent.current = event;
     setLastEvent(event);
     setPanelEventVersion(version => version + 1);
+    stateRef.current = event.event;
     setState(event.event);
   }
 
@@ -188,6 +207,7 @@ export default function App() {
       soundVolumeRef.current = next.soundVolume;
       setHideSensitiveContent(next.hideSensitiveContent);
       setShowBubbles(next.showBubbles);
+      hideIdleStatusCardRef.current = next.hideIdleStatusCard;
       setHideIdleStatusCard(next.hideIdleStatusCard);
       setStateAnimations(next.stateAnimations);
       // Settings broadcasts always deliver a fresh object; keep the previous
@@ -271,6 +291,7 @@ export default function App() {
 
     if (state === "completed") {
       resetTimer.current = window.setTimeout(() => {
+        stateRef.current = "idle";
         setState("idle");
         stableEvent.current = null;
         setLastEvent(null);
@@ -283,13 +304,6 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    const clearPanelTimers = () => {
-      if (panelFadeTimer.current) window.clearTimeout(panelFadeTimer.current);
-      if (panelHideTimer.current) window.clearTimeout(panelHideTimer.current);
-      panelFadeTimer.current = null;
-      panelHideTimer.current = null;
-    };
-
     clearPanelTimers();
     if (!showBubbles) {
       setPanelVisibility("hidden");
