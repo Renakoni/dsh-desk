@@ -50,6 +50,47 @@ function packageManifest(profileDir, packageName) {
   return existsSync(file) ? objectValue(jsonFile(file, null)) : null
 }
 
+const AQUA_PACKAGE_NAME = '@deepseek-ai/dsh-client-ui-aqua'
+const STALE_AQUA_SPEC = /^github:Renakoni\/DSH-Transparent-UI-Plugin#816bd68[0-9a-f]*$/i
+
+function isStaleAquaSpec(value) {
+  return typeof value === 'string' && STALE_AQUA_SPEC.test(value.trim())
+}
+
+const STALE_DEPENDENCY_RULES = new Map([[AQUA_PACKAGE_NAME, isStaleAquaSpec]])
+
+function pendingThemeDependencyRepairs(profileDir, catalog) {
+  if (!Array.isArray(catalog)) return null
+  const manifest = profileManifest(profileDir)
+  const installed = objectValue(manifest.dependencies) ?? {}
+  const replacements = new Map()
+  for (const [packageName, isStale] of STALE_DEPENDENCY_RULES) {
+    const skin = catalog.find(item => item && item.packageName === packageName)
+    const target = skin?.install?.target
+    if (typeof target !== 'string' || target === '' || isStale(target)) continue
+    if (isStale(installed[packageName])) replacements.set(packageName, target)
+  }
+  return replacements.size > 0 ? { manifest, replacements } : null
+}
+
+/**
+ * Repair known historical catalog targets that no longer exist.
+ *
+ * The repair is deliberately exact: package.json is user-owned, so a custom
+ * Aqua fork or any other git dependency must remain untouched. The current
+ * target comes from the freshly fetched catalog and is then resolved by the
+ * normal `dsh plugin add` command, which also refreshes the lockfile.
+ */
+export function repairKnownThemeDependencies(profileDir, catalog) {
+  const repair = pendingThemeDependencyRepairs(profileDir, catalog)
+  if (!repair) return false
+  atomicJson(join(profileDir, 'package.json'), {
+    ...repair.manifest,
+    dependencies: { ...objectValue(repair.manifest.dependencies), ...Object.fromEntries(repair.replacements) },
+  })
+  return true
+}
+
 function validThemePackage(profileDir, packageName) {
   if (!Object.hasOwn(dependencies(profileDir), packageName)) return false
   const manifest = packageManifest(profileDir, packageName)
@@ -152,6 +193,12 @@ export function allowGitHostedBuild(profileDir, packageName) {
   }
 }
 
+const PROFILE_CLEANUP_COMMANDS = new Set(['add', 'install', 'remove', 'update'])
+
+function mutatesProfile(args) {
+  return args.some(argument => PROFILE_CLEANUP_COMMANDS.has(argument))
+}
+
 function snapshotFile(file) {
   if (!existsSync(file)) return { exists: false, content: null }
   return { exists: true, content: readFileSync(file) }
@@ -166,26 +213,38 @@ function restoreFile(file, snapshot) {
   }
 }
 
-function createActiveThemeUpdateRollback(profileDir, packageName) {
-  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'dsh-theme-update-rollback-'))
-  const packagePath = packageDir(profileDir, packageName)
-  const packageBackup = join(temporaryDirectory, 'package')
-  const packageExists = existsSync(packagePath)
-  if (packageExists) cpSync(packagePath, packageBackup, { recursive: true, force: true, verbatimSymlinks: true })
+function createProfileRollback(profileDir, packageNames) {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'dsh-theme-profile-rollback-'))
+  const packages = new Map([...new Set(packageNames)].map(packageName => {
+    const path = packageDir(profileDir, packageName)
+    const backup = join(temporaryDirectory, 'packages', ...packageName.split('/'))
+    const exists = existsSync(path)
+    if (exists) {
+      mkdirSync(dirname(backup), { recursive: true })
+      cpSync(path, backup, { recursive: true, force: true, verbatimSymlinks: true })
+    }
+    return [path, { backup, exists }]
+  }))
   const files = new Map(ROLLBACK_FILES.map(relative => [relative, snapshotFile(join(profileDir, relative))]))
   return {
     restore() {
       for (const [relative, snapshot] of files) restoreFile(join(profileDir, relative), snapshot)
-      if (packageExists) {
-        rmSync(packagePath, { recursive: true, force: true })
-        mkdirSync(dirname(packagePath), { recursive: true })
-        cpSync(packageBackup, packagePath, { recursive: true, force: true, verbatimSymlinks: true })
-      } else if (existsSync(packagePath)) {
-        rmSync(packagePath, { recursive: true, force: true })
+      for (const [packagePath, snapshot] of packages) {
+        if (snapshot.exists) {
+          rmSync(packagePath, { recursive: true, force: true })
+          mkdirSync(dirname(packagePath), { recursive: true })
+          cpSync(snapshot.backup, packagePath, { recursive: true, force: true, verbatimSymlinks: true })
+        } else if (existsSync(packagePath)) {
+          rmSync(packagePath, { recursive: true, force: true })
+        }
       }
     },
     cleanup() { rmSync(temporaryDirectory, { recursive: true, force: true }) },
   }
+}
+
+function createActiveThemeUpdateRollback(profileDir, packageName) {
+  return createProfileRollback(profileDir, [packageName])
 }
 
 /**
@@ -419,11 +478,20 @@ function spawnPlugin(profile, args, onProgress) {
 }
 
 export function runPlugin(profile, args, onProgress, profileDir) {
-  return spawnPlugin(profile, args, onProgress).then(result => {
-    if (result.exitCode === 0 || !profileDir || !gitHostedAdd(args)) return result
-    const packageName = blockedBuildPackage(`${result.stderr}\n${result.stdout}`)
-    if (!packageName || !allowGitHostedBuild(profileDir, packageName)) return result
-    return spawnPlugin(profile, args, onProgress)
+  return spawnPlugin(profile, args, onProgress).then(async result => {
+    if (result.exitCode !== 0 && profileDir && gitHostedAdd(args)) {
+      const packageName = blockedBuildPackage(`${result.stderr}\n${result.stdout}`)
+      if (packageName && allowGitHostedBuild(profileDir, packageName)) {
+        result = await spawnPlugin(profile, args, onProgress)
+      }
+    }
+    if (profileDir && result.exitCode === 0 && mutatesProfile(args)) {
+      // Keep pnpm-managed node_modules aligned with the manifest after a
+      // successful mutation. This only removes extraneous materialized
+      // packages; it never edits dependencies or the pnpm store.
+      await spawnPlugin(profile, ['prune', '--ignore-scripts'])
+    }
+    return result
   })
 }
 
@@ -518,8 +586,12 @@ class AppearanceManager {
       const legacyState = jsonFile(join(this.profileDir, '.dsh-skin-market', 'state.json'), {})
       const existing = stored.skins[skin.id] ?? { active: legacyState?.activeSkinId === skin.id }
       if (operation.kind === 'install' || operation.kind === 'update') {
-        if (operation.kind === 'update' && existing.active === true) rollback = createActiveThemeUpdateRollback(this.profileDir, skin.packageName)
-        if (operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName)) {
+        const pendingRepairs = pendingThemeDependencyRepairs(this.profileDir, catalog)
+        const needsInstall = operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName) || pendingRepairs !== null
+        if (needsInstall) {
+          if (pendingRepairs) rollback = createProfileRollback(this.profileDir, [skin.packageName, ...pendingRepairs.replacements.keys()])
+          repairKnownThemeDependencies(this.profileDir, catalog)
+          if (operation.kind === 'update' && existing.active === true && !rollback) rollback = createActiveThemeUpdateRollback(this.profileDir, skin.packageName)
           operation.phase = 'downloading'
           const result = await this.pluginRunner(this.profile, ['add', skin.install.target], progress => {
             operation.progress = typeof progress?.progress === 'number' && Number.isFinite(progress.progress)
@@ -575,7 +647,10 @@ class AppearanceManager {
         operation.phase = 'uninstalling'
         await disableLoaderEntries(this.loader, skin)
         if (Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
-          const result = await this.pluginRunner(this.profile, ['remove', skin.packageName])
+          const pendingRepairs = pendingThemeDependencyRepairs(this.profileDir, catalog)
+          if (pendingRepairs) rollback = createProfileRollback(this.profileDir, [skin.packageName, ...pendingRepairs.replacements.keys()])
+          repairKnownThemeDependencies(this.profileDir, catalog)
+          const result = await this.pluginRunner(this.profile, ['remove', skin.packageName], undefined, this.profileDir)
           if (result.exitCode !== 0) throw new Error(commandError(result))
         }
         removeRegistration(this.profileDir, skin)

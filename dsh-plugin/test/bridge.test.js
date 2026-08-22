@@ -24,6 +24,7 @@ import {
   detectThemeCompatibility,
   loaderInventory,
   mountAppearanceManager,
+  repairKnownThemeDependencies,
   runPlugin,
   runtimeEntryOwners,
 } from '../src/index.js'
@@ -356,6 +357,178 @@ describe('DSH Loader inventory bridge', () => {
     } finally {
       process.argv[1] = previousEntry
       process.execArgv = previousExecArgv
+    }
+  })
+
+  it('prunes extraneous profile packages after a successful mutation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-profile-prune-'))
+    temporaryDirectories.add(root)
+    const log = join(root, 'commands.log')
+    const fakeBin = join(root, 'bin.js')
+    writeFileSync(fakeBin, [
+      "const fs = require('node:fs')",
+      `const log = ${JSON.stringify(log)}`,
+      "fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n')",
+    ].join('\n'))
+    const previousEntry = process.argv[1]
+    const previousExecArgv = process.execArgv
+    process.argv[1] = fakeBin
+    process.execArgv = []
+    try {
+      const result = await runPlugin('web', ['add', 'github:demo/theme#commit'], undefined, root)
+      assert.equal(result.exitCode, 0)
+      const commands = readFileSync(log, 'utf8').trim().split(/\r?\n/)
+      assert.equal(commands.length, 2)
+      assert.match(commands[0], /plugin --profile web add github:demo\/theme#commit/)
+      assert.match(commands[1], /plugin --profile web prune --ignore-scripts/)
+    } finally {
+      process.argv[1] = previousEntry
+      process.execArgv = previousExecArgv
+    }
+  })
+
+  it('does not turn a successful mutation into a failure when pruning fails', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-profile-prune-failure-'))
+    temporaryDirectories.add(root)
+    const fakeBin = join(root, 'bin.js')
+    writeFileSync(fakeBin, [
+      "const fs = require('node:fs')",
+      "if (process.argv.includes('prune')) process.exit(7)",
+    ].join('\n'))
+    const previousEntry = process.argv[1]
+    const previousExecArgv = process.execArgv
+    process.argv[1] = fakeBin
+    process.execArgv = []
+    try {
+      const result = await runPlugin('web', ['add', 'github:demo/theme#commit'], undefined, root)
+      assert.equal(result.exitCode, 0)
+    } finally {
+      process.argv[1] = previousEntry
+      process.execArgv = previousExecArgv
+    }
+  })
+
+  it('repairs only the known stale Aqua fork dependency from the current catalog', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-aqua-repair-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(profile, { recursive: true })
+    const stale = 'github:Renakoni/DSH-Transparent-UI-Plugin#816bd68'
+    const current = 'github:WYH66666666/DSH-Transparent-UI-Plugin#57f3ce213c5246ff4d61f16425c61d3975d772f8'
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+      '@deepseek-ai/dsh-client-ui-aqua': stale,
+      'user-plugin': 'github:user/plugin#custom',
+    } }))
+    const catalog = [{ packageName: '@deepseek-ai/dsh-client-ui-aqua', install: { target: current } }]
+    assert.equal(repairKnownThemeDependencies(profile, catalog), true)
+    const repaired = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(repaired.dependencies['@deepseek-ai/dsh-client-ui-aqua'], current)
+    assert.equal(repaired.dependencies['user-plugin'], 'github:user/plugin#custom')
+    assert.equal(repairKnownThemeDependencies(profile, catalog), false)
+  })
+
+  it('repairs a stale Aqua dependency before installing another theme', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-aqua-install-repair-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(profile, { recursive: true })
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    const current = 'github:WYH66666666/DSH-Transparent-UI-Plugin#57f3ce213c5246ff4d61f16425c61d3975d772f8'
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+      '@deepseek-ai/dsh-client-ui-aqua': 'github:Renakoni/DSH-Transparent-UI-Plugin#816bd68',
+    } }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const calls = []
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async (_profile, args) => {
+        calls.push(args)
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const install = routes.find(route => route.path === '/dsh-appearance-manager/install')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(install, { method: 'POST', body: {
+      skin: { id: 'other.skin', packageName: 'other-skin', rowId: 'other-row', install: { target: 'github:demo/other#commit', version: '1.0.0' } },
+      catalog: [
+        { id: 'aqua', packageName: '@deepseek-ai/dsh-client-ui-aqua', install: { target: current } },
+        { id: 'other.skin', packageName: 'other-skin', rowId: 'other-row', install: { target: 'github:demo/other#commit', version: '1.0.0' } },
+      ],
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(calls, [['add', 'github:demo/other#commit']])
+    const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh-client-ui-aqua'], current)
+    dispose()
+  })
+
+  it('rolls back dependency migrations when a theme mutation fails', async () => {
+    const current = 'github:WYH66666666/DSH-Transparent-UI-Plugin#57f3ce213c5246ff4d61f16425c61d3975d772f8'
+    const stale = 'github:Renakoni/DSH-Transparent-UI-Plugin#816bd68'
+    for (const action of ['install', 'update', 'uninstall']) {
+      const root = mkdtempSync(join(tmpdir(), `dsh-theme-migration-rollback-${action}-`))
+      temporaryDirectories.add(root)
+      const profile = join(root, 'web')
+      const aquaDir = join(profile, 'node_modules', '@deepseek-ai', 'dsh-client-ui-aqua')
+      const selectedDir = join(profile, 'node_modules', 'selected-theme')
+      mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+      mkdirSync(join(aquaDir, 'lib'), { recursive: true })
+      if (action !== 'install') mkdirSync(selectedDir, { recursive: true })
+      const oldPackageJson = JSON.stringify({ dependencies: {
+        '@deepseek-ai/dsh-client-ui-aqua': stale,
+        ...(action === 'install' ? {} : { 'selected-theme': 'github:demo/theme#old' }),
+      } })
+      const oldLockfile = 'lockfileVersion: 9\npackages:\n  aqua: 816bd68\n'
+      const oldAquaManifest = JSON.stringify({ name: '@deepseek-ai/dsh-client-ui-aqua', version: '1.3.0' })
+      writeFileSync(join(profile, 'package.json'), oldPackageJson)
+      writeFileSync(join(profile, 'pnpm-lock.yaml'), oldLockfile)
+      writeFileSync(join(aquaDir, 'package.json'), oldAquaManifest)
+      writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+      if (action !== 'install') {
+        writeFileSync(join(selectedDir, 'package.json'), JSON.stringify({ name: 'selected-theme', version: '1.0.0' }))
+        writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({
+          version: 1,
+          skins: { 'selected.skin': { active: action === 'update', packageName: 'selected-theme', themeId: 'selected.skin' } },
+        }))
+      }
+      const routes = []
+      const dispose = mountAppearanceManager({
+        webServer: { register(route) { routes.push(route); return () => undefined } },
+        loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+        runPlugin: async () => {
+          writeFileSync(join(aquaDir, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-client-ui-aqua', version: '2.0.0' }))
+          writeFileSync(join(profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9\npackages:\n  aqua: current\n')
+          return { exitCode: 1, stdout: '', stderr: 'network failure' }
+        },
+      })
+      const route = routes.find(item => item.path === `/dsh-appearance-manager/${action}`)
+      const operations = routes.find(item => item.kind === 'prefix')
+      const started = await invokeRoute(route, { method: 'POST', body: {
+        skin: { id: action === 'install' ? 'new.skin' : 'selected.skin', packageName: action === 'install' ? 'new-theme' : 'selected-theme', rowId: 'selected-row', install: { target: 'github:demo/theme#new', version: '2.0.0' } },
+        catalog: [
+          { id: 'aqua', packageName: '@deepseek-ai/dsh-client-ui-aqua', install: { target: current } },
+          { id: 'selected.skin', packageName: 'selected-theme', rowId: 'selected-row', install: { target: 'github:demo/theme#new', version: '2.0.0' } },
+        ],
+      } })
+      let operation
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+        if (operation.body?.phase === 'failed') break
+        await new Promise(resolve => setImmediate(resolve))
+      }
+      assert.equal(operation.body.phase, 'failed')
+      assert.equal(readFileSync(join(profile, 'package.json'), 'utf8'), oldPackageJson)
+      assert.equal(readFileSync(join(profile, 'pnpm-lock.yaml'), 'utf8'), oldLockfile)
+      assert.equal(readFileSync(join(aquaDir, 'package.json'), 'utf8'), oldAquaManifest)
+      dispose()
     }
   })
 

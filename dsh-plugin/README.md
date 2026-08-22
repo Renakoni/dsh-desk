@@ -41,3 +41,8 @@ Loader modules as separate plugins. Core DeepSeek Harness bundles and the bridge
 itself remain read-only. The inventory is republished after Loader changes and
 periodically so starting DSH Desk after
 Harness does not require a Harness restart.
+
+Theme installs, updates, and removals run `pnpm prune --ignore-scripts` after a
+successful package mutation. This only removes extraneous materialized packages
+from that profile's `node_modules`; it preserves declared dependencies and never
+clears the shared pnpm store.
