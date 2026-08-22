@@ -40,8 +40,8 @@ jobs:
       - name: Run test shard ${{ matrix.shard }}
         run: npm test -- --shard=${{ matrix.shard }}
 
-  quality:
-    name: Quality (Windows, plugin, typecheck, build)
+  plugin-tests:
+    name: DSH plugin tests (Windows)
     runs-on: windows-latest
     steps:
       - name: Check out repository
@@ -53,11 +53,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            package-lock.json
             dsh-plugin/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Install DSH plugin dependencies
         run: npm ci --prefix ./dsh-plugin
@@ -65,8 +61,94 @@ jobs:
       - name: Test DSH plugin
         run: npm test --prefix ./dsh-plugin
 
+  typecheck:
+    name: TypeScript (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Typecheck
         run: npm run typecheck
 
+  build:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Build
         run: npm run build
+
+  repository-hygiene:
+    name: Repository hygiene (diff check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check whitespace errors
+        run: git diff --check HEAD^1 HEAD
+
+  dependency-review:
+    name: Dependency review (PR)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+
+      - name: Skip on push
+        if: github.event_name != 'pull_request'
+        run: echo "Dependency review runs only for pull requests."
+
+  # Keep the branch-protection context used by main while the quality checks
+  # remain split into independently visible jobs above. Hygiene and dependency
+  # review are included here because this is the required branch-protection
+  # context for the repository.
+  quality:
+    name: Quality (Windows, plugin, typecheck, build)
+    if: always()
+    needs: [plugin-tests, typecheck, build, repository-hygiene, dependency-review]
+    runs-on: windows-latest
+    steps:
+      - name: Verify quality jobs
+        shell: pwsh
+        env:
+          PLUGIN_RESULT: ${{ needs.plugin-tests.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          HYGIENE_RESULT: ${{ needs.repository-hygiene.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          $results = @(
+            $env:PLUGIN_RESULT,
+            $env:TYPECHECK_RESULT,
+            $env:BUILD_RESULT,
+            $env:HYGIENE_RESULT,
+            $env:DEPENDENCY_REVIEW_RESULT
+          )
+          if ($results -contains 'failure' -or $results -contains 'cancelled' -or $results -contains 'skipped') {
+            throw "One or more quality jobs did not succeed: $($results -join ', ')"
+          }
