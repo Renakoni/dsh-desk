@@ -11,11 +11,11 @@ import type { PetAnimationKey } from "./petAnimations";
 // any one theme, so this record is partial; catalog-scoped pickers only ever
 // look up keys the built-in theme provides.
 export const petAnimationAssets: Partial<Record<PetAnimationKey, string>> = {
-  idle: idleAnimation,
+  idle: extraActionAquaBocchiAnimation,
   running: runningAnimation,
   waiting_permission: permissionAnimation,
   done: completedAnimation,
   extra_action_7: extraAction7Animation,
   extra_action_8: extraAction8Animation,
-  extra_action_aqua_bocchi: extraActionAquaBocchiAnimation
+  extra_action_aqua_bocchi: idleAnimation
 };

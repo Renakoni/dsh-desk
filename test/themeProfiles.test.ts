@@ -9,6 +9,12 @@ const packs = [makePackManifest()];
 
 const aquaMappings = { running: "extra_action_7" };
 const aquaIdle = { enabled: true, selectedSprites: ["idle", "extra_action_8"], intervalMin: 10, intervalMax: 20 };
+const aquaDefaultIdle = {
+  enabled: true,
+  selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
+  intervalMin: 12,
+  intervalMax: 28
+};
 
 function builtinSettings() {
   return {
@@ -65,12 +71,10 @@ describe("applyThemeAnimationProfileSwitch", () => {
     const settings = { ...builtinSettings(), petTheme: "codex-pet:ghost" };
     const switched = applyThemeAnimationProfileSwitch(settings, BUILTIN, packs);
     expect(switched.stateAnimations).toEqual({});
-    expect(switched.idleAnim).toEqual(DEFAULT_COMPANION_SETTINGS.idleAnim);
-    // Deep copy, never the shared defaults object itself.
-    expect(switched.idleAnim).not.toBe(DEFAULT_COMPANION_SETTINGS.idleAnim);
+    expect(switched.idleAnim).toEqual(aquaDefaultIdle);
   });
 
-  it("activating the built-in for the first time uses the schema default idle config", () => {
+  it("activating the built-in for the first time uses its Aqua idle config", () => {
     const settings = {
       petTheme: BUILTIN,
       stateAnimations: { jumping: "review" },
@@ -79,7 +83,8 @@ describe("applyThemeAnimationProfileSwitch", () => {
     };
     const switched = applyThemeAnimationProfileSwitch(settings, PACK_THEME, packs);
     expect(switched.stateAnimations).toEqual({});
-    expect(switched.idleAnim).toEqual(DEFAULT_COMPANION_SETTINGS.idleAnim);
+    expect(switched.idleAnim).toEqual(aquaDefaultIdle);
+    expect(switched.idleAnim).not.toBe(DEFAULT_COMPANION_SETTINGS.idleAnim);
     expect(switched.themeAnimationProfiles[PACK_THEME]).toEqual({
       stateAnimations: { jumping: "review" },
       idleAnim: { enabled: true, selectedSprites: ["jumping"] }

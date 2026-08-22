@@ -634,11 +634,11 @@ export const defaultSettings: CompanionSettings = {
   openSettingsOnStart: false,
   autoStartWithCli: false,
   autoUpdateEnabled: true,
-  petTheme: "minato-aqua",
+  petTheme: "codex-pet:maid-deepseek-whale",
   removedBuiltinPetThemes: [],
   enabledSources: ["deepseek-harness"],
   notificationsEnabled: true,
-  theme: "system",
+  theme: "dark",
   uiStyle: "classic",
   language: "auto",
   displayCurrency: "CNY",
@@ -668,7 +668,7 @@ export const defaultSettings: CompanionSettings = {
   },
   idleAnim: {
     enabled: true,
-    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
+    selectedSprites: ["idle", "waving", "jumping", "review"],
     intervalMin: 12,
     intervalMax: 28
   },

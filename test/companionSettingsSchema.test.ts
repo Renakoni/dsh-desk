@@ -77,6 +77,20 @@ describe("canonical settings schema", () => {
     expect(DEFAULT_COMPANION_SETTINGS.sound.volume).toBe(0.6);
     expect(DEFAULT_COMPANION_SETTINGS.notificationRules).toHaveLength(4);
   });
+
+  it("starts new installs in dark mode with the bundled whale and its calm pool", () => {
+    expect(DEFAULT_COMPANION_SETTINGS.theme).toBe("dark");
+    expect(DEFAULT_COMPANION_SETTINGS.petTheme).toBe("codex-pet:maid-deepseek-whale");
+    expect(DEFAULT_COMPANION_SETTINGS.idleAnim).toEqual({
+      enabled: true,
+      selectedSprites: ["idle", "waving", "jumping", "review"],
+      intervalMin: 12,
+      intervalMax: 28
+    });
+    expect(defaultSettings.theme).toBe(DEFAULT_COMPANION_SETTINGS.theme);
+    expect(defaultSettings.petTheme).toBe(DEFAULT_COMPANION_SETTINGS.petTheme);
+    expect(defaultSettings.idleAnim).toEqual(DEFAULT_COMPANION_SETTINGS.idleAnim);
+  });
 });
 
 describe("pickCanonicalSettings", () => {

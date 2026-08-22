@@ -19,13 +19,13 @@ import { PetAnimationKey, resolvePetAnimation } from "../state/petAnimations";
 // built-in catalog can only yield these keys, and idle stays the last-resort
 // image if that invariant is ever broken.
 const animationImages: Partial<Record<PetAnimationKey, string>> = {
-  idle: idleImage,
+  idle: extraActionAquaBocchiImage,
   running: runningImage,
   waiting_permission: permissionPromptImage,
   done: completedImage,
   extra_action_7: extraAction7Image,
   extra_action_8: extraAction8Image,
-  extra_action_aqua_bocchi: extraActionAquaBocchiImage
+  extra_action_aqua_bocchi: idleImage
 };
 
 interface PetProps {

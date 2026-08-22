@@ -220,7 +220,7 @@ const currentSettings: CompanionSettings = {
   ...defaultSettings,
   language: "zh",
   enabledSources: ["deepseek-harness"],
-  petTheme: "minato-aqua",
+  petTheme: "codex-pet:maid-deepseek-whale",
   openSettingsOnStart: true
 };
 

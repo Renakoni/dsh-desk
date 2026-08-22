@@ -11,7 +11,6 @@
 
 import { defaultIdlePool, type PetPackManifest } from "../shared/petPack";
 import { packIdFromThemeId } from "../shared/petThemeCatalog";
-import { DEFAULT_COMPANION_SETTINGS } from "./companionSettingsSchema";
 
 interface ThemeAnimationProfile {
   stateAnimations: Record<string, string>;
@@ -33,7 +32,15 @@ function defaultIdleAnimFor(theme: string, packs: readonly PetPackManifest[]): u
       intervalMax: 28
     };
   }
-  return JSON.parse(JSON.stringify(DEFAULT_COMPANION_SETTINGS.idleAnim)) as unknown;
+  // The schema default follows the bundled whale because that is the first
+  // pet on a fresh install. Aqua keeps its own built-in action pool when it is
+  // selected later.
+  return {
+    enabled: true,
+    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
+    intervalMin: 12,
+    intervalMax: 28
+  };
 }
 
 /**
