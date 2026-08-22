@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
     const original = SlotRegistry.prototype.register
     let patched = original
     if (!original[marker]) {
-      patched = function registerWithLegacyThemeSupport(options, component) {
+      patched = function registerWithLegacySettingsSupport(options, component) {
         if (options && typeof options === "object"
           && options.name === "settings.plugin.item"
           && options.key === undefined
@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         ctx.effect(() => () => {
           if (SlotRegistry.prototype.register === patched) SlotRegistry.prototype.register = original
-        }, "dsh-desk: legacy theme slot adapter")
+        }, "dsh-desk: legacy plugin settings slot adapter")
       },
     }
   },
