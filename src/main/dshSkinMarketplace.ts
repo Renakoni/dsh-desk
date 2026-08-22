@@ -29,7 +29,8 @@ const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 5_000;
 export const OPERATION_TIMEOUT_MS = 10 * 60 * 1000;
-// Version 2 invalidates catalogs generated while Aqua pointed at the temporary fork.
+// Version 2 marks caches written after the Aqua source was restored. Version 1
+// remains readable so offline users do not lose their existing catalog.
 const CACHE_VERSION = 2;
 
 type FetchResponse = {
