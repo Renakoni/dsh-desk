@@ -20,24 +20,44 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
   const { t } = useI18n();
   const [subsection, setSubsection] = useState<"themes" | "pet">("themes");
   const [themeOperationKey, setThemeOperationKeyState] = useState<string | null>(null);
-  const [themeOperationProgress, setThemeOperationProgress] = useState<DshSkinOperationProgress | null>(null);
+  const [themeOperationProgress, setThemeOperationProgressState] = useState<DshSkinOperationProgress | null>(null);
   const [themeSnapshot, setThemeSnapshot] = useState<DshSkinMarketplaceSnapshot | null>(null);
   const [themeSnapshotGeneration, setThemeSnapshotGeneration] = useState(0);
   const [themeNotice, setThemeNotice] = useState<DshThemeOperationNotice | null>(null);
   const [themeNoticeFading, setThemeNoticeFading] = useState(false);
   const themeOperationKeyRef = useRef<string | null>(null);
+  const themeOperationProgressRef = useRef<DshSkinOperationProgress | null>(null);
   const themeSnapshotGenerationRef = useRef(0);
   const themeSnapshotRefreshRef = useRef(0);
 
   function setThemeOperationKey(key: string | null) {
     const previous = themeOperationKeyRef.current;
-    if (key !== null && themeOperationKeyRef.current === null) {
-      themeSnapshotGenerationRef.current += 1;
-      setThemeSnapshotGeneration(themeSnapshotGenerationRef.current);
+    if (key !== null) {
+      if (previous === null) {
+        themeSnapshotGenerationRef.current += 1;
+        setThemeSnapshotGeneration(themeSnapshotGenerationRef.current);
+      }
+      themeOperationKeyRef.current = key;
+      setThemeOperationKeyState(key);
+      return;
     }
-    themeOperationKeyRef.current = key;
-    setThemeOperationKeyState(key);
-    if (previous !== null && key === null) void refreshThemeSnapshot();
+    if (previous !== null) void finishThemeOperation(previous);
+  }
+
+  async function finishThemeOperation(operationKey: string) {
+    const progress = themeOperationProgressRef.current;
+    if (progress) setThemeOperationProgress({ ...progress, phase: "done", progress: 100 });
+    const snapshot = await refreshThemeSnapshot();
+    if (themeOperationKeyRef.current !== operationKey) return;
+    themeOperationKeyRef.current = null;
+    setThemeOperationKeyState(null);
+    setThemeOperationProgress(snapshot?.host.operation ?? null);
+  }
+
+  function setThemeOperationProgress(progress: DshSkinOperationProgress | null) {
+    if (progress === null && themeOperationKeyRef.current !== null) return;
+    themeOperationProgressRef.current = progress;
+    setThemeOperationProgressState(progress);
   }
 
   function handleThemeSnapshotChange(next: DshSkinMarketplaceSnapshot, generation?: number) {
@@ -50,14 +70,16 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
     const requestId = ++themeSnapshotRefreshRef.current;
     try {
       const next = await window.companion.getDshSkinMarketplace();
-      if (requestId !== themeSnapshotRefreshRef.current) return;
+      if (requestId !== themeSnapshotRefreshRef.current) return null;
       setThemeSnapshot(next);
       if (next.host.operation) setThemeOperationProgress(next.host.operation);
+      return next;
     } catch (error) {
-      if (requestId !== themeSnapshotRefreshRef.current) return;
+      if (requestId !== themeSnapshotRefreshRef.current) return null;
       setThemeNotice(current => current?.persistent
         ? current
         : { message: error instanceof Error ? error.message : String(error), persistent: true });
+      return null;
     }
   }
 

@@ -315,16 +315,18 @@ describe("DshThemesPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "使用" })).toHaveProperty("disabled", false));
   });
 
-  it("refreshes the authoritative library after an install completes off-screen", async () => {
+  it("keeps the library locked until an off-screen install refreshes authoritative state", async () => {
     const empty = snapshot({ skins: [] });
     const installed: DshSkinMarketplaceSnapshot = { ...snapshot(), host: { ...snapshot().host, skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] } };
     const api = renderAppearance(empty);
     let currentSnapshot = empty;
     let snapshotRequest = 0;
     let finishStaleRefresh!: () => void;
+    let finishAuthoritativeRefresh!: () => void;
     api.getDshSkinMarketplace.mockImplementation(() => {
       snapshotRequest += 1;
       if (snapshotRequest === 1) return new Promise(resolve => { finishStaleRefresh = () => resolve(empty); });
+      if (snapshotRequest === 2) return new Promise(resolve => { finishAuthoritativeRefresh = () => resolve(currentSnapshot); });
       return Promise.resolve(currentSnapshot);
     });
     let finishInstall!: () => void;
@@ -349,7 +351,12 @@ describe("DshThemesPage", () => {
 
     finishInstall();
     await waitFor(() => expect(api.getDshSkinMarketplace.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(screen.getByRole("button", { name: "主题市场" })).toHaveProperty("disabled", true);
+    expect(screen.getByText("正在同步主题状态…")).not.toBeNull();
+
+    finishAuthoritativeRefresh();
     await waitFor(() => expect(screen.getByText("海洋主题")).not.toBeNull());
+    await waitFor(() => expect(screen.getByRole("button", { name: "主题市场" })).toHaveProperty("disabled", false));
     finishStaleRefresh();
     await act(async () => { await Promise.resolve(); });
     expect(screen.getByText("海洋主题")).not.toBeNull();
