@@ -76,15 +76,16 @@ export function DshThemeFeedback({ notice, noticeFading, operationProgress, fina
     {operationProgress
       ? <DshThemeOperationProgress progress={operationProgress} finalizing={finalizing} t={t} />
       : notice
-        ? <div className={`dsh-theme-notice${noticeFading ? " fading" : ""}`} role="status"><span>{notice}</span><button type="button" onClick={onDismiss} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div>
+        ? <div className={`dsh-theme-notice${noticeFading ? " fading" : ""}`} role="status"><span className="dsh-theme-notice-message" tabIndex={0}>{notice}</span><button type="button" onClick={onDismiss} aria-label={t("dshThemes.dismiss", "关闭")}><X size={14} /></button></div>
         : null}
   </div>;
 }
 
-export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
+export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged, onBusyChange }: {
   initialSnapshot: DshSkinMarketplaceSnapshot | null;
   onBack: () => void;
   onChanged: (snapshot: DshSkinMarketplaceSnapshot) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const { locale, t } = useI18n();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -174,6 +175,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     const operationKey = `${skin.id}:${action}`;
     busyRef.current = operationKey;
     setBusy(operationKey);
+    onBusyChange(true);
     setOperationProgress({ skinId: skin.id, action, phase: "queued", progress: null });
     setNotice(null);
     try {
@@ -218,6 +220,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     finally {
       busyRef.current = null;
       setBusy(null);
+      onBusyChange(false);
     }
   }
 
@@ -235,7 +238,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
   return (
     <div className="settings-page dsh-themes-page dsh-theme-market">
       <header className="dsh-theme-market-header">
-        <button type="button" className="dsh-theme-icon-button" onClick={onBack} aria-label={t("common.back", "返回")}><ArrowLeft size={17} /></button>
+        <button type="button" className="dsh-theme-icon-button" onClick={onBack} disabled={busy !== null || operationProgress !== null} aria-label={t("common.back", "返回")}><ArrowLeft size={17} /></button>
         <div><h2>{t("dshThemes.marketTitle", "主题市场")}</h2><p>{snapshot ? t("dshThemes.marketSummary", "{count} 个主题", { count: snapshot.skins.length }) : t("dshThemes.loading", "正在加载主题…")}</p></div>
         <div className="dsh-theme-header-actions">
           <button type="button" className="dsh-theme-icon-button" onClick={() => void window.companion.openExternal("https://github.com/Renakoni/awesome-dsh-themes")} title={t("dshThemes.openOnlineMarket", "打开主题目录仓库")} aria-label={t("dshThemes.openOnlineMarket", "打开主题目录仓库")}><ExternalLink size={17} /></button>
