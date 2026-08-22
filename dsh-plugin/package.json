@@ -23,7 +23,8 @@
   },
   "dsh": {
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "immediately": true
     },
     "bundle": {
       "patch": "./cordis.patch.yml"

@@ -611,19 +611,19 @@ describe('DSH Loader inventory bridge', () => {
     dispose()
   })
 
-  it('detects the old Aqua keyed-settings registration at activation time', () => {
+  it('detects a legacy keyed-settings registration at activation time', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-theme-compatibility-'))
     temporaryDirectories.add(root)
     const profile = join(root, 'web')
-    const packageDir = join(profile, 'node_modules', '@deepseek-ai', 'dsh-client-ui-aqua')
+    const packageDir = join(profile, 'node_modules', 'legacy-settings-skin')
     mkdirSync(join(packageDir, 'lib'), { recursive: true })
-    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { '@deepseek-ai/dsh-client-ui-aqua': '1.3.0' } }))
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'legacy-settings-skin': '1.3.0' } }))
     writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
-      name: '@deepseek-ai/dsh-client-ui-aqua', version: '1.3.0',
+      name: 'legacy-settings-skin', version: '1.3.0',
       exports: { './client': './lib/client.js' }, dsh: { client: { platform: 'web' } },
     }))
-    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", id: "aqua" }, AquaPluginCard)')
-    assert.deepEqual(detectThemeCompatibility(profile, '@deepseek-ai/dsh-client-ui-aqua'), {
+    writeFileSync(join(packageDir, 'lib', 'client.js'), 'ctx.slots.register({ name: "settings.plugin.item", id: "legacy-settings" }, LegacySettingsCard)')
+    assert.deepEqual(detectThemeCompatibility(profile, 'legacy-settings-skin'), {
       status: 'adapted', code: 'legacy-keyed-settings-item',
     })
   })
