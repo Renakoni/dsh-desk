@@ -17,9 +17,10 @@ function loadClientPlugin(SlotRegistry) {
   })
 }
 
-describe('DSH legacy theme client adapter', () => {
-  it('exports package metadata for DSH client discovery', () => {
+describe('DSH legacy plugin client adapter', () => {
+  it('exports metadata and prefetches the compatibility layer before regular plugins', () => {
     assert.equal(packageManifest.exports?.['./package.json'], './package.json')
+    assert.equal(packageManifest.dsh?.client?.immediately, true)
   })
 
   it('adds a stable key only to legacy keyed settings cards', () => {
@@ -30,10 +31,11 @@ describe('DSH legacy theme client adapter', () => {
     let dispose
     plugin.apply({ effect(effect) { dispose = effect(); return dispose } })
     const slots = new SlotRegistry()
-    assert.equal(slots.register({ name: 'settings.plugin.item', id: 'aqua' }).key, 'legacy:aqua')
+    assert.equal(slots.register({ name: 'settings.plugin.item', id: 'legacy-alpha' }).key, 'legacy:legacy-alpha')
+    assert.equal(slots.register({ name: 'settings.plugin.item', id: 'legacy-beta' }).key, 'legacy:legacy-beta')
     assert.equal(slots.register({ name: 'settings.plugin.item', key: 'native' }).key, 'native')
-    assert.equal(slots.register({ name: 'settings.general.item', id: 'aqua' }).key, undefined)
+    assert.equal(slots.register({ name: 'settings.general.item', id: 'unrelated' }).key, undefined)
     dispose?.()
-    assert.equal(SlotRegistry.prototype.register({ name: 'settings.plugin.item', id: 'aqua' }).key, undefined)
+    assert.equal(SlotRegistry.prototype.register({ name: 'settings.plugin.item', id: 'legacy-alpha' }).key, undefined)
   })
 })
