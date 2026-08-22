@@ -16,7 +16,7 @@ import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
 import { DshMarketPanel } from "./DshMarketPanel";
 import { DshSchemeEditor } from "./DshSchemeEditor";
 import { RequiredComponentWarningDialog, shouldWarnRequiredComponent } from "./RequiredComponentWarningDialog";
-import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, isBaseThemeResource, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { useVirtualRows } from "./useVirtualRows";
 
 type BusyAction = "refresh" | "save" | "delete" | "apply" | "resource" | null;
@@ -116,12 +116,19 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     [activeTab, snapshot.inventory]
   );
   const items = useMemo(() => {
-    const memberIds = visibleDshSchemeResourceIds(selectedScheme?.[activeTab] ?? []);
+    const themeIds = new Set(availableResources.filter(isBaseThemeResource).flatMap(item => [
+      item.id,
+      item.packageName ? `plugin:package:${item.packageName}` : undefined
+    ].filter((id): id is string => Boolean(id))));
+    const memberIds = visibleDshSchemeResourceIds(selectedScheme?.[activeTab] ?? [])
+      .filter(id => activeTab !== "plugins" || !themeIds.has(id));
+    const visibleResources = activeTab === "plugins"
+      ? availableResources.filter(item => !isBaseThemeResource(item))
+      : availableResources;
     const members = new Set(memberIds);
     return [
-      ...availableResources.filter(item => members.has(item.id)),
-      ...(activeTab === "plugins" ? availableResources.filter(item => item.appearance?.components.includes("base-theme")) : []),
-      ...unavailableDshResources(memberIds, availableResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
+      ...visibleResources.filter(item => members.has(item.id)),
+      ...unavailableDshResources(memberIds, visibleResources, activeTab, t("dshResources.noLongerInstalled", "No longer installed"), knownPluginIds)
     ];
   }, [activeTab, availableResources, knownPluginIds, selectedScheme, t]);
   const filteredItems = useMemo(() => filterDshResources(items, deferredQuery, hideSensitiveContent), [deferredQuery, hideSensitiveContent, items]);
@@ -322,8 +329,6 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
           ? t("dshResources.bridgeDescription", "Local bridge between DSH Desk and DeepSeek Harness")
           : presentation.description;
         const components = resource.components ?? [];
-        const baseTheme = resource.appearance?.components.includes("base-theme") === true;
-        const selectedBaseTheme = baseTheme && scheme?.themeId === resource.appearance?.themeId;
         const soleComponent = components.length === 1 ? components[0] : undefined;
         const directComponent = resource.required && soleComponent?.manageable ? soleComponent : undefined;
         const open = components.length > 1 && expanded.has(resource.id);
@@ -331,7 +336,7 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
         const directComponentBusy = directComponent && busyResourceId === `${resource.id}:${directComponent.key}`;
         const canChangeDirectComponent = Boolean(directComponent && resource.enabled && scheme && scheme.id === appliedSchemeId && scheme.id !== ALL_DSH_SCHEME_ID);
         const directComponentEnabled = directComponent ? componentEffectiveEnabled(directComponent, scheme) : false;
-        const rowEnabled = baseTheme ? resource.appearance?.active === true : directComponent ? directComponentEnabled : resource.enabled;
+        const rowEnabled = directComponent ? directComponentEnabled : resource.enabled;
         return (
           <div className={`dsh-plugin-bundle ${open ? "expanded" : ""}`} key={resource.id}>
             <article className={`claude-resource-row claude-profile-readonly-row dsh-resource-row ${resource.missing ? "missing" : rowEnabled ? "enabled" : "disabled"}`}>
@@ -342,8 +347,8 @@ function PluginResourceList({ items, loading, busyResourceId, hideSensitiveConte
                 {presentation.detail ? <code title={presentation.detail}>{presentation.detail}</code> : null}
                 {components.length > 1 ? <button type="button" className="dsh-component-disclosure" aria-expanded={open} aria-label={t("dshResources.showComponents", "View {count} components", { count: components.length })} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(resource.id)) next.delete(resource.id); else next.add(resource.id); return next; })}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<span>{t("dshResources.componentCount", "{count} components", { count: components.length })}</span></button> : null}
               </div>
-              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : rowEnabled ? "active" : "idle"}`}>{baseTheme ? selectedBaseTheme ? t("dshResources.schemeTheme", "Scheme theme") : rowEnabled ? t("dshResources.enabled", "Enabled") : t("dshResources.disabled", "Disabled") : t(resource.missing ? "dshResources.missing" : rowEnabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : rowEnabled ? "Enabled" : "Disabled")}</span>
-              {baseTheme ? <span className="claude-profile-resource-unavailable dsh-resource-unavailable">{t("dshResources.themeManagedInAppearance", "Managed in Appearance")}</span> : directComponent ? <button
+              <span className={`claude-resource-status dsh-resource-status ${resource.missing ? "missing" : rowEnabled ? "active" : "idle"}`}>{t(resource.missing ? "dshResources.missing" : rowEnabled ? "dshResources.enabled" : "dshResources.disabled", resource.missing ? "Missing" : rowEnabled ? "Enabled" : "Disabled")}</span>
+              {directComponent ? <button
                 type="button"
                 className="claude-profile-resource-action dsh-resource-action"
                 aria-label={`${t(directComponentEnabled ? "dshResources.disable" : "dshResources.enable", directComponentEnabled ? "Disable" : "Enable")} ${directComponent.name}`}

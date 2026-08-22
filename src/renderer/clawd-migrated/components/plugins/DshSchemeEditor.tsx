@@ -3,7 +3,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronRight, Code2, Minus, Package, Pal
 import { isDshResourceSchemeSelectable, type DshPluginComponentOverrideState, type DshResourceInventory, type DshResourceItem, type DshResourceSchemeSaveInput } from "../../../../shared/dshResources";
 import { useI18n } from "../../useI18n";
 import { ConfirmDialog } from "../dsh-routing/ConfirmDialog";
-import { dshResourcePresentation, filterDshResources, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
+import { dshResourcePresentation, filterDshResources, isBaseThemeResource, logicalDshResources, unavailableDshResources, visibleDshSchemeResourceIds, type DshResourceTab } from "./dshSchemeResources";
 import { RequiredComponentWarningDialog, shouldWarnRequiredComponent } from "./RequiredComponentWarningDialog";
 import { useVirtualRows } from "./useVirtualRows";
 
@@ -36,12 +36,16 @@ export function DshSchemeEditor({
   const { t } = useI18n();
   const logicalInventory = useMemo(() => ({
     skills: logicalDshResources(inventory.skills, "skills"),
-    plugins: logicalDshResources(inventory.plugins, "plugins").filter(item => !item.appearance?.components.includes("base-theme"))
+    plugins: logicalDshResources(inventory.plugins, "plugins").filter(item => !isBaseThemeResource(item))
   }), [inventory.plugins, inventory.skills]);
   const themes = useMemo(
-    () => logicalDshResources(inventory.plugins, "plugins").filter(item => item.appearance?.components.includes("base-theme") && item.appearance.themeId),
+    () => logicalDshResources(inventory.plugins, "plugins").filter(item => isBaseThemeResource(item) && item.appearance?.themeId),
     [inventory.plugins]
   );
+  const themeIds = useMemo(() => new Set(themes.flatMap(item => [
+    item.id,
+    item.packageName ? `plugin:package:${item.packageName}` : undefined
+  ].filter((id): id is string => Boolean(id)))), [themes]);
   const [draft, setDraft] = useState<DshResourceSchemeSaveInput>(() => ({
     ...initial,
     ...(initial.themeId ? { themeId: initial.themeId } : {}),
@@ -66,19 +70,19 @@ export function DshSchemeEditor({
   ];
   const availableResources = logicalInventory[activeTab];
   const visibleDraftIds = useMemo(
-    () => visibleDshSchemeResourceIds(draft[activeTab]),
-    [activeTab, draft]
+    () => visibleDshSchemeResourceIds(draft[activeTab]).filter(id => activeTab !== "plugins" || !themeIds.has(id)),
+    [activeTab, draft, themeIds]
   );
   const visibleKnownCandidateIds = useMemo(
     () => activeTab === "plugins"
       ? visibleDshSchemeResourceIds(
         [...new Set([
-          ...knownPluginIds.filter(id => id.startsWith("plugin:package:")),
-          ...initial.plugins.filter(id => knownPluginIds.includes(id))
+          ...knownPluginIds.filter(id => id.startsWith("plugin:package:") && !themeIds.has(id)),
+          ...initial.plugins.filter(id => knownPluginIds.includes(id) && !themeIds.has(id))
         ])]
       )
       : [],
-    [activeTab, initial.plugins, knownPluginIds]
+    [activeTab, initial.plugins, knownPluginIds, themeIds]
   );
   const candidateIds = useMemo(
     () => [...new Set([...visibleDraftIds, ...visibleKnownCandidateIds])],

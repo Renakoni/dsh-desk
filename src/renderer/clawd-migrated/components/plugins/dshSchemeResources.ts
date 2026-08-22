@@ -3,6 +3,10 @@ import type { DshResourceItem } from "../../../../shared/dshResources";
 export type DshResourceTab = "skills" | "plugins";
 const PACKAGE_PLUGIN_PREFIX = "plugin:package:";
 
+export function isBaseThemeResource(resource: DshResourceItem): boolean {
+  return resource.appearance?.components.includes("base-theme") === true;
+}
+
 export function logicalDshResources(resources: DshResourceItem[], tab: DshResourceTab): DshResourceItem[] {
   if (tab === "skills") return resources;
   const grouped = new Map<string, DshResourceItem[]>();

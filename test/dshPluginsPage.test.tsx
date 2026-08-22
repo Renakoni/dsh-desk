@@ -119,6 +119,45 @@ describe("DSH resource schemes page", () => {
     expect(await screen.findByText("review")).not.toBeNull();
   });
 
+  it("keeps base themes out of plugin views when a historical runtime mapping remains", async () => {
+    const themePackage = "ocean-theme";
+    const themeSnapshot: DshResourceSchemesSnapshot = {
+      ...snapshot,
+      pluginRuntimePackages: {
+        ...snapshot.pluginRuntimePackages,
+        "plugin:include:ocean-theme": themePackage
+      },
+      inventory: {
+        ...snapshot.inventory,
+        plugins: [...snapshot.inventory.plugins, {
+          id: `plugin:package:${themePackage}`,
+          kind: "plugin",
+          name: "Ocean Theme",
+          packageName: themePackage,
+          enabled: false,
+          manageable: true,
+          appearance: {
+            kind: "theme-bundle",
+            components: ["base-theme", "settings"],
+            themeId: "ocean.theme",
+            active: false
+          }
+        }]
+      }
+    };
+
+    renderPage(api(themeSnapshot));
+    await screen.findByText("@deepseek-ai/plugin-0");
+    expect(screen.queryByText("Ocean Theme")).toBeNull();
+
+    fireEvent.click(screen.getByTitle("编辑"));
+    fireEvent.change(screen.getByPlaceholderText("搜索插件"), { target: { value: themePackage } });
+    await waitFor(() => expect(screen.queryByText(`package:${themePackage}`)).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: /默认主题/ }));
+    expect(screen.getByRole("option", { name: /Ocean Theme/ })).not.toBeNull();
+  });
+
   it("does not refresh the inventory while creating a scheme", async () => {
     let emitResourcesUpdated: () => void = () => undefined;
     const mockApi = api();
