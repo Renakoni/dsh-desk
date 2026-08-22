@@ -19,7 +19,7 @@ const animationLabels: Record<PetAnimationKey, { labelKey: string; fallback: str
   done: { labelKey: "animation.sprite.done", fallback: "完成" },
   extra_action_7: { labelKey: "animation.sprite.extra7", fallback: "AMT" },
   extra_action_8: { labelKey: "animation.sprite.extra8", fallback: "生气" },
-  extra_action_aqua_bocchi: { labelKey: "animation.sprite.aquaBocchi", fallback: "Aqua 趴姿" },
+  extra_action_aqua_bocchi: { labelKey: "animation.sprite.aquaBocchi", fallback: "平静" },
   running_right: { labelKey: "animation.sprite.runningRight", fallback: "向右跑" },
   running_left: { labelKey: "animation.sprite.runningLeft", fallback: "向左跑" },
   waving: { labelKey: "animation.sprite.waving", fallback: "挥手" },

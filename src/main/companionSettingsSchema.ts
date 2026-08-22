@@ -32,11 +32,11 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   openSettingsOnStart: true,
   autoStartWithCli: false,
   autoUpdateEnabled: false,
-  petTheme: "minato-aqua",
+  petTheme: "codex-pet:maid-deepseek-whale",
   removedBuiltinPetThemes: [],
   enabledSources: ["deepseek-harness"],
   notificationsEnabled: true,
-  theme: "system",
+  theme: "dark",
   uiStyle: "classic",
   dshWebOrigin: "http://127.0.0.1:3080",
   language: "zh",
@@ -108,7 +108,7 @@ export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   currentClaudeProviderId: "claude-official",
   idleAnim: {
     enabled: true,
-    selectedSprites: ["idle", "running", "waiting_permission", "done", "extra_action_7", "extra_action_8", "extra_action_aqua_bocchi"],
+    selectedSprites: ["idle", "waving", "jumping", "review"],
     intervalMin: 12,
     intervalMax: 28
   },
