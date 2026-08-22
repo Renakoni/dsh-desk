@@ -1,8 +1,10 @@
 // @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Bot, Palette } from "lucide-react";
+import type { DshSkinOperationProgress } from "../../../../shared/dshSkins";
 import { useI18n } from "../../useI18n";
 import { DshThemesPage } from "../themes/DshThemesPage";
+import type { DshThemeOperationNotice } from "../themes/DshThemeMarketPanel";
 import { PetThemeGrid } from "../../features/settings/PetThemeGrid";
 
 type DshAppearancePageProps = {
@@ -17,6 +19,44 @@ type DshAppearancePageProps = {
 export function DshAppearancePage({ active, settings, updateSettings, petPacks = [], refreshPetPacks }: DshAppearancePageProps) {
   const { t } = useI18n();
   const [subsection, setSubsection] = useState<"themes" | "pet">("themes");
+  const [themeOperationKey, setThemeOperationKeyState] = useState<string | null>(null);
+  const [themeOperationProgress, setThemeOperationProgress] = useState<DshSkinOperationProgress | null>(null);
+  const [themeNotice, setThemeNotice] = useState<DshThemeOperationNotice | null>(null);
+  const [themeNoticeFading, setThemeNoticeFading] = useState(false);
+  const themeOperationKeyRef = useRef<string | null>(null);
+
+  function setThemeOperationKey(key: string | null) {
+    themeOperationKeyRef.current = key;
+    setThemeOperationKeyState(key);
+  }
+
+  useEffect(() => {
+    const subscribe = window.companion.onDshSkinProgress;
+    if (!subscribe) return undefined;
+    return subscribe(progress => {
+      // The host emits null before the temporary override finishes. Keep the
+      // visible progress rail until the operation releases its shared lock.
+      if (progress === null && themeOperationKeyRef.current !== null) return;
+      setThemeOperationProgress(progress);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!themeNotice || themeNotice.persistent) {
+      setThemeNoticeFading(false);
+      return undefined;
+    }
+    setThemeNoticeFading(false);
+    const fadeTimer = window.setTimeout(() => setThemeNoticeFading(true), 9_700);
+    const clearTimer = window.setTimeout(() => {
+      setThemeNotice(null);
+      setThemeNoticeFading(false);
+    }, 10_000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [themeNotice]);
 
   useEffect(() => {
     if (!active) setSubsection("themes");
@@ -56,7 +96,16 @@ export function DshAppearancePage({ active, settings, updateSettings, petPacks =
 
       <div className="appearance-page-content">
         {subsection === "themes" ? (
-          <DshThemesPage active={active && subsection === "themes"} />
+          <DshThemesPage
+            active={active && subsection === "themes"}
+            operationKey={themeOperationKey}
+            operationProgress={themeOperationProgress}
+            notice={themeNotice}
+            noticeFading={themeNoticeFading}
+            onBusyChange={setThemeOperationKey}
+            onProgressChange={setThemeOperationProgress}
+            onNoticeChange={setThemeNotice}
+          />
         ) : (
           <section className="appearance-pet-library settings-page" aria-label={t("appearance.desktopPet", "桌宠")} tabIndex={0}>
             <header className="appearance-library-header">

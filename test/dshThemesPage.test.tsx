@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshSkinMarketplaceSnapshot } from "../src/shared/dshSkins";
 import { ThemePreview } from "../src/renderer/clawd-migrated/components/themes/DshThemeMarketPanel";
 import { DshThemesPage } from "../src/renderer/clawd-migrated/components/themes/DshThemesPage";
+import { DshAppearancePage } from "../src/renderer/clawd-migrated/components/appearance/DshAppearancePage";
 import { I18nProvider } from "../src/renderer/clawd-migrated/useI18n";
 
 const themes: DshSkinMarketplaceSnapshot["skins"] = [{
@@ -68,6 +69,24 @@ function renderPage(value = snapshot()) {
     rerenderActive(active: boolean) {
       view.rerender(<I18nProvider initialLocale="zh"><DshThemesPage active={active} /></I18nProvider>);
     }
+  });
+}
+
+function renderAppearance(value = snapshot()) {
+  const api = {
+    getDshSkinMarketplace: vi.fn(async () => value),
+    mutateDshSkin: vi.fn(async (): Promise<{ ok: boolean; snapshot: DshSkinMarketplaceSnapshot }> => ({ ok: true, snapshot: value })),
+    setDshThemeOverride: vi.fn(async () => ({ ok: true })),
+    openExternal: vi.fn(async () => undefined),
+    onDshSkinProgress: vi.fn(() => () => undefined)
+  };
+  Object.assign(window, { companion: api });
+  const view = render(<I18nProvider initialLocale="zh"><DshAppearancePage active settings={{ petTheme: "" }} updateSettings={vi.fn()} petPacks={[]} /></I18nProvider>);
+  return Object.assign(api, {
+    selectSubsection(name: "DSH 主题" | "桌宠") {
+      fireEvent.click(screen.getByRole("button", { name }));
+    },
+    view
   });
 }
 
@@ -265,6 +284,68 @@ describe("DshThemesPage", () => {
 
     finishOverride({ ok: true });
     await waitFor(() => expect(screen.getByRole("button", { name: "使用" })).toHaveProperty("disabled", false));
+  });
+
+  it("locks the empty-library market entry during an existing host operation", async () => {
+    renderPage(snapshot({ skins: [], operation: { skinId: "ocean.theme", action: "install", phase: "downloading", progress: 42 } }));
+    const browse = await screen.findByRole("button", { name: "浏览主题市场" });
+    expect(browse).toHaveProperty("disabled", true);
+  });
+
+  it("keeps the shared operation lock when the appearance child page is replaced", async () => {
+    const value = snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] });
+    const api = renderAppearance(value);
+    let finishOverride!: (result: { ok: boolean }) => void;
+    api.mutateDshSkin.mockResolvedValueOnce({ ok: true, snapshot: value });
+    api.setDshThemeOverride.mockImplementationOnce(() => new Promise(resolve => { finishOverride = resolve; }));
+
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    fireEvent.click(within((await screen.findByText("海洋主题")).closest("article")!).getByRole("button", { name: "使用" }));
+    await screen.findByText("正在同步主题状态…");
+
+    api.selectSubsection("桌宠");
+    expect(await screen.findByRole("heading", { name: "桌宠库" })).not.toBeNull();
+    api.selectSubsection("DSH 主题");
+    expect(await screen.findByRole("heading", { name: "主题库" })).not.toBeNull();
+    expect(screen.getByText("正在同步主题状态…")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "启用中…" })).toHaveProperty("disabled", true);
+
+    finishOverride({ ok: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "使用" })).toHaveProperty("disabled", false));
+  });
+
+  it("keeps a failed market operation visible after switching appearance pages", async () => {
+    const value = snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] });
+    const api = renderAppearance(value);
+    const error = `pnpm failed ${"dependency output ".repeat(80)}`;
+    api.mutateDshSkin.mockRejectedValueOnce(new Error(error));
+
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    fireEvent.click(within((await screen.findByText("海洋主题")).closest("article")!).getByRole("button", { name: "使用" }));
+    await screen.findByText(content => content.startsWith("pnpm failed") && content.length > 1_000);
+
+    api.selectSubsection("桌宠");
+    await screen.findByRole("heading", { name: "桌宠库" });
+    api.selectSubsection("DSH 主题");
+    await screen.findByRole("heading", { name: "主题库" });
+    expect(screen.getByText(content => content.startsWith("pnpm failed") && content.length > 1_000)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "关闭" })).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByText(content => content.startsWith("pnpm failed") && content.length > 1_000)).toBeNull();
+  });
+
+  it("does not expire a failed operation notice after ten seconds", async () => {
+    vi.useFakeTimers();
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }));
+    api.mutateDshSkin.mockRejectedValueOnce(new Error("theme install failed"));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "使用" }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.getByText("theme install failed")).not.toBeNull();
+    vi.useRealTimers();
   });
 
   it("restores an in-flight host operation after switching to the market", async () => {
