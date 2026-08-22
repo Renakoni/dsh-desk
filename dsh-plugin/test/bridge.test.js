@@ -316,6 +316,13 @@ describe('DSH Loader inventory bridge', () => {
       },
     })
     assert.equal(blockedBuildPackage(blocked), '@deepseek-ai/dsh-client-ui-aqua')
+    const currentPnpm = JSON.stringify({
+      name: 'pnpm',
+      code: 'ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED',
+      hint: 'Add the package to "onlyBuiltDependencies" in your project.\\nonlyBuiltDependencies:\\n  - "@cdxdnrf/dsh-client-ui-skin-wishadel"',
+      err: { message: 'Failed to prepare git-hosted package: The git-hosted package "@cdxdnrf/dsh-client-ui-skin-wishadel@0.6.0" needs to execute build scripts.' },
+    })
+    assert.equal(blockedBuildPackage(currentPnpm), '@cdxdnrf/dsh-client-ui-skin-wishadel')
     assert.equal(blockedBuildPackage(`${blocked.replace('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED', 'ECONNRESET')}\ndsh: git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed`), null)
     assert.match(commandError({ stderr: `${JSON.stringify({ name: 'pnpm', err: { code: 'ECONNRESET', message: 'request failed' } })}\ndsh: pnpm failed in profile directory C:\\profile` }), /ECONNRESET[\s\S]*request failed/)
     const notFound = JSON.stringify({ name: 'pnpm', code: 'ERR_PNPM_FETCH_404', resource: 'https://codeload.github.com/example/theme/tar.gz/missing', err: { code: 'ERR_PNPM_FETCH_404', message: 'Not Found' } })
