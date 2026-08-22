@@ -5,9 +5,13 @@
   "description": "DSH Desk - a desktop pet companion and local usage workbench for DeepSeek Harness.",
   "author": "Renakoni",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "dist-electron/main/index.js",
   "scripts": {
     "prebuild": "npm pack ./dsh-plugin --pack-destination ./build",
+    "postinstall": "node node_modules/electron/install.js",
     "dev": "vite --host 127.0.0.1 --port 5273 --strictPort",
     "build:electron": "tsc -p tsconfig.node.json && tsc -p tsconfig.preload.json",
     "dev:electron": "npm run build:electron && concurrently -k \"npm run dev\" \"wait-on tcp:5273 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5273 electron .\"",
@@ -41,15 +45,15 @@
     "postcss": "8.5.26"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^9.2.4",
     "cross-env": "^7.0.3",
-    "electron": "^39.8.10",
+    "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
     "jsdom": "^26.1.0",
     "typescript": "^5.8.3",
