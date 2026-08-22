@@ -75,6 +75,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   }, [snapshot]);
   const localInstalled = snapshot?.localSkins ?? [];
   const canManageThemes = snapshot?.host.connected === true;
+  const managerInstalled = snapshot?.host.marketInstalled === true;
   const selected = selectedId && snapshot ? snapshot.skins.find(skin => skin.id === selectedId) : undefined;
   const selectedRuntime = selected && snapshot ? runtimeFor(snapshot, selected.id) : undefined;
 
@@ -90,8 +91,16 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
   }
 
   async function mutate(skin: Pick<DshSkinCatalogEntry, "id">, action: DshSkinAction) {
+    if (snapshot?.host.marketInstalled !== true) {
+      toast.warning(t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。"), { id: "dsh-theme-manager-unavailable", className: "dsh-theme-warning-toast" });
+      return;
+    }
+    if (snapshot?.host.connected !== true) {
+      toast.warning(t("dshThemes.dshOnlineRequired", "该操作需 DSH 在线。"), { id: "dsh-theme-dsh-offline", className: "dsh-theme-warning-toast" });
+      return;
+    }
     if (busy !== null || operationProgress !== null) {
-      toast.info(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"));
+      toast.warning(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"), { id: "dsh-theme-operation-busy", className: "dsh-theme-warning-toast" });
       return;
     }
     if (action === "update" && selectedId !== null) closeDetails();
@@ -178,6 +187,7 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
           const state = runtimeFor(snapshot, skin.id)!;
           const activeTheme = state.activation === "active";
           const canManage = snapshot.host.connected;
+          const managerAvailable = snapshot.host.marketInstalled;
           const isBusy = busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null;
           return (
             <article key={skin.id} className={`dsh-theme-library-card ${activeTheme ? "active" : ""}`}>
@@ -189,8 +199,8 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
               {activeTheme && state.compatibility?.status === "adapted" ? <p className="dsh-theme-compatibility-note">{t("dshThemes.compatibilityAdapted", "已启用兼容适配：这个旧版主题正在使用 Desk 的 keyed slot 兼容层。")}</p> : activeTheme && state.compatibility?.status === "unverified" ? <p className="dsh-theme-compatibility-note">{t("dshThemes.compatibilityUnverified", "暂未确认该主题兼容当前 DSH，启用前会阻止应用并提示原因。")}</p> : null}
               <div className="dsh-theme-library-actions">
                 {state.installation === "broken" ? <span className="dsh-theme-broken">{t("dshThemes.broken", "安装不完整")}</span> : null}
-                {activeTheme ? <button type="button" disabled={!canManage || isBusy} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button> : state.installation === "installed" ? <button type="button" className="primary" disabled={!canManage || isBusy} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button> : null}
-                <button type="button" className="icon danger" disabled={!canManage || isBusy} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "uninstall")} title={t("dshThemes.uninstall", "卸载")} aria-label={t("dshThemes.uninstall", "卸载")}><Trash2 size={15} /></button>
+                {activeTheme ? <button type="button" disabled={!managerAvailable || isBusy} aria-disabled={managerAvailable && !canManage || undefined} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button> : state.installation === "installed" ? <button type="button" className="primary" disabled={!managerAvailable || isBusy} aria-disabled={managerAvailable && !canManage || undefined} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button> : null}
+                <button type="button" className="icon danger" disabled={!managerAvailable || isBusy} aria-disabled={managerAvailable && !canManage || undefined} aria-describedby={!canManage ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "uninstall")} title={t("dshThemes.uninstall", "卸载")} aria-label={t("dshThemes.uninstall", "卸载")}><Trash2 size={15} /></button>
               </div>
             </article>
           );
@@ -204,8 +214,8 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
               <div className="dsh-theme-library-actions">
                 <span className={skin.broken || !skin.rowId ? "dsh-theme-broken" : "dsh-theme-local-label"}>{skin.broken ? t("dshThemes.broken", "安装不完整") : !skin.rowId ? t("dshThemes.registrationMissing", "未找到主题入口") : t("dshThemes.keptLocally", "仅保留在本机")}</span>
                 {!skin.broken && skin.rowId ? skin.active
-                  ? <button type="button" disabled={!canManageThemes || busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null} aria-describedby={!canManageThemes ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button>
-                  : <button type="button" className="primary" disabled={!canManageThemes || busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null} aria-describedby={!canManageThemes ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button>
+                  ? <button type="button" disabled={!managerInstalled || busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null} aria-disabled={managerInstalled && !canManageThemes || undefined} aria-describedby={!canManageThemes ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "deactivate")}><Power size={14} />{t("dshThemes.deactivate", "停用")}</button>
+                  : <button type="button" className="primary" disabled={!managerInstalled || busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null} aria-disabled={managerInstalled && !canManageThemes || undefined} aria-describedby={!canManageThemes ? "dsh-theme-host-status" : undefined} onClick={() => void mutate(skin, "activate")}>{t("dshThemes.use", "使用")}</button>
                   : null}
               </div>
             </article>
