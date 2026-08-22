@@ -140,7 +140,7 @@ describe("DshSkinMarketplace", () => {
     const fresh = await market.snapshot();
     expect(fetcher).toHaveBeenCalledWith(DSH_SKIN_CATALOG_URL, expect.anything());
     expect(fresh).toMatchObject({ catalogSource: "remote", skins: [{ id: "demo.skin", stars: 42 }], host: { marketInstalled: false, connected: false } });
-    expect(JSON.parse(readFileSync(cachePath, "utf8"))).toMatchObject({ version: 1, skins: [{ id: "demo.skin" }] });
+    expect(JSON.parse(readFileSync(cachePath, "utf8"))).toMatchObject({ version: 2, skins: [{ id: "demo.skin" }] });
 
     const diskCacheFetcher = vi.fn();
     const reloaded = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => false, fetcher: diskCacheFetcher, now: () => 101 });
@@ -153,6 +153,19 @@ describe("DshSkinMarketplace", () => {
     expect(cached.skins).toHaveLength(1);
   });
 
+  it("drops the pre-fork catalog cache before resolving theme operations", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-cache-revision-"));
+    const cachePath = join(root, "catalog.json");
+    writeFileSync(cachePath, JSON.stringify({ version: 1, fetchedAt: Date.now(), generatedAt: "old", skins: [] }));
+    const fetcher = vi.fn(async () => response(skinCatalog()));
+    const market = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => false, fetcher });
+
+    const snapshot = await market.snapshot();
+    expect(fetcher).toHaveBeenCalledWith(DSH_SKIN_CATALOG_URL, expect.anything());
+    expect(snapshot.catalogSource).toBe("remote");
+    expect(snapshot.skins).toHaveLength(1);
+  });
+
   it("keeps installed and runtime-connected states separate", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-host-"));
     const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
@@ -162,6 +175,28 @@ describe("DshSkinMarketplace", () => {
 
     const snapshot = await market.snapshot();
     expect(snapshot.host).toMatchObject({ connected: true, marketInstalled: true, restartAvailable: true, skins: [{ skinId: "demo.skin", activation: "active" }] });
+  });
+
+  it("exposes a live host operation so another view can restore its progress", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-host-operation-"));
+    const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
+      ? response(skinCatalog())
+      : response({
+        skins: [],
+        operation: { kind: "install", skinId: "demo.skin", phase: "downloading", progress: 42, receivedBytes: 420, totalBytes: 1000 },
+        restartAvailable: false
+      }));
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher });
+
+    const snapshot = await market.snapshot();
+    expect(snapshot.host.operation).toEqual({
+      skinId: "demo.skin",
+      action: "install",
+      phase: "downloading",
+      progress: 42,
+      receivedBytes: 420,
+      totalBytes: 1000
+    });
   });
 
   it("does not let runtime state erase a profile update detected by version or commit", async () => {
@@ -315,6 +350,22 @@ describe("DshSkinMarketplace", () => {
       expect.objectContaining({ phase: "downloading", progress: 37, receivedBytes: 37, totalBytes: 100 }),
       expect.objectContaining({ phase: "done", progress: 100 })
     ]));
+    expect(progress.at(-1)).toBeNull();
+  });
+
+  it("reports a failed host operation and clears its progress callback", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-failed-operation-"));
+    const fetcher = vi.fn(async (url: string) => {
+      if (url === DSH_SKIN_CATALOG_URL) return response(skinCatalog());
+      if (url.endsWith("/install")) return response({ operationId: "failed-op" }, 202);
+      if (url.endsWith("/operations/failed-op")) return response({ phase: "failed", message: "ERR_PNPM_FETCH_404: Not Found" });
+      return response({ skins: [], restartAvailable: false });
+    });
+    const progress: unknown[] = [];
+    const market = new DshSkinMarketplace({ cachePath: join(root, "catalog.json"), webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher, pollDelay: async () => undefined });
+
+    await expect(market.mutate({ skinId: "demo.skin", action: "install" }, value => progress.push(value))).resolves.toMatchObject({ ok: false, error: "ERR_PNPM_FETCH_404: Not Found" });
+    expect(progress.at(-1)).toBeNull();
   });
 
   it("uses the configured DSH Web origin for theme operations", async () => {

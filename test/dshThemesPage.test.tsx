@@ -171,6 +171,24 @@ describe("DshThemesPage", () => {
     expect(api.mutateDshSkin).toHaveBeenCalledTimes(1);
   });
 
+  it("restores an in-flight host operation after switching to the market", async () => {
+    renderPage(snapshot({ operation: { skinId: "ocean.theme", action: "install", phase: "downloading", progress: 42, receivedBytes: 420, totalBytes: 1000 } }));
+    expect(await screen.findByText("42%")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    expect(await screen.findByText("42%")).not.toBeNull();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("42");
+  });
+
+  it("clears the local progress indicator when the mutation IPC call rejects", async () => {
+    const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }));
+    api.mutateDshSkin.mockRejectedValueOnce(new Error("connection lost"));
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "使用" }));
+    await waitFor(() => expect(screen.getByText("connection lost")).not.toBeNull());
+    expect(document.querySelector(".dsh-theme-operation-progress")).toBeNull();
+  });
+
   it("fades the saved-state notice after ten seconds", async () => {
     vi.useFakeTimers();
     const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }] }));

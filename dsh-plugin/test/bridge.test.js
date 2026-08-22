@@ -18,6 +18,7 @@ import {
   allowGitHostedBuild,
   blockedBuildPackage,
   bundleConfigOwners,
+  commandError,
   createAgentSkillPolicy,
   createPluginPackageController,
   detectThemeCompatibility,
@@ -304,6 +305,24 @@ describe('DSH Loader inventory bridge', () => {
     assert.match(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'), /allowBuilds:/)
     assert.match(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'), /dsh-client-ui-aqua"?: true/)
     assert.equal(allowGitHostedBuild(root, '@deepseek-ai/dsh-client-ui-aqua'), false)
+  })
+
+  it('reads pnpm NDJSON build-block metadata and does not misclassify network errors', () => {
+    const blocked = JSON.stringify({
+      name: 'pnpm',
+      err: {
+        code: 'ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED',
+        package: { bareSpecifier: '@deepseek-ai/dsh-client-ui-aqua@1.3.1' },
+      },
+    })
+    assert.equal(blockedBuildPackage(blocked), '@deepseek-ai/dsh-client-ui-aqua')
+    assert.equal(blockedBuildPackage(`${blocked.replace('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED', 'ECONNRESET')}\ndsh: git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed`), null)
+    assert.match(commandError({ stderr: `${JSON.stringify({ name: 'pnpm', err: { code: 'ECONNRESET', message: 'request failed' } })}\ndsh: pnpm failed in profile directory C:\\profile` }), /ECONNRESET[\s\S]*request failed/)
+    const notFound = JSON.stringify({ name: 'pnpm', code: 'ERR_PNPM_FETCH_404', resource: 'https://codeload.github.com/example/theme/tar.gz/missing', err: { code: 'ERR_PNPM_FETCH_404', message: 'Not Found' } })
+    const notFoundError = commandError({ stderr: `${notFound}\ndsh: pnpm failed in profile directory C:\\profile\ndsh: git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed` })
+    assert.match(notFoundError, /ERR_PNPM_FETCH_404/)
+    assert.match(notFoundError, /Not Found/)
+    assert.doesNotMatch(notFoundError, /allowBuilds/)
   })
 
   it('retries a git theme install after allowing its blocked prepare build', async () => {

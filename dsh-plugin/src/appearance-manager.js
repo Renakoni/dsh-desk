@@ -75,16 +75,52 @@ function compatibilityActivationError(compatibility) {
 }
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/i
+const ANSI_ESCAPE = /\u001b\[[0-?]*[ -\/]*[@-~]/g
+
+function packageNameFromValue(value) {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)(?:@.*)?$/i)
+  return match && PACKAGE_NAME.test(match[1]) ? match[1] : null
+}
 
 function gitHostedAdd(args) {
   return args.includes('add') && args.some(argument => /^(?:git\+|github:)|\.git(?:#|$)/.test(argument))
 }
 
 export function blockedBuildPackage(output) {
-  const hint = output.match(/onlyBuiltDependencies:\s*\r?\n\s*-\s*["']?([^"'\s]+)["']?/i)?.[1]
-  if (hint && PACKAGE_NAME.test(hint)) return hint
-  const error = output.match(/The git-hosted package\s+["'](.+)@[^"']+["'] needs to execute build scripts/i)?.[1]
-  return error && PACKAGE_NAME.test(error) ? error : null
+  const text = String(output ?? '').replace(ANSI_ESCAPE, '')
+  const diagnostic = text.split(/\r?\n/)
+    .filter(line => !/^\s*dsh: (?:pnpm failed|git-hosted plugins build)/i.test(line))
+    .join('\n')
+  const blocked = /ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED|onlyBuiltDependencies\s*:|git-hosted package\s+["'][^"']+["'] needs to execute build scripts|prepare script[^\n]*(?:block|allow)|build scripts?[^\n]*(?:block|allow)/i.test(diagnostic)
+  if (!blocked) return null
+
+  const hint = diagnostic.match(/onlyBuiltDependencies\s*:\s*\r?\n\s*-\s*["']?([^"'\s]+)["']?/i)?.[1]
+  const hintedPackage = packageNameFromValue(hint)
+  if (hintedPackage) return hintedPackage
+
+  for (const line of diagnostic.split(/\r?\n/)) {
+    try {
+      const event = JSON.parse(line)
+      const candidates = [
+        event?.packageId,
+        event?.packageName,
+        event?.package?.bareSpecifier,
+        event?.err?.package?.bareSpecifier,
+        event?.err?.packageId,
+        event?.err?.packageName,
+      ]
+      for (const candidate of candidates) {
+        const packageName = packageNameFromValue(candidate)
+        if (packageName) return packageName
+      }
+    } catch {
+      // pnpm may mix human-readable and NDJSON reporter output.
+    }
+  }
+
+  const error = diagnostic.match(/The git-hosted package\s+["'](.+)@[^"']+["'] needs to execute build scripts/i)?.[1]
+  return packageNameFromValue(error)
 }
 
 export function allowGitHostedBuild(profileDir, packageName) {
@@ -380,7 +416,31 @@ export function runPlugin(profile, args, onProgress, profileDir) {
   })
 }
 
-function commandError(result) { return (result.stderr || result.stdout || `plugin command exited ${String(result.exitCode)}`).trim().slice(-800) }
+export function commandError(result) {
+  const raw = `${result.stderr || ''}\n${result.stdout || ''}`.replace(ANSI_ESCAPE, '')
+  const details = []
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || /^dsh: (?:pnpm failed|git-hosted plugins build)/i.test(trimmed)) continue
+    try {
+      const event = JSON.parse(trimmed)
+      const error = event?.err
+      if (event?.name === 'pnpm' && error && typeof error === 'object') {
+        if (typeof error.code === 'string') details.push(error.code)
+        if (typeof error.message === 'string') details.push(error.message)
+        if (typeof error.resource === 'string') details.push(error.resource)
+      } else if (event?.name === 'pnpm:package-requester' && typeof event.message === 'string') {
+        details.push(event.message)
+      }
+      continue
+    } catch {
+      // Keep non-JSON pnpm error lines below.
+    }
+    if (/ERR_PNPM_|\b(?:ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN)\b|\b(?:error|failed|forbidden|not found)\b/i.test(trimmed)) details.push(trimmed)
+  }
+  const message = [...new Set(details)].join('\n') || raw.trim() || `plugin command exited ${String(result.exitCode)}`
+  return message.slice(-1200)
+}
 
 function skinState(profileDir, skin, stored) {
   const installed = Object.hasOwn(dependencies(profileDir), skin.packageName)

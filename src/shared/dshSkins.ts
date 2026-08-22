@@ -69,6 +69,8 @@ export type DshSkinHostState = {
   connected: boolean;
   marketInstalled: boolean;
   skins: DshSkinRuntimeState[];
+  /** The live operation, when a theme install/update is still running. */
+  operation?: DshSkinOperationProgress | null;
   restartAvailable: boolean;
   runningAgentCount: number | null;
 };

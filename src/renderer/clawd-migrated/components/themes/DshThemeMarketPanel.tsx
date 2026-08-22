@@ -85,6 +85,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     try {
       const next = await window.companion.getDshSkinMarketplace(force);
       setSnapshot(next);
+      setOperationProgress(next.host.operation ?? null);
       onChanged(next);
     } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
     finally { setLoading(false); }
@@ -96,6 +97,11 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     const subscribe = window.companion.onDshSkinProgress;
     return subscribe ? subscribe(setOperationProgress) : undefined;
   }, []);
+  useEffect(() => {
+    if (!initialSnapshot) return;
+    setSnapshot(initialSnapshot);
+    setOperationProgress(initialSnapshot.host.operation ?? null);
+  }, [initialSnapshot]);
   useEffect(() => {
     if (!notice) {
       setNoticeFading(false);
@@ -122,7 +128,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
   const selectedRuntime = selected && snapshot ? runtimeFor(snapshot, selected.id) : undefined;
 
   async function mutate(skin: DshSkinCatalogEntry, action: DshSkinAction) {
-    if (busy !== null) {
+    if (busy !== null || operationProgress !== null) {
       toast.info(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"));
       return;
     }
@@ -138,6 +144,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
     try {
       const result = await window.companion.mutateDshSkin({ skinId: skin.id, action });
       setSnapshot(result.snapshot);
+      setOperationProgress(result.snapshot.host.operation ?? null);
       onChanged(result.snapshot);
       if (result.supportPrepared) setNotice(t("dshThemes.supportPrepared", "主题管理已准备好。重启 DSH 后再次安装这个主题。"));
       else if (!result.ok) setNotice(result.error ?? t("dshThemes.operationFailed", "操作失败。"));
@@ -152,13 +159,17 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
           const nextSnapshot = await window.companion.getDshSkinMarketplace().catch(() => null);
           if (nextSnapshot) {
             setSnapshot(nextSnapshot);
+            setOperationProgress(nextSnapshot.host.operation ?? null);
             onChanged(nextSnapshot);
           }
           setNotice(t("dshThemes.restartToApply", "主题状态已保存，部分功能可能需要重启 DSH。"));
         }
       } else if (result.browserRefreshRequired) setNotice(t("dshThemes.restartToApply", "主题状态已保存，部分功能可能需要重启 DSH。"));
-    } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(null); setOperationProgress(null); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+      setOperationProgress(null);
+    }
+    finally { setBusy(null); }
   }
 
   function openDetails(skin: DshSkinCatalogEntry, trigger?: HTMLButtonElement) {
@@ -211,7 +222,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
           const installed = state?.installation === "installed";
           const activeTheme = state?.activation === "active";
           const manual = skin.review?.installation === "manual-only";
-          const isBusy = busy?.startsWith(`${skin.id}:`) === true;
+          const isBusy = busy?.startsWith(`${skin.id}:`) === true || operationProgress !== null;
           const canManage = snapshot.host.connected;
           return (
             <article key={skin.id} className={`dsh-theme-market-card ${activeTheme ? "active" : ""}`} data-testid="dsh-theme-card">
@@ -226,7 +237,7 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged }: {
         {rows.length > visibleCount ? <button type="button" className="dsh-theme-load-more" onClick={() => setVisibleCount(count => count + PAGE_SIZE)}>{t("dshThemes.loadMore", "加载更多")}<span>{Math.min(PAGE_SIZE, rows.length - visibleCount)}</span></button> : null}
       </section>
 
-      {selected && snapshot ? <ThemeDetailsDialog skin={selected} runtime={selectedRuntime} snapshot={snapshot} shotIndex={shotIndex} busy={busy !== null} locale={locale} t={t} onShotIndex={setShotIndex} onClose={closeDetails} onMutate={mutate} /> : null}
+      {selected && snapshot ? <ThemeDetailsDialog skin={selected} runtime={selectedRuntime} snapshot={snapshot} shotIndex={shotIndex} busy={busy !== null || operationProgress !== null} locale={locale} t={t} onShotIndex={setShotIndex} onClose={closeDetails} onMutate={mutate} /> : null}
     </div>
   );
 }
