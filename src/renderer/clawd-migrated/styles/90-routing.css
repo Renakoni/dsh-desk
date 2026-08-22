@@ -239,6 +239,24 @@
   -webkit-app-region: no-drag;
 }
 
+[data-sonner-toaster] .dsh-theme-warning-toast[data-sonner-toast][data-styled="true"] {
+  border-color: color-mix(in srgb, #d79b2d 48%, var(--settings-line));
+  color: var(--settings-ink);
+  background: color-mix(in srgb, #d79b2d 18%, var(--settings-surface));
+  text-align: center;
+}
+
+[data-sonner-toaster] .dsh-theme-warning-toast[data-sonner-toast][data-styled="true"] [data-content] {
+  flex: 1 1 auto;
+  justify-content: center;
+  text-align: center;
+}
+
+[data-sonner-toaster] .dsh-theme-warning-toast[data-sonner-toast][data-styled="true"] [data-title] {
+  width: 100%;
+  text-align: center;
+}
+
 /* Connectivity feedback is content-sized instead of reserving a broad empty
    surface. The max width keeps long provider names readable without letting a
    provider name push the toast out of a narrow window. */

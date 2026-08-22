@@ -160,14 +160,17 @@ describe("DshThemesPage", () => {
 
   it("reports a second update request while another theme operation is running", async () => {
     const api = renderPage(snapshot({ skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "0.9.0", installedAt: null, updateAvailable: true }] }));
-    const toastInfo = vi.spyOn(toast, "info");
+    const toastWarning = vi.spyOn(toast, "warning");
     api.mutateDshSkin.mockImplementationOnce(() => new Promise(() => undefined));
     await screen.findByText("海洋主题");
     fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "海洋主题" })).getByRole("button", { name: "更新" }));
     fireEvent.click(screen.getByRole("button", { name: "查看 海洋主题" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "海洋主题" })).getByRole("button", { name: "更新" }));
-    expect(toastInfo).toHaveBeenCalledWith("另一个主题操作正在进行，请完成后再试。");
+    expect(toastWarning.mock.calls.at(-1)).toEqual(["另一个主题操作正在进行，请完成后再试。", {
+      id: "dsh-theme-operation-busy",
+      className: "dsh-theme-warning-toast"
+    }]);
     expect(api.mutateDshSkin).toHaveBeenCalledTimes(1);
   });
 
@@ -278,7 +281,7 @@ describe("DshThemesPage", () => {
       marketInstalled: true,
       skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
     }));
-    const toastInfo = vi.spyOn(toast, "info");
+    const toastWarning = vi.spyOn(toast, "warning");
     await screen.findByText("海洋主题");
     const deactivate = screen.getByRole("button", { name: "停用" });
     const uninstall = screen.getByRole("button", { name: "卸载" });
@@ -288,7 +291,12 @@ describe("DshThemesPage", () => {
     expect(screen.getByText("启动 DSH 后可管理主题。")).not.toBeNull();
     expect(deactivate.getAttribute("aria-describedby")).toBe("dsh-theme-host-status");
     fireEvent.click(deactivate);
-    expect(toastInfo).toHaveBeenCalledWith("该操作需 DSH 在线。");
+    fireEvent.click(deactivate);
+    expect(toastWarning).toHaveBeenCalledTimes(2);
+    expect(toastWarning.mock.calls.at(-1)).toEqual(["该操作需 DSH 在线。", {
+      id: "dsh-theme-dsh-offline",
+      className: "dsh-theme-warning-toast"
+    }]);
     expect(api.mutateDshSkin).not.toHaveBeenCalled();
   });
 
@@ -298,14 +306,17 @@ describe("DshThemesPage", () => {
       marketInstalled: true,
       skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
     }));
-    const toastInfo = vi.spyOn(toast, "info");
+    const toastWarning = vi.spyOn(toast, "warning");
     await screen.findByText("海洋主题");
     fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
     const card = (await screen.findByText("海洋主题")).closest("article");
     fireEvent.click(within(card!).getByRole("button", { name: "详情" }));
     const dialog = await screen.findByRole("dialog", { name: "海洋主题" });
     fireEvent.click(within(dialog).getByRole("button", { name: "使用" }));
-    expect(toastInfo).toHaveBeenCalledWith("该操作需 DSH 在线。");
+    expect(toastWarning.mock.calls.at(-1)).toEqual(["该操作需 DSH 在线。", {
+      id: "dsh-theme-dsh-offline",
+      className: "dsh-theme-warning-toast"
+    }]);
     expect(api.mutateDshSkin).not.toHaveBeenCalled();
   });
 

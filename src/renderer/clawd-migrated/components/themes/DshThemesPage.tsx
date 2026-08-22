@@ -92,15 +92,15 @@ export function DshThemesPage({ active }: DshThemesPageProps) {
 
   async function mutate(skin: Pick<DshSkinCatalogEntry, "id">, action: DshSkinAction) {
     if (snapshot?.host.marketInstalled !== true) {
-      toast.info(t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。"));
+      toast.warning(t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。"), { id: "dsh-theme-manager-unavailable", className: "dsh-theme-warning-toast" });
       return;
     }
     if (snapshot?.host.connected !== true) {
-      toast.info(t("dshThemes.dshOnlineRequired", "该操作需 DSH 在线。"));
+      toast.warning(t("dshThemes.dshOnlineRequired", "该操作需 DSH 在线。"), { id: "dsh-theme-dsh-offline", className: "dsh-theme-warning-toast" });
       return;
     }
     if (busy !== null || operationProgress !== null) {
-      toast.info(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"));
+      toast.warning(t("dshThemes.operationBusy", "另一个主题操作正在进行，请完成后再试。"), { id: "dsh-theme-operation-busy", className: "dsh-theme-warning-toast" });
       return;
     }
     if (action === "update" && selectedId !== null) closeDetails();
