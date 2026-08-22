@@ -25,7 +25,6 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@vitejs/plugin-react": "^4.4.1",
     "codemirror": "^6.0.2",
     "electron-updater": "^6.8.9",
     "fflate": "^0.8.3",
@@ -36,13 +35,19 @@
     "sonner": "^2.0.7",
     "yaml": "^2.9.0"
   },
+  "overrides": {
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26"
+  },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "concurrently": "^9.1.2",
+    "concurrently": "^9.2.4",
     "cross-env": "^7.0.3",
     "electron": "^39.8.10",
     "electron-builder": "^26.15.3",
