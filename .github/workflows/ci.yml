@@ -110,3 +110,23 @@ jobs:
 
       - name: Check whitespace errors
         run: git diff --check HEAD^1 HEAD
+
+  # Keep the branch-protection context used by main while the quality checks
+  # remain split into independently visible jobs above.
+  quality:
+    name: Quality (Windows, plugin, typecheck, build)
+    if: always()
+    needs: [plugin-tests, typecheck, build]
+    runs-on: windows-latest
+    steps:
+      - name: Verify quality jobs
+        shell: pwsh
+        env:
+          PLUGIN_RESULT: ${{ needs.plugin-tests.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          $results = @($env:PLUGIN_RESULT, $env:TYPECHECK_RESULT, $env:BUILD_RESULT)
+          if ($results -contains 'failure' -or $results -contains 'cancelled' -or $results -contains 'skipped') {
+            throw "One or more quality jobs did not succeed: $($results -join ', ')"
+          }
