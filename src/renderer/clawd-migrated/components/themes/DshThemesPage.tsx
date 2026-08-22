@@ -209,15 +209,17 @@ export function DshThemesPage({ active, snapshot: sharedSnapshot, snapshotGenera
         </div>
       </header>
 
-      <DshThemeFeedback notice={notice?.message ?? null} noticeFading={noticeFading} operationProgress={operationProgress} finalizing={busy !== null} onDismiss={() => onNoticeChange(null)} t={t} />
-      {snapshot && (!snapshot.host.marketInstalled || !snapshot.host.connected) ? (
-        <div className="dsh-theme-connection-note" id="dsh-theme-host-status" role="status">
-          <Info size={14} aria-hidden="true" />
-          <span>{snapshot.host.marketInstalled
-            ? t("dshThemes.startDshToManage", "启动 DSH 后可管理主题。")
-            : t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。")}</span>
-        </div>
-      ) : null}
+      <div className="dsh-theme-status-rail">
+        {snapshot && (!snapshot.host.marketInstalled || !snapshot.host.connected) ? (
+          <div className="dsh-theme-connection-note" id="dsh-theme-host-status" role="status">
+            <Info size={14} aria-hidden="true" />
+            <span>{snapshot.host.marketInstalled
+              ? t("dshThemes.startDshToManage", "启动 DSH 后可管理主题。")
+              : t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。")}</span>
+          </div>
+        ) : null}
+        <DshThemeFeedback notice={notice?.message ?? null} noticeFading={noticeFading} operationProgress={operationProgress} finalizing={busy !== null} onDismiss={() => onNoticeChange(null)} t={t} />
+      </div>
 
       <section className="dsh-theme-library-content" aria-live="polite" tabIndex={0} aria-label={t("dshThemes.libraryContent", "已安装主题")}>
         {loading && !snapshot ? <div className="dsh-theme-empty"><RefreshCw size={20} className="spinning" /><span>{t("dshThemes.loadingLibrary", "正在读取本机主题…")}</span></div> : null}

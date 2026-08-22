@@ -52,6 +52,18 @@
   align-items: stretch;
   overflow: hidden;
 }
+.dsh-theme-status-rail {
+  min-width: 0;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  align-items: stretch;
+}
+.dsh-theme-status-rail > .dsh-theme-feedback,
+.dsh-theme-status-rail > .dsh-theme-connection-note { grid-area: 1 / 1; }
+.dsh-theme-status-rail > .dsh-theme-feedback { position: relative; z-index: 1; }
+.dsh-theme-status-rail > .dsh-theme-connection-note { transition: opacity 150ms ease; }
+.dsh-theme-status-rail:has(.dsh-theme-feedback:not([data-state="idle"])) > .dsh-theme-connection-note { opacity: 0; pointer-events: none; }
 .dsh-theme-feedback > * {
   grid-area: 1 / 1;
   animation: dsh-theme-feedback-enter 180ms cubic-bezier(.16, 1, .3, 1);

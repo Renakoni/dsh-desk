@@ -526,7 +526,7 @@ describe("DshThemesPage", () => {
     expect(deactivate).toHaveProperty("disabled", false);
     expect(uninstall).toHaveProperty("disabled", false);
     expect(deactivate.getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByText("启动 DSH 后可管理主题。")).not.toBeNull();
+    expect(screen.getByText("启动 DSH 后可管理主题。").closest(".dsh-theme-status-rail")).not.toBeNull();
     expect(deactivate.getAttribute("aria-describedby")).toBe("dsh-theme-host-status");
     fireEvent.click(deactivate);
     fireEvent.click(deactivate);

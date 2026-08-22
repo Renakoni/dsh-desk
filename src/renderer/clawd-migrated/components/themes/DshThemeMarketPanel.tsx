@@ -229,15 +229,17 @@ export function DshThemeMarketPanel({ initialSnapshot, onBack, onChanged, operat
       </header>
 
       {snapshot?.catalogError ? <div className="dsh-theme-catalog-note">{snapshot.skins.length > 0 ? t("dshThemes.cachedCatalog", "正在显示上次成功加载的主题目录。") : t("dshThemes.catalogUnavailable", "主题目录暂时无法加载。")}</div> : null}
-      <DshThemeFeedback notice={notice?.message ?? null} noticeFading={noticeFading} operationProgress={operationProgress} finalizing={operationKey !== null} onDismiss={() => onNoticeChange(null)} t={t} />
-      {snapshot && (!snapshot.host.marketInstalled || !snapshot.host.connected) ? (
-        <div className="dsh-theme-connection-note" id="dsh-theme-market-host-status" role="status">
-          <Info size={14} aria-hidden="true" />
-          <span>{snapshot.host.marketInstalled
-            ? t("dshThemes.startDshToManage", "启动 DSH 后可管理主题。")
-            : t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。")}</span>
-        </div>
-      ) : null}
+      <div className="dsh-theme-status-rail">
+        {snapshot && (!snapshot.host.marketInstalled || !snapshot.host.connected) ? (
+          <div className="dsh-theme-connection-note" id="dsh-theme-market-host-status" role="status">
+            <Info size={14} aria-hidden="true" />
+            <span>{snapshot.host.marketInstalled
+              ? t("dshThemes.startDshToManage", "启动 DSH 后可管理主题。")
+              : t("dshThemes.managerUnavailable", "DSH 主题管理组件不可用。")}</span>
+          </div>
+        ) : null}
+        <DshThemeFeedback notice={notice?.message ?? null} noticeFading={noticeFading} operationProgress={operationProgress} finalizing={operationKey !== null} onDismiss={() => onNoticeChange(null)} t={t} />
+      </div>
       <section className="dsh-theme-market-toolbar" aria-label={t("dshThemes.filters", "主题筛选")}>
         <label className="dsh-theme-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t("dshThemes.search", "搜索主题或作者")} /></label>
         <div className="dsh-theme-sort" aria-label={t("dshThemes.sort", "排序")}>
