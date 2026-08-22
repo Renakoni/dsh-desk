@@ -10,6 +10,7 @@
 export const DEFAULT_COMPANION_SETTINGS: Record<string, any> = {
   hideSensitiveContent: false,
   showBubbles: true,
+  hideIdleStatusCard: false,
   editPosition: false,
   alwaysOnTop: true,
   clickThrough: false,

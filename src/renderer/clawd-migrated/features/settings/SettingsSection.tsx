@@ -212,6 +212,7 @@ export function SettingsSection({
             <Toggle label={t("appearance.enablePet", "启用桌宠")} checked={settings.petEnabled} onChange={petEnabled => updateSettings({ petEnabled })} />
             <Toggle label={t("appearance.alwaysOnTop", "始终置顶")} checked={settings.alwaysOnTop} onChange={alwaysOnTop => updateSettings({ alwaysOnTop })} />
             <Toggle label={t("appearance.showBubbles", "显示气泡")} checked={settings.showBubbles} onChange={showBubbles => updateSettings({ showBubbles })} />
+            <Toggle label={t("appearance.hideIdleStatusCard", "空闲时隐去状态卡片")} checked={settings.hideIdleStatusCard} onChange={hideIdleStatusCard => updateSettings({ hideIdleStatusCard })} />
           </GroupCard>
 
           <div className="pet-display-controls">

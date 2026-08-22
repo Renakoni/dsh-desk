@@ -850,6 +850,7 @@
     "alwaysOnTop": "Always on top",
     "clickThrough": "Full click-through",
     "showBubbles": "Show bubbles",
+    "hideIdleStatusCard": "Hide status card while idle",
     "showStatusProp": "Show status prop",
     "editPosition": "Edit pet position",
     "resetAll": "Reset all",

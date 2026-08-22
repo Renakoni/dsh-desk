@@ -67,9 +67,9 @@ button {
    Panel and the permission card). One matte-graphite material, hairline
    detailing, no glow — anchored above the pet. */
 .pet-bubble {
-  --line: rgba(255, 255, 255, 0.09);
-  --surface-bottom: rgba(20, 21, 25, 0.97);
-  --accent: rgba(255, 255, 255, 0.4);
+  --line: oklch(0.88 0.008 255 / 0.16);
+  --surface: oklch(0.205 0.01 255 / 0.975);
+  --accent: oklch(0.76 0.012 255);
   /* Fixed width, centered in the window, scaled via --bubble-scale. The window
      grows to fit a larger scale (getPetWindowWidth), so scaling never clips.
      Scaling from the bottom keeps the bubble pinned above the pet — it grows
@@ -77,6 +77,7 @@ button {
      BUBBLE_BASE_WIDTH in petDisplaySettings.ts. */
   --bubble-base-width: 236px;
   --bubble-scale: 1;
+  --bubble-opacity: 1;
   box-sizing: border-box;
   position: absolute;
   z-index: 20;
@@ -88,15 +89,14 @@ button {
   margin-right: auto;
   transform: scale(var(--bubble-scale));
   transform-origin: bottom center;
-  transition: opacity 160ms ease-out;
+  translate: 0 0;
+  opacity: var(--bubble-opacity);
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
   border: 1px solid var(--line);
-  border-radius: 15px;
-  color: rgba(245, 245, 247, 0.96);
-  background: linear-gradient(180deg, rgba(30, 31, 36, 0.97), var(--surface-bottom));
-  /* No drop shadow: it reads as a dark halo around the bubble on light
-     wallpapers. The inset hairline is surface detail, not glow. */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px) saturate(1.05);
+  border-radius: 8px;
+  color: oklch(0.965 0.004 255);
+  background: var(--surface);
+  box-shadow: 0 2px 8px oklch(0.05 0.01 255 / 0.22), inset 0 1px 0 oklch(0.95 0.006 255 / 0.055);
 }
 
 /* --- shared bubble content (status panel + permission card) --- */
@@ -111,18 +111,19 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.44);
+  color: oklch(0.72 0.008 255);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .bubble-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 16%, transparent);
 }
 
 .bubble-body {
@@ -137,11 +138,11 @@ button {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: rgba(247, 247, 249, 0.97);
-  font-size: 15px;
-  font-weight: 550;
+  color: oklch(0.965 0.004 255);
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -150,10 +151,11 @@ button {
   flex: 0 0 auto;
   max-width: 48%;
   overflow: hidden;
-  padding: 2px 7px;
-  border-radius: 5px;
-  color: rgba(232, 232, 236, 0.72);
-  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border: 1px solid oklch(0.88 0.008 255 / 0.1);
+  border-radius: 4px;
+  color: oklch(0.79 0.01 255);
+  background: oklch(0.93 0.008 255 / 0.055);
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 10px;
   font-weight: 450;
@@ -194,22 +196,28 @@ button {
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 11px 13px 12px;
 }
 
-.state-running .panel { --accent: #7fb0c9; }
-.state-completed .panel { --accent: #8caf95; }
-.state-error .panel { --accent: #cf866b; }
-.state-permission-prompt .panel { --accent: #c6a56a; }
-.panel.notification-attention { --accent: #c6a56a; }
-.panel.notification-info { --accent: #7f9daa; }
+.state-idle .panel { --accent: oklch(0.76 0.08 220); }
+.state-running .panel { --accent: oklch(0.76 0.09 220); }
+.state-completed .panel { --accent: oklch(0.76 0.09 155); }
+.state-error .panel { --accent: oklch(0.72 0.13 35); }
+.state-permission-prompt .panel { --accent: oklch(0.78 0.1 85); }
+.panel.notification-attention { --accent: oklch(0.78 0.1 85); }
+.panel.notification-info { --accent: oklch(0.74 0.07 220); }
+
+.panel-exiting {
+  translate: 0 -4px;
+  opacity: 0;
+}
 
 /* Monospace target on one line; truncate from the left so the filename / tail
    (the useful part of a path) stays visible. */
 .panel-path {
   overflow: hidden;
-  color: rgba(226, 227, 233, 0.6);
+  color: oklch(0.76 0.008 255);
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 11px;
   white-space: nowrap;
@@ -225,20 +233,21 @@ button {
 .panel-note {
   margin: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.5);
+  color: oklch(0.72 0.008 255);
   font-size: 12px;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.state-error .panel-note {
+.state-error .panel-note,
+.panel-note-prose {
   display: -webkit-box;
-  max-height: 2.8em;
+  max-height: 4.2em;
   white-space: normal;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 /* === Permission bubble ===
@@ -246,18 +255,18 @@ button {
    block so a long command stays readable while the bubble grows upward,
    never into the pet. Restrained — one quiet risk accent, no glow. */
 .permission-card {
-  --risk: #8caf95;
+  --risk: oklch(0.76 0.09 155);
   --accent: var(--risk);
   max-height: 250px;
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding: 13px 14px;
+  padding: 12px 13px 13px;
 }
 
-.risk-high { --risk: #cf866b; }
-.risk-medium { --risk: #c6a56a; }
-.risk-low { --risk: #8caf95; }
+.risk-high { --risk: oklch(0.72 0.13 35); }
+.risk-medium { --risk: oklch(0.78 0.1 85); }
+.risk-low { --risk: oklch(0.76 0.09 155); }
 
 .permission-risk {
   flex: 0 0 auto;
@@ -267,7 +276,7 @@ button {
   color: color-mix(in srgb, var(--risk) 82%, white 18%);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 .permission-foot {
@@ -321,6 +330,22 @@ button {
 
 .permission-allow:hover {
   background: #93bfab;
+}
+
+.permission-actions button:focus-visible {
+  outline: 2px solid oklch(0.82 0.08 220);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-bubble,
+  .permission-actions button {
+    transition: none;
+  }
+
+  .panel-exiting {
+    translate: 0 0;
+  }
 }
 
 .debug-panel {

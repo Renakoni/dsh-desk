@@ -163,6 +163,35 @@ describe("DSH model routing placement", () => {
     expect(screen.queryByRole("button", { name: "Models" })).toBeNull();
   });
 
+  it("saves the pet idle-card visibility preference", () => {
+    const updateSettings = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <SettingsSection
+          settings={defaultSettings}
+          updateSettings={updateSettings}
+          connection={{ serverListening: false, error: null }}
+          now={Date.now()}
+          hookStatus={null}
+          activeSettingsSubsection="pet"
+          setActiveSettingsSubsection={vi.fn()}
+          sectionContentRef={React.createRef<HTMLDivElement>()}
+          locale="en"
+          setLocale={vi.fn()}
+          appVersion="0.0.0"
+          updateStatus={{}}
+          checkingUpdate={false}
+          handleCheckUpdate={vi.fn()}
+        />
+      </I18nProvider>
+    );
+
+    const toggle = screen.getByRole("switch", { name: "Hide status card while idle" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith({ hideIdleStatusCard: true });
+  });
+
   it("uses the DSH Desk alarm-clock icon on the About page", () => {
     const view = render(
       <I18nProvider initialLocale="en">

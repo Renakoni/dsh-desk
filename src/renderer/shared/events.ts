@@ -284,6 +284,7 @@ export interface CompanionSettings {
   currentClaudeProviderId?: string;
   hideSensitiveContent: boolean;
   showBubbles: boolean;
+  hideIdleStatusCard: boolean;
   editPosition: boolean;
   alwaysOnTop: boolean;
   clickThrough: boolean;
@@ -611,6 +612,7 @@ export interface CompanionConnectionStatus {
 export const defaultSettings: CompanionSettings = {
   hideSensitiveContent: false,
   showBubbles: true,
+  hideIdleStatusCard: false,
   editPosition: false,
   alwaysOnTop: true,
   clickThrough: false,

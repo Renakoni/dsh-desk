@@ -25,6 +25,8 @@ import { isPetElement } from "./petHitTest";
 
 const defaultBubbleSeconds = 8;
 const soundClipMs = 3000;
+const idleStatusCardMs = 5000;
+const statusCardFadeMs = 220;
 const showDebugPanel = import.meta.env.DEV;
 
 type PermissionRequestPayload = { id: string; toolName?: string; toolDetail?: string };
@@ -35,6 +37,8 @@ type PetDisplaySettings = {
   feedbackOpacity?: number;
   permissionScale?: number;
   bubbleDuration?: number;
+  showBubbles?: boolean;
+  hideIdleStatusCard?: boolean;
   sound?: { volume?: number } | null;
   hideSensitiveContent?: boolean;
   language?: "auto" | "zh" | "en";
@@ -80,6 +84,8 @@ function normalizePetRendererSettings(settings?: PetDisplaySettings) {
       permissionScale: clampPermissionScale(settings?.permissionScale)
     },
     hideSensitiveContent: settings?.hideSensitiveContent === true,
+    showBubbles: settings?.showBubbles !== false,
+    hideIdleStatusCard: settings?.hideIdleStatusCard === true,
     stateAnimations: mappings && typeof mappings === "object" && !Array.isArray(mappings) ? mappings : {},
     idleAnim,
     petTheme: typeof settings?.petTheme === "string" ? settings.petTheme : "",
@@ -97,6 +103,11 @@ export default function App() {
   const [permissions, setPermissions] = useState<PermissionRequestView[]>([]);
   const [petDisplay, setPetDisplay] = useState(initialSettings.display);
   const [hideSensitiveContent, setHideSensitiveContent] = useState(initialSettings.hideSensitiveContent);
+  const [showBubbles, setShowBubbles] = useState(initialSettings.showBubbles);
+  const [hideIdleStatusCard, setHideIdleStatusCard] = useState(initialSettings.hideIdleStatusCard);
+  const [panelVisibility, setPanelVisibility] = useState<"visible" | "exiting" | "hidden">(
+    initialSettings.showBubbles && !initialSettings.hideIdleStatusCard ? "visible" : "hidden"
+  );
   const [stateAnimations, setStateAnimations] = useState<Record<string, string>>(initialSettings.stateAnimations);
   const [idleAnimConfig, setIdleAnimConfig] = useState<IdleAnimationConfig | null>(initialSettings.idleAnim);
   const [idleAnimation, setIdleAnimation] = useState<PetAnimationKey | null>(null);
@@ -107,6 +118,8 @@ export default function App() {
   const [dragDirection, setDragDirection] = useState<DragDirection | null>(null);
   const resetTimer = useRef<number | null>(null);
   const notificationTimer = useRef<number | null>(null);
+  const panelFadeTimer = useRef<number | null>(null);
+  const panelHideTimer = useRef<number | null>(null);
   const stableEvent = useRef<PetEvent | null>(null);
   // "Bubble stay" (bubbleDuration) and sound volume live in refs so the timers
   // and the play-sound handler read the latest value without re-subscribing.
@@ -170,6 +183,8 @@ export default function App() {
       bubbleDurationMsRef.current = next.bubbleDurationMs;
       soundVolumeRef.current = next.soundVolume;
       setHideSensitiveContent(next.hideSensitiveContent);
+      setShowBubbles(next.showBubbles);
+      setHideIdleStatusCard(next.hideIdleStatusCard);
       setStateAnimations(next.stateAnimations);
       // Settings broadcasts always deliver a fresh object; keep the previous
       // reference when the config is unchanged so unrelated saves don't reset
@@ -252,10 +267,9 @@ export default function App() {
 
     if (state === "completed") {
       resetTimer.current = window.setTimeout(() => {
-        const idleEvent = createPetEvent("idle", { title: "Idle" });
         setState("idle");
-        stableEvent.current = idleEvent;
-        setLastEvent(idleEvent);
+        stableEvent.current = null;
+        setLastEvent(null);
       }, bubbleDurationMsRef.current);
     }
 
@@ -263,6 +277,45 @@ export default function App() {
       if (resetTimer.current) window.clearTimeout(resetTimer.current);
     };
   }, [state]);
+
+  useEffect(() => {
+    const clearPanelTimers = () => {
+      if (panelFadeTimer.current) window.clearTimeout(panelFadeTimer.current);
+      if (panelHideTimer.current) window.clearTimeout(panelHideTimer.current);
+      panelFadeTimer.current = null;
+      panelHideTimer.current = null;
+    };
+
+    clearPanelTimers();
+    if (!showBubbles) {
+      setPanelVisibility("hidden");
+      return clearPanelTimers;
+    }
+    if (!hideIdleStatusCard) {
+      setPanelVisibility("visible");
+      return clearPanelTimers;
+    }
+
+    const hideAfter = state === "idle"
+      ? (lastEvent ? idleStatusCardMs : 0)
+      : state === "completed" ? bubbleDurationMsRef.current : null;
+    if (hideAfter === null) {
+      setPanelVisibility("visible");
+      return clearPanelTimers;
+    }
+    if (hideAfter === 0) {
+      setPanelVisibility("hidden");
+      return clearPanelTimers;
+    }
+
+    setPanelVisibility("visible");
+    panelFadeTimer.current = window.setTimeout(
+      () => setPanelVisibility("exiting"),
+      Math.max(0, hideAfter - statusCardFadeMs)
+    );
+    panelHideTimer.current = window.setTimeout(() => setPanelVisibility("hidden"), hideAfter);
+    return clearPanelTimers;
+  }, [state, lastEvent, showBubbles, hideIdleStatusCard]);
 
   useEffect(() => () => {
     if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
@@ -354,9 +407,15 @@ export default function App() {
           onDeny={() => respondPermission(activePermission.id, "deny")}
           scale={petDisplay.permissionScale}
         />
-      ) : (
-        <Panel state={state} event={displayEvent} scale={petDisplay.feedbackScale} opacity={petDisplay.feedbackOpacity} />
-      )}
+      ) : panelVisibility !== "hidden" ? (
+        <Panel
+          state={state}
+          event={displayEvent}
+          scale={petDisplay.feedbackScale}
+          opacity={petDisplay.feedbackOpacity}
+          exiting={panelVisibility === "exiting"}
+        />
+      ) : null}
       <Pet
         state={petState}
         stateAnimations={stateAnimations}
