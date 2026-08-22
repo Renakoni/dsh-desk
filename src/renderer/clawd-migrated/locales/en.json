@@ -698,6 +698,7 @@
     "browseMarket": "Browse theme market",
     "supportPrepared": "Theme management is ready. Restart DSH, then continue.",
     "startDshToManage": "Start DSH to manage themes.",
+    "dshOnlineRequired": "DSH must be online for this action.",
     "managerUnavailable": "The DSH theme manager is unavailable.",
     "libraryContent": "Installed themes",
     "marketContent": "Theme marketplace list",

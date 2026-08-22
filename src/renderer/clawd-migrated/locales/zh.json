@@ -698,6 +698,7 @@
     "browseMarket": "浏览主题市场",
     "supportPrepared": "主题管理已准备好。重启 DSH 后继续操作。",
     "startDshToManage": "启动 DSH 后可管理主题。",
+    "dshOnlineRequired": "该操作需 DSH 在线。",
     "managerUnavailable": "DSH 主题管理组件不可用。",
     "libraryContent": "已安装主题",
     "marketContent": "主题市场列表",

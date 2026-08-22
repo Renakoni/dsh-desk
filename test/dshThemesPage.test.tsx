@@ -272,19 +272,40 @@ describe("DshThemesPage", () => {
     expect(api.setDshThemeOverride).not.toHaveBeenCalled();
   });
 
-  it("does not offer lifecycle actions while the built-in manager is offline", async () => {
+  it("explains that lifecycle actions require an online DSH manager", async () => {
     const api = renderPage(snapshot({
       connected: false,
       marketInstalled: true,
       skins: [{ skinId: "ocean.theme", installation: "installed", activation: "active", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
     }));
+    const toastInfo = vi.spyOn(toast, "info");
     await screen.findByText("海洋主题");
     const deactivate = screen.getByRole("button", { name: "停用" });
     const uninstall = screen.getByRole("button", { name: "卸载" });
-    expect(deactivate).toHaveProperty("disabled", true);
-    expect(uninstall).toHaveProperty("disabled", true);
+    expect(deactivate).toHaveProperty("disabled", false);
+    expect(uninstall).toHaveProperty("disabled", false);
+    expect(deactivate.getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText("启动 DSH 后可管理主题。")).not.toBeNull();
     expect(deactivate.getAttribute("aria-describedby")).toBe("dsh-theme-host-status");
+    fireEvent.click(deactivate);
+    expect(toastInfo).toHaveBeenCalledWith("该操作需 DSH 在线。");
+    expect(api.mutateDshSkin).not.toHaveBeenCalled();
+  });
+
+  it("shows the offline toast from market details without sending a request", async () => {
+    const api = renderPage(snapshot({
+      connected: false,
+      marketInstalled: true,
+      skins: [{ skinId: "ocean.theme", installation: "installed", activation: "inactive", installedVersion: "1.0.0", installedAt: null, updateAvailable: false }]
+    }));
+    const toastInfo = vi.spyOn(toast, "info");
+    await screen.findByText("海洋主题");
+    fireEvent.click(screen.getByRole("button", { name: "主题市场" }));
+    const card = (await screen.findByText("海洋主题")).closest("article");
+    fireEvent.click(within(card!).getByRole("button", { name: "详情" }));
+    const dialog = await screen.findByRole("dialog", { name: "海洋主题" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "使用" }));
+    expect(toastInfo).toHaveBeenCalledWith("该操作需 DSH 在线。");
     expect(api.mutateDshSkin).not.toHaveBeenCalled();
   });
 
