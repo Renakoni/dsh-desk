@@ -384,7 +384,9 @@ function readCache(path: string): CatalogCache | null {
   if (!existsSync(path)) return null;
   try {
     const source = objectValue(JSON.parse(readFileSync(path, "utf8")));
-    if (!source || source.version !== CACHE_VERSION || typeof source.fetchedAt !== "number") return null;
+    // Version 1 used the same official catalog URL. Keep it usable offline and
+    // rewrite it as version 2 after the next successful refresh.
+    if (!source || ![1, CACHE_VERSION].includes(source.version as number) || typeof source.fetchedAt !== "number") return null;
     if (!Array.isArray(source.skins)) return null;
     const catalog = parseDshSkinCatalog({
       schemaVersion: 1,
@@ -446,7 +448,7 @@ export class DshSkinMarketplace {
       return { ok: false, error: "DSH 主题管理组件不可用，请先启动 DSH Desk 插件。", snapshot: await this.snapshot() };
     }
     try {
-      await this.refreshCatalog(false);
+      await this.refreshCatalog(input.action === "install" || input.action === "update");
       if (input.action === "restart") {
         await this.hostRequest("/dsh-appearance-manager/restart", {
           method: "POST",

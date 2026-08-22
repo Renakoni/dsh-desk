@@ -153,7 +153,7 @@ describe("DshSkinMarketplace", () => {
     expect(cached.skins).toHaveLength(1);
   });
 
-  it("drops the pre-fork catalog cache before resolving theme operations", async () => {
+  it("migrates a v1 catalog cache after a successful refresh", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-cache-revision-"));
     const cachePath = join(root, "catalog.json");
     writeFileSync(cachePath, JSON.stringify({ version: 1, fetchedAt: Date.now(), generatedAt: "old", skins: [] }));
@@ -164,6 +164,20 @@ describe("DshSkinMarketplace", () => {
     expect(fetcher).toHaveBeenCalledWith(DSH_SKIN_CATALOG_URL, expect.anything());
     expect(snapshot.catalogSource).toBe("remote");
     expect(snapshot.skins).toHaveLength(1);
+  });
+
+  it("keeps a valid v1 catalog cache when a forced refresh is offline", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-cache-offline-"));
+    const cachePath = join(root, "catalog.json");
+    const cachedCatalog = parseDshSkinCatalog(skinCatalog());
+    writeFileSync(cachePath, JSON.stringify({ version: 1, fetchedAt: 100, generatedAt: cachedCatalog.generatedAt, skins: cachedCatalog.skins }));
+    const fetcher = vi.fn(async () => response({ error: "offline" }, 503));
+    const market = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => false, fetcher, now: () => 101 });
+
+    const snapshot = await market.snapshot(true);
+    expect(snapshot.catalogSource).toBe("cache");
+    expect(snapshot.skins).toHaveLength(1);
+    expect(snapshot.catalogError).toContain("HTTP 503");
   });
 
   it("keeps installed and runtime-connected states separate", async () => {
