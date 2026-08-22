@@ -449,7 +449,13 @@ export class DshSkinMarketplace {
       return { ok: false, error: "DSH 主题管理组件不可用，请先启动 DSH Desk 插件。", snapshot: await this.snapshot() };
     }
     try {
-      await this.refreshCatalog(input.action === "install" || input.action === "update");
+      const requiresCurrentCatalog = input.action === "install" || input.action === "update";
+      await this.refreshCatalog(requiresCurrentCatalog);
+      if (requiresCurrentCatalog && this.catalogSource !== "remote") {
+        throw new Error(this.lastError
+          ? `Theme catalog unavailable; install or update requires a fresh catalog. ${this.lastError}`
+          : "Theme catalog unavailable; install or update requires a fresh catalog.");
+      }
       if (input.action === "restart") {
         await this.hostRequest("/dsh-appearance-manager/restart", {
           method: "POST",

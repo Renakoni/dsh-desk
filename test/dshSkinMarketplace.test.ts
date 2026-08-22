@@ -180,6 +180,20 @@ describe("DshSkinMarketplace", () => {
     expect(snapshot.catalogError).toContain("HTTP 503");
   });
 
+  it("does not install from a stale cache when the current catalog cannot be refreshed", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skins-cache-operation-offline-"));
+    const cachePath = join(root, "catalog.json");
+    const cachedCatalog = parseDshSkinCatalog(skinCatalog());
+    writeFileSync(cachePath, JSON.stringify({ version: 1, fetchedAt: 100, generatedAt: cachedCatalog.generatedAt, skins: cachedCatalog.skins }));
+    const fetcher = vi.fn(async (url: string) => response({ error: "offline" }, 503));
+    const market = new DshSkinMarketplace({ cachePath, webProfileDir: join(root, "web"), marketInstalled: () => true, fetcher, now: () => 101 });
+
+    const result = await market.mutate({ skinId: "demo.skin", action: "install" });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("requires a fresh catalog");
+    expect(fetcher.mock.calls.some(([url]) => url.endsWith("/install"))).toBe(false);
+  });
+
   it("keeps installed and runtime-connected states separate", async () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skins-host-"));
     const fetcher = vi.fn(async (url: string) => url === DSH_SKIN_CATALOG_URL
