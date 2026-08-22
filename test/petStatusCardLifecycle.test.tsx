@@ -93,6 +93,38 @@ describe("pet status card lifecycle", () => {
     expect(document.querySelector(".pet")).toBeTruthy();
   });
 
+  it("does not replay an expired idle card when an info notice restores its previous event", () => {
+    renderPet({ hideIdleStatusCard: true });
+    act(() => emitPetEvent?.({
+      id: "session-1",
+      event: "idle",
+      source: "deepseek-harness",
+      hook: "agent/session-start",
+      title: "DSH is online",
+      message: "Ready",
+      timestamp: 1
+    }));
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+
+    act(() => emitPetEvent?.({
+      id: "notice-1",
+      event: "idle",
+      source: "deepseek-harness",
+      notificationKind: "info",
+      title: "Profile synchronized",
+      timestamp: 2
+    }));
+    expect(screen.getByText("Profile synchronized")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.queryByText("DeepSeek Harness")).toBeNull();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByLabelText("Pet status")).toBeNull();
+  });
+
   it("never expires a pending permission request", () => {
     renderPet({ hideIdleStatusCard: true });
     act(() => emitPermission?.({ id: "permission-1", toolName: "Bash", toolDetail: "npm run build" }));

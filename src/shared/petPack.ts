@@ -135,6 +135,12 @@ export interface CodexPetManifest {
   description: string;
   spritesheetPath: string;
   spriteVersionNumber: CodexPetSpriteVersion;
+  displayOffset?: PetDisplayOffset;
+}
+
+export interface PetDisplayOffset {
+  x: number;
+  y: number;
 }
 
 export interface PetLookCapability {
@@ -180,6 +186,8 @@ export interface PetPackManifest {
   animations: PetPackAnimation[];
   roleDefaults: PetPackRoleDefaults;
   look?: PetLookCapability;
+  /** Optional visual alignment for art whose character body is off-center in its cell. */
+  displayOffset?: PetDisplayOffset;
 }
 
 export type PetPackResult<T> =
@@ -288,8 +296,20 @@ export function parseCodexPetManifest(value: unknown): PetPackResult<CodexPetMan
     }
   }
 
+  let displayOffset: PetDisplayOffset | undefined;
+  if (value.displayOffset !== undefined) {
+    const offset = value.displayOffset;
+    if (!isPlainObject(offset)
+      || typeof offset.x !== "number" || !Number.isInteger(offset.x) || Math.abs(offset.x) > 48
+      || typeof offset.y !== "number" || !Number.isInteger(offset.y) || Math.abs(offset.y) > 48) {
+      problems.push({ field: "displayOffset", message: "displayOffset x and y must be integers between -48 and 48" });
+    } else {
+      displayOffset = { x: offset.x, y: offset.y };
+    }
+  }
+
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: { id, displayName, description, spritesheetPath, spriteVersionNumber } };
+  return { ok: true, value: { id, displayName, description, spritesheetPath, spriteVersionNumber, ...(displayOffset ? { displayOffset } : {}) } };
 }
 
 /**
@@ -430,6 +450,7 @@ export function buildPetPackManifest(input: {
         done: resolveRole("done", available),
         error: resolveRole("error", available)
       },
+      ...(manifest.displayOffset ? { displayOffset: manifest.displayOffset } : {}),
       ...(manifest.spriteVersionNumber === 2
         && visibleCellMasks?.[CODEX_PET_LOOK_START_ROW] === (1 << CODEX_PET_COLUMNS) - 1
         && visibleCellMasks?.[CODEX_PET_LOOK_START_ROW + 1] === (1 << CODEX_PET_COLUMNS) - 1

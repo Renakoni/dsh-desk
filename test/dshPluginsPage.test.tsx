@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DshResourceSchemeSaveInput, DshResourceSchemesSnapshot } from "../src/shared/dshResources";
 import { PluginsPage } from "../src/renderer/clawd-migrated/components/plugins/PluginsPage";
@@ -62,7 +62,7 @@ function api(resourceSnapshot = snapshot) {
     applyDshResourceScheme: vi.fn(async (schemeId: string) => ({ ok: true, schemeId, snapshot: { ...snapshot, appliedSchemeId: schemeId } })),
     setDshResourceState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
     setDshPluginComponentState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
-    onDshResourcesUpdated: vi.fn(() => () => undefined),
+    onDshResourcesUpdated: vi.fn((_listener: () => void) => () => undefined),
     getDshPluginMarketplace: vi.fn(async () => ({ source: "remote", sourceName: "market", sourceUrl: "https://example.com", categories: [], plugins: [{ id: "demo", name: "DSH Demo", owner: "AcidGr", packageName: "dsh-demo", repositoryUrl: "https://github.com/demo/dsh-demo", category: "tools", description: { en: "Demo plugin", zh: "示例插件" }, installSpec: "github:demo/dsh-demo", stars: 1234, added: "2026-08-01" }, { id: "zulu", name: "Zulu Plugin", owner: "Example", packageName: "zulu-plugin", repositoryUrl: "https://github.com/example/zulu-plugin", category: "tools", description: { en: "Zulu plugin", zh: "Zulu 插件" }, installSpec: "github:example/zulu-plugin", stars: 50, added: "2026-08-02" }] })),
     listDshPlugins: vi.fn(async () => ({ profiles: [], plugins: [], dshHome: "C:\\.dsh", npxAvailable: true, scannedAt: 1 })),
     installDshMarketplacePlugin: vi.fn(),
@@ -117,6 +117,28 @@ describe("DSH resource schemes page", () => {
     expect(await screen.findByText("@deepseek-ai/plugin-159")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Skills/ }));
     expect(await screen.findByText("review")).not.toBeNull();
+  });
+
+  it("does not refresh the inventory while creating a scheme", async () => {
+    let emitResourcesUpdated: () => void = () => undefined;
+    const mockApi = api();
+    mockApi.onDshResourcesUpdated.mockImplementation(listener => {
+      emitResourcesUpdated = listener;
+      return () => undefined;
+    });
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    expect(mockApi.getDshResourceSchemes).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTitle("新建配置方案"));
+    fireEvent.click(screen.getByRole("button", { name: /空白方案/ }));
+    const nameInput = screen.getByRole("textbox", { name: "名称" }) as HTMLInputElement;
+    expect(nameInput.disabled).toBe(false);
+
+    act(() => emitResourcesUpdated());
+
+    expect(mockApi.getDshResourceSchemes).toHaveBeenCalledTimes(1);
+    expect(nameInput.disabled).toBe(false);
   });
 
   it("changes a manageable scheme resource through the DSH scheme API", async () => {

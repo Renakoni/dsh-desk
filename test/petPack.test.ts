@@ -119,6 +119,20 @@ describe("parseCodexPetManifest", () => {
     if (!unknown.ok) expect(unknown.problems[0].field).toBe("spriteVersionNumber");
   });
 
+  it("accepts a bounded visual offset and rejects malformed values", () => {
+    const parsed = parseCodexPetManifest({
+      id: "whale",
+      displayName: "Whale",
+      displayOffset: { x: 9, y: -3 }
+    });
+    expect(parsed.ok && parsed.value.displayOffset).toEqual({ x: 9, y: -3 });
+
+    for (const displayOffset of [{ x: 49, y: 0 }, { x: 0.5, y: 0 }, { x: "9", y: 0 }, { x: 0 }]) {
+      const invalid = parseCodexPetManifest({ id: "whale", displayName: "Whale", displayOffset });
+      expect(invalid.ok, JSON.stringify(displayOffset)).toBe(false);
+    }
+  });
+
   it("sanitizes the id and accepts .png sheets", () => {
     const parsed = parseCodexPetManifest({ id: "Happy Dog!", displayName: "Happy Dog", spritesheetPath: "Sheet_v2.PNG" });
     expect(parsed.ok).toBe(true);
@@ -244,6 +258,21 @@ describe("buildPetPackManifest", () => {
       done: "jumping",
       error: "failed"
     });
+  });
+
+  it("preserves the pet's visual offset in the installed manifest", () => {
+    const manifest = parseCodexPetManifest({
+      id: "whale",
+      displayName: "Whale",
+      displayOffset: { x: 9, y: 0 }
+    });
+    if (!manifest.ok) throw new Error("offset fixture must parse");
+    const built = buildPetPackManifest({
+      manifest: manifest.value,
+      geometry: referenceGeometry(),
+      rowFrameCounts: [6, 8, 7, 5, 8, 8, 8, 8, 6]
+    });
+    expect(built.ok && built.value.displayOffset).toEqual({ x: 9, y: 0 });
   });
 
   it("builds a v2 pack with a complete look grid and keeps neutral out of idle", () => {

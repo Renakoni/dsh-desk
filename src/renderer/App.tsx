@@ -105,6 +105,7 @@ export default function App() {
   const [hideSensitiveContent, setHideSensitiveContent] = useState(initialSettings.hideSensitiveContent);
   const [showBubbles, setShowBubbles] = useState(initialSettings.showBubbles);
   const [hideIdleStatusCard, setHideIdleStatusCard] = useState(initialSettings.hideIdleStatusCard);
+  const [panelEventVersion, setPanelEventVersion] = useState(0);
   const [panelVisibility, setPanelVisibility] = useState<"visible" | "exiting" | "hidden">(
     initialSettings.showBubbles && !initialSettings.hideIdleStatusCard ? "visible" : "hidden"
   );
@@ -145,6 +146,7 @@ export default function App() {
     if (event.notificationKind === "info") {
       const previous = stableEvent.current;
       setLastEvent(event);
+      setPanelEventVersion(version => version + 1);
       notificationTimer.current = window.setTimeout(() => {
         setLastEvent(current => current?.id === event.id ? previous : current);
         notificationTimer.current = null;
@@ -157,6 +159,7 @@ export default function App() {
       if (next !== current || event.event === current) {
         stableEvent.current = event;
         setLastEvent(event);
+        setPanelEventVersion(version => version + 1);
       }
       return next;
     });
@@ -167,6 +170,7 @@ export default function App() {
     notificationTimer.current = null;
     stableEvent.current = event;
     setLastEvent(event);
+    setPanelEventVersion(version => version + 1);
     setState(event.event);
   }
 
@@ -315,7 +319,7 @@ export default function App() {
     );
     panelHideTimer.current = window.setTimeout(() => setPanelVisibility("hidden"), hideAfter);
     return clearPanelTimers;
-  }, [state, lastEvent, showBubbles, hideIdleStatusCard]);
+  }, [state, panelEventVersion, showBubbles, hideIdleStatusCard]);
 
   useEffect(() => () => {
     if (notificationTimer.current) window.clearTimeout(notificationTimer.current);

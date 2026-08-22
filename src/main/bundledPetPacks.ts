@@ -3,7 +3,8 @@ import { join } from "node:path";
 import type { PetPackAnimationKey, PetPackManifest } from "../shared/petPack";
 
 const LEGACY_SEED_MARKER = "bundled-pets-v1.seeded";
-const SEED_MARKER = "bundled-pets-v2.seeded";
+const PREVIOUS_SEED_MARKER = "bundled-pets-v2.seeded";
+const SEED_MARKER = "bundled-pets-v3.seeded";
 const ANIMATION_KEYS: readonly PetPackAnimationKey[] = [
   "idle",
   "running_right",
@@ -24,6 +25,7 @@ interface BundledPetPack {
   description: string;
   frameCounts: readonly number[];
   look: boolean;
+  displayOffset?: { x: number; y: number };
 }
 
 const BUNDLED_PET_PACKS: readonly BundledPetPack[] = [
@@ -43,11 +45,12 @@ const BUNDLED_PET_PACKS: readonly BundledPetPack[] = [
     displayName: "Maid-DeepSeek-Whale",
     description: "A tiny chibi blue-haired whale maid.",
     frameCounts: [7, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8],
-    look: true
+    look: true,
+    displayOffset: { x: 9, y: 0 }
   }
 ];
 
-function manifestFor(pack: BundledPetPack, legacy = false): PetPackManifest {
+function manifestFor(pack: BundledPetPack, legacy = false, includeDisplayOffset = true): PetPackManifest {
   return {
     formatVersion: 1,
     sourceFormat: pack.rows === 11 ? "codex-pet-v2" : "codex-pet-v1",
@@ -77,6 +80,7 @@ function manifestFor(pack: BundledPetPack, legacy = false): PetPackManifest {
       done: "jumping",
       error: "failed"
     },
+    ...(includeDisplayOffset && pack.displayOffset ? { displayOffset: pack.displayOffset } : {}),
     ...(pack.look ? {
       look: {
         directions: 16,
@@ -91,9 +95,19 @@ function manifestFor(pack: BundledPetPack, legacy = false): PetPackManifest {
 function isLegacySeededPack(targetDir: string, sourceSheet: string, pack: BundledPetPack): boolean {
   try {
     const manifest = JSON.parse(readFileSync(join(targetDir, "pack.manifest.json"), "utf8"));
-    const legacyManifest = manifestFor(pack, true);
+    const legacyManifest = manifestFor(pack, true, false);
     delete legacyManifest.look;
     return JSON.stringify(manifest) === JSON.stringify(legacyManifest)
+      && readFileSync(join(targetDir, "spritesheet.webp")).equals(readFileSync(sourceSheet));
+  } catch {
+    return false;
+  }
+}
+
+function isPreviousSeededPack(targetDir: string, sourceSheet: string, pack: BundledPetPack): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(targetDir, "pack.manifest.json"), "utf8"));
+    return JSON.stringify(manifest) === JSON.stringify(manifestFor(pack, false, false))
       && readFileSync(join(targetDir, "spritesheet.webp")).equals(readFileSync(sourceSheet));
   } catch {
     return false;
@@ -110,21 +124,23 @@ export function seedBundledPetPacks(userDataDir: string, bundledRoot: string) {
 
   const targetRoot = join(userDataDir, "pets");
   const legacySeeded = existsSync(join(userDataDir, LEGACY_SEED_MARKER));
+  const previouslySeeded = existsSync(join(userDataDir, PREVIOUS_SEED_MARKER));
   mkdirSync(targetRoot, { recursive: true });
 
   for (const pack of BUNDLED_PET_PACKS) {
     const targetDir = join(targetRoot, pack.id);
     const sourceSheet = join(bundledRoot, pack.id, "spritesheet.webp");
     if (existsSync(targetDir)) {
-      if (legacySeeded && isLegacySeededPack(targetDir, sourceSheet, pack)) writeManifest(targetDir, pack);
+      if ((legacySeeded && isLegacySeededPack(targetDir, sourceSheet, pack))
+        || (previouslySeeded && isPreviousSeededPack(targetDir, sourceSheet, pack))) writeManifest(targetDir, pack);
       continue;
     }
-    if (legacySeeded) continue;
+    if (legacySeeded || previouslySeeded) continue;
 
     mkdirSync(targetDir, { recursive: true });
     copyFileSync(sourceSheet, join(targetDir, "spritesheet.webp"));
     writeManifest(targetDir, pack);
   }
 
-  writeFileSync(join(userDataDir, SEED_MARKER), "bundled-pets-v2\n", "utf8");
+  writeFileSync(join(userDataDir, SEED_MARKER), "bundled-pets-v3\n", "utf8");
 }

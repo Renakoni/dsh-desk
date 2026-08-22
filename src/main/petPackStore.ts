@@ -311,6 +311,13 @@ function isPetPackManifest(value: unknown): value is PetPackManifest {
   if (typeof record.description !== "string") return false;
   if (typeof record.spritesheetFile !== "string" || !isValidSpritesheetFileName(record.spritesheetFile)) return false;
   if (!isValidPersistedSheet(record.sheet, spriteVersionNumber)) return false;
+  if (record.displayOffset !== undefined) {
+    const offset = record.displayOffset;
+    if (!offset || typeof offset !== "object" || Array.isArray(offset)) return false;
+    const { x, y } = offset as Record<string, unknown>;
+    if (typeof x !== "number" || !Number.isInteger(x) || Math.abs(x) > 48
+      || typeof y !== "number" || !Number.isInteger(y) || Math.abs(y) > 48) return false;
+  }
   const sheet = record.sheet as { columns: number; rows: number };
   if (spriteVersionNumber === 2) {
     const look = record.look;

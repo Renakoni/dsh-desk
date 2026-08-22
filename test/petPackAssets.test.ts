@@ -22,9 +22,10 @@ describe("spritesheetAssetsFromPack", () => {
   });
 
   it("exposes v2 look capability separately from action animations", () => {
-    const assets = spritesheetAssetsFromPack(makeV2PackManifest());
+    const assets = spritesheetAssetsFromPack({ ...makeV2PackManifest(), displayOffset: { x: 9, y: 0 } });
     expect(assets.rows).toBe(11);
     expect(assets.look).toMatchObject({ directions: 16, startRow: 9, columns: 8 });
+    expect(assets.displayOffset).toEqual({ x: 9, y: 0 });
     expect(Object.keys(assets.animations)).not.toContain("look");
   });
 });

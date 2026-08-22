@@ -24,6 +24,12 @@ describe("Pet drag playback", () => {
     expect(screen.getByRole("img", { name: "running" })).toBeTruthy();
   });
 
+  it("applies a pack's visual alignment without changing its animation", () => {
+    render(<Pet state="idle" catalog={catalog} spritesheet={{ ...spritesheet, displayOffset: { x: 9, y: 0 } }} />);
+    const pet = screen.getByRole("img", { name: "idle" }).parentElement as HTMLElement;
+    expect(pet.style.translate).toBe("9px 0px");
+  });
+
   it("keeps the built-in clips unchanged while dragged (no locomotion assets)", () => {
     // No spritesheet: the clip theme renders its state image even if a drag
     // transient were ever passed in.
