@@ -31,8 +31,11 @@ extraResources:
     to: pets
 
 win:
+  artifactName: DSHDesk-${version}-portable.${ext}
   target:
     - target: nsis
+      arch: [x64]
+    - target: zip
       arch: [x64]
   # The exe/installer/Start-menu icon (separate from the runtime tray icon).
   # A 256x256 square PNG derived from kuaclock.png (letterboxed to square with
