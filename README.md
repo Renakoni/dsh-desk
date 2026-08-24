@@ -44,10 +44,11 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 插件市场提供海量 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新，并兼容常见旧版主题注册方式。
 
-市场上游：<br>
-插件目录来自 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)；<br>
-Skill 默认收录 [anthropics/skills](https://github.com/anthropics/skills)、[awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[myclaude](https://github.com/cexll/myclaude) 和 [baoyu-skills](https://github.com/JimLiu/baoyu-skills)；<br>
-主题目录来自 [awesome-dsh-themes](https://github.com/Renakoni/awesome-dsh-themes)。
+*数据源/上游收录：*
+
+* **插件：** [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)
+* **Skills：** [anthropics/skills](https://github.com/anthropics/skills) · [awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) · [myclaude](https://github.com/cexll/myclaude) · [baoyu-skills](https://github.com/JimLiu/baoyu-skills)
+* **主题：** [awesome-dsh-themes](https://github.com/Renakoni/awesome-dsh-themes)
 
 ## 开箱即用
 
