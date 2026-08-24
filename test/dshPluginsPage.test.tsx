@@ -64,7 +64,7 @@ function api(resourceSnapshot = snapshot) {
     setDshPluginComponentState: vi.fn(async () => ({ ok: true, schemeId: "default", snapshot })),
     onDshResourcesUpdated: vi.fn((_listener: () => void) => () => undefined),
     getDshPluginMarketplace: vi.fn(async () => ({ source: "remote", sourceName: "market", sourceUrl: "https://example.com", categories: [], plugins: [{ id: "demo", name: "DSH Demo", owner: "AcidGr", packageName: "dsh-demo", repositoryUrl: "https://github.com/demo/dsh-demo", category: "tools", description: { en: "Demo plugin", zh: "示例插件" }, installSpec: "github:demo/dsh-demo", stars: 1234, added: "2026-08-01" }, { id: "zulu", name: "Zulu Plugin", owner: "Example", packageName: "zulu-plugin", repositoryUrl: "https://github.com/example/zulu-plugin", category: "tools", description: { en: "Zulu plugin", zh: "Zulu 插件" }, installSpec: "github:example/zulu-plugin", stars: 50, added: "2026-08-02" }] })),
-    listDshPlugins: vi.fn(async () => ({ profiles: [], plugins: [], dshHome: "C:\\.dsh", npxAvailable: true, scannedAt: 1 })),
+    listDshPlugins: vi.fn(async () => ({ profiles: [], plugins: [], dshHome: "C:\\.dsh", pnpmAvailable: true, scannedAt: 1 })),
     installDshMarketplacePlugin: vi.fn(),
     getDshSkillMarketplace: vi.fn(async () => ({ repos: [{ owner: "ComposioHQ", name: "awesome-claude-skills", branch: "master", enabled: true }], skills: [{ key: "ComposioHQ/awesome-claude-skills:composio-skills/ably-automation", name: "ably-automation", description: "Automate Ably workflows with a complete description", directory: "composio-skills/ably-automation", readmeUrl: "https://github.com/ComposioHQ/awesome-claude-skills/blob/master/composio-skills/ably-automation/SKILL.md", repoOwner: "ComposioHQ", repoName: "awesome-claude-skills", repoBranch: "master", stars: 4321, installed: false }], scannedAt: 1, errors: [] })),
     addDshSkillRepo: vi.fn(),
@@ -767,7 +767,7 @@ describe("DSH resource schemes page", () => {
         ]
       }],
       dshHome: "C:\\.dsh",
-      npxAvailable: true,
+      pnpmAvailable: true,
       scannedAt: 1
     })) as unknown as typeof mockApi.listDshPlugins;
     mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
@@ -796,7 +796,7 @@ describe("DSH resource schemes page", () => {
       { name: "web", label: "Web", exists: true },
       { name: "headless", label: "Headless", exists: true }
     ];
-    mockApi.listDshPlugins = vi.fn(async () => ({ profiles, plugins: [], dshHome: "C:\\.dsh", npxAvailable: true, scannedAt: 1 })) as unknown as typeof mockApi.listDshPlugins;
+    mockApi.listDshPlugins = vi.fn(async () => ({ profiles, plugins: [], dshHome: "C:\\.dsh", pnpmAvailable: true, scannedAt: 1 })) as unknown as typeof mockApi.listDshPlugins;
     mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
       ok: false,
       changedProfiles: ["web"],
@@ -815,7 +815,7 @@ describe("DSH resource schemes page", () => {
           ]
         }],
         dshHome: "C:\\.dsh",
-        npxAvailable: true,
+        pnpmAvailable: true,
         scannedAt: 2
       }
     })) as unknown as typeof mockApi.installDshMarketplacePlugin;

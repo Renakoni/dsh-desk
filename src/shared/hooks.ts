@@ -21,11 +21,11 @@ export interface HookStatus {
   commandMatches: boolean;
   settingsPath: string;
   bundle: { expectedPath: string; exists: boolean };
-  npxAvailable: boolean;
+  pnpmAvailable: boolean;
   profiles: DshProfilePluginStatus[];
 }
 
-export type HookOperationErrorKind = "bundle-missing" | "npx-missing";
+export type HookOperationErrorKind = "bundle-missing" | "pnpm-missing";
 
 export interface HookOperationResult {
   success: boolean;
@@ -38,7 +38,7 @@ export interface HookOperationResult {
 
 export type HookErrorDisplay =
   | { kind: "bundle-missing"; path?: string }
-  | { kind: "npx-missing" }
+  | { kind: "pnpm-missing" }
   | { kind: "hidden" }
   | { kind: "raw"; text: string };
 
@@ -49,7 +49,7 @@ export function describeHookOperationError(
   if (result?.errorKind === "bundle-missing") {
     return hide || !result.bundlePath ? { kind: "bundle-missing" } : { kind: "bundle-missing", path: result.bundlePath };
   }
-  if (result?.errorKind === "npx-missing") return { kind: "npx-missing" };
+  if (result?.errorKind === "pnpm-missing") return { kind: "pnpm-missing" };
   if (hide) return { kind: "hidden" };
   return { kind: "raw", text: result?.error ?? "" };
 }

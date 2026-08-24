@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, resolveNpxInvocation, type DshCommandRunner } from "../src/main/dshPluginManager";
+import { getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, resolvePnpmInvocation, type DshCommandRunner } from "../src/main/dshPluginManager";
 
 const roots: string[] = [];
 
@@ -16,7 +16,7 @@ function fixture() {
   const profilesRoot = join(root, "profiles");
   const pluginPath = join(root, "dsh-desk-plugin.tgz");
   writeFileSync(pluginPath, "package", "utf8");
-  return { root, profilesRoot, pluginPath, npxPath: "C:\\node\\npx.cmd" };
+  return { root, profilesRoot, pluginPath, pnpmPath: "C:\\node\\pnpm.cmd" };
 }
 
 function writeProfile(profilesRoot: string, name: "web" | "headless", installed: boolean) {
@@ -42,7 +42,7 @@ describe("DSH plugin status", () => {
       hookCount: 1,
       requiredCount: 2,
       missingEvents: ["headless"],
-      npxAvailable: true
+      pnpmAvailable: true
     });
   });
 
@@ -51,18 +51,18 @@ describe("DSH plugin status", () => {
     expect(resolveBundledDshPluginPath("C:\\repo", "C:\\app\\resources", true)).toBe(join("C:\\app\\resources", "dsh-plugin", "dsh-desk-plugin.tgz"));
   });
 
-  it("runs npx.cmd through node without shell command construction", () => {
-    const root = mkdtempSync(join(tmpdir(), "chara-npx-"));
+  it("runs pnpm.cmd through node without shell command construction", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-pnpm-"));
     roots.push(root);
-    const npxPath = join(root, "npx.cmd");
+    const pnpmPath = join(root, "pnpm.cmd");
     const nodePath = join(root, "node.exe");
-    const cliPath = join(root, "node_modules", "npm", "bin", "npx-cli.js");
-    mkdirSync(join(root, "node_modules", "npm", "bin"), { recursive: true });
-    writeFileSync(npxPath, "", "utf8");
+    const cliPath = join(root, "node_modules", "pnpm", "bin", "pnpm.cjs");
+    mkdirSync(join(root, "node_modules", "pnpm", "bin"), { recursive: true });
+    writeFileSync(pnpmPath, "", "utf8");
     writeFileSync(nodePath, "", "utf8");
     writeFileSync(cliPath, "", "utf8");
-    expect(resolveNpxInvocation(npxPath, ["--yes", "@deepseek-ai/dsh"], "win32"))
-      .toEqual({ command: nodePath, args: [cliPath, "--yes", "@deepseek-ai/dsh"] });
+    expect(resolvePnpmInvocation(pnpmPath, ["dlx", "@deepseek-ai/dsh"], "win32"))
+      .toEqual({ command: nodePath, args: [cliPath, "dlx", "@deepseek-ai/dsh"] });
   });
 });
 
@@ -77,7 +77,7 @@ describe("DSH plugin operations", () => {
     };
     const result = await installDshPlugin(options, run);
     expect(result.success).toBe(true);
-    expect(calls.map(args => args.slice(-3))).toEqual([
+      expect(calls.map(args => args.slice(-3))).toEqual([
       ["web", "add", options.pluginPath],
       ["headless", "add", options.pluginPath]
     ]);

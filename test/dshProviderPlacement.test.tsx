@@ -97,7 +97,7 @@ describe("DSH model routing placement", () => {
             commandMatches: false,
             settingsPath: "C:/users/test/.dsh/profiles",
             bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: true },
-            npxAvailable: true,
+            pnpmAvailable: true,
             profiles: []
           }}
         />
