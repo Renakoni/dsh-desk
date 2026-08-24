@@ -32,7 +32,7 @@
 
 ## DSH Desk 是什么
 
-DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Web / Headless profiles，处理桌宠、状态通知、权限请求和用量记录。插件、Skill、主题、方案和市场入口集中在同一个桌面应用里。
+DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Web / Headless profiles，提供桌宠、状态通知、权限请求和用量记录。插件、Skill、主题、方案和市场入口集中在同一个桌面应用里。
 
 ## 核心亮点
 
@@ -42,7 +42,7 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **DSH 工作流联动**
 
-`dsh-desk-plugin` 接入 DSH 的连接、任务、工具、完成、错误和权限事件。桌宠动作、状态通知、声音和权限确认都由同一条 DSH 工作流驱动。
+`dsh-desk-plugin` 将 DSH 的任务、工具调用、完成状态、错误和权限事件送到 DSH Desk。桌宠动作、状态通知、声音和权限确认都由同一条 DSH 工作流驱动。
 
 **方案化扩展管理**
 
@@ -51,7 +51,6 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 **插件与主题市场**
 
 插件市场提供 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新、卸载和预览缓存，并支持常见旧版主题注册方式。
-
 
 ## 开箱即用
 
