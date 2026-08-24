@@ -26,15 +26,8 @@
 
 DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 开发的桌面端管理与交互工具。它将 DSH 后台的任务进度、权限审批和状态变化，以**桌面宠物交互**与**系统通知**的形式展现，同时集成了插件、Skill 和主题的集中管理。
 
-## 界面预览
-
 <p align="center">
-  <img src="docs/screenshots/pet-states.gif" alt="桌宠响应不同的 DSH 会话状态" width="480">
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/dsh-themes.webp" alt="DSH 主题库" width="49%">
-  <img src="docs/screenshots/dsh-pets.webp" alt="桌宠库与导入对话框" width="49%">
+  <img src="docs/screenshots/pet-states.gif" alt="桌宠响应不同的 DSH 会话状态" width="360">
 </p>
 
 ## 核心亮点
@@ -82,6 +75,13 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
    ```powershell
    npx @deepseek-ai/dsh web
    ```
+
+### 界面预览
+
+<p align="center">
+  <img src="docs/screenshots/dsh-themes.webp" alt="DSH 主题库" width="42%">
+  <img src="docs/screenshots/dsh-pets.webp" alt="桌宠库与导入对话框" width="42%">
+</p>
 
 ## 从源码运行
 
