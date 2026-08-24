@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: DSH Desk documentation
+    url: https://github.com/Renakoni/dsh-desk#readme
+    about: Check the README and release notes before opening an issue.
+  - name: DeepSeek Harness issues
+    url: https://github.com/deepseek-ai/deepseek-harness/issues
+    about: Report problems in the underlying DSH runtime to DeepSeek Harness.

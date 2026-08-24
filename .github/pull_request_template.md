@@ -1,6 +1,17 @@
+<!-- Link the issue this PR addresses, if one exists. "Closes #NNN" auto-closes it on merge. -->
+
+Closes #
+
 ## Summary
 
 <!-- What changed and why? -->
+
+## Type of change
+
+- [ ] Bug fix (non-breaking behavior fix)
+- [ ] New feature
+- [ ] Documentation update
+- [ ] Maintenance, security, or packaging change
 
 ## Verification
 
@@ -9,13 +20,15 @@
 - [ ] `npm run typecheck`
 - [ ] `npm run build`
 - [ ] `npm test --prefix ./dsh-plugin`
+- [ ] Manually tested on Windows 10/11 (describe below)
+- [ ] Tests are not needed for this change (explain below)
 
 ## DSH Impact
 
-- Profiles or plugin installation affected: no
-- Provider or pricing behavior affected: no
-- Local session data or UI affected: no
+- Profiles or plugin installation affected: no / yes
+- Provider or pricing behavior affected: no / yes
+- Local session data or UI affected: no / yes
 
-## Notes
+## Screenshots or manual test notes
 
-<!-- Add rollout notes, follow-up work, or known limitations. -->
+<!-- Add screenshots, recordings, rollout notes, known limitations, or explain skipped tests. -->
