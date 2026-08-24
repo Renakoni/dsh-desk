@@ -1,7 +1,8 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Code2, ExternalLink, Package, Plus, RefreshCw, Search, Settings2, Star, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Code2, ExternalLink, LoaderCircle, Package, Plus, RefreshCw, Search, Settings2, Star, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { DshMarketplaceSnapshot, DshPluginSnapshot, DshSkillMarketplaceSnapshot } from "../../../../shared/dshPlugins";
-import { useI18n } from "../../useI18n";
+import { type I18nTranslate, useI18n } from "../../useI18n";
 
 type MarketTab = "plugins" | "skills";
 type MarketSortKey = "name" | "stars";
@@ -19,6 +20,37 @@ function sortRows<T extends { name: string; stars: number | null }>(rows: T[], s
       ? compareNullableStars(left.stars, right.stars, sort.direction)
       : (sort.direction === "asc" ? 1 : -1) * left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
     return primary || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  });
+}
+
+function rawErrorMessage(value: unknown): string {
+  return value instanceof Error ? value.message : typeof value === "string" ? value : "";
+}
+
+function friendlyInstallError(value: unknown, t: I18nTranslate): string {
+  const raw = rawErrorMessage(value);
+  const normalized = raw.toLocaleLowerCase();
+  if (/git_dep_prepare_not_allowed|prepare.*not allowed|needs to execute build scripts/.test(normalized)) {
+    return t("dshResources.buildScriptBlocked", "This resource needs a build script, but pnpm blocked it. Allow its build script in the DSH profile, then try again.");
+  }
+  if (/pnpm.*not found|pnpm-missing/.test(normalized)) {
+    return t("dshResources.pnpmMissing", "pnpm is unavailable, so this resource could not be installed.");
+  }
+  if (/econnreset|econnrefused|enotfound|etimedout|eai_again|network|fetch|download|timeout/.test(normalized)) {
+    return t("dshResources.downloadFailed", "The resource could not be downloaded. Check your network connection and try again.");
+  }
+  if (/profile|dsh/.test(normalized)) {
+    return t("dshResources.profileInstallFailed", "DSH could not install this resource in the selected profiles.");
+  }
+  return t("dshResources.installationFailed", "Installation failed. Try again later.");
+}
+
+function showInstallError(message: string) {
+  toast.error(message, {
+    id: "dsh-market-install-error",
+    duration: 5000,
+    closeButton: true,
+    className: "dsh-market-toast"
   });
 }
 
@@ -111,36 +143,49 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
   async function installPlugin(index: number) {
     const plugin = pluginRows[index];
     if (!plugin || !installed) return;
+    setMarketError("plugins", "");
     setBusy(plugin.id);
-    const result = await window.companion.installDshMarketplacePlugin({
-      installSpec: plugin.installSpec,
-      profiles: installed.profiles.filter(profile => profile.exists && !profile.readError).map(profile => profile.name)
-    });
-    setBusy("");
-    setInstalled(result.snapshot);
-    if (!result.ok) {
-      if (result.changedProfiles.length > 0) {
-        onChanged();
-        const partial = t("dshResources.partialInstallationFailed", "Installed in {profiles}, but installation failed for the remaining profiles.", { profiles: result.changedProfiles.join(", ") });
-        const restart = result.restartRequired ? ` ${t("dshResources.restartCompletedProfiles", "Restart DSH to use the completed changes.")}` : "";
-        setMarketError("plugins", `${partial}${restart}${result.error ? ` ${result.error}` : ""}`);
-      } else {
-        setMarketError("plugins", result.error ?? t("dshResources.installationFailed", "Installation failed."));
+    try {
+      const result = await window.companion.installDshMarketplacePlugin({
+        installSpec: plugin.installSpec,
+        profiles: installed.profiles.filter(profile => profile.exists && !profile.readError).map(profile => profile.name)
+      });
+      setInstalled(result.snapshot);
+      if (!result.ok) {
+        const failure = friendlyInstallError(result.error, t);
+        if (result.changedProfiles.length > 0) {
+          onChanged();
+          const partial = t("dshResources.partialInstallationFailed", "Installed in {profiles}, but installation failed for the remaining profiles.", { profiles: result.changedProfiles.join(", ") });
+          const restart = result.restartRequired ? ` ${t("dshResources.restartCompletedProfiles", "Restart DSH to use the completed changes.")}` : "";
+          showInstallError(`${partial}${restart} ${failure}`);
+        } else {
+          showInstallError(failure);
+        }
+        return;
       }
-      return;
+      onChanged();
+    } catch (reason) {
+      showInstallError(friendlyInstallError(reason, t));
+    } finally {
+      setBusy("");
     }
-    onChanged();
   }
 
   async function installSkill(index: number) {
     const skill = skillRows[index];
     if (!skill) return;
+    setMarketError("skills", "");
     setBusy(skill.key);
-    const result = await window.companion.installDshSkill(skill);
-    setBusy("");
-    if (!result.ok) { setMarketError("skills", result.error ?? t("dshResources.installationFailed", "Installation failed.")); return; }
-    setSkills(current => current ? { ...current, skills: current.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) } : current);
-    onChanged();
+    try {
+      const result = await window.companion.installDshSkill(skill);
+      if (!result.ok) { showInstallError(friendlyInstallError(result.error, t)); return; }
+      setSkills(current => current ? { ...current, skills: current.skills.map(item => item.key === skill.key ? { ...item, installed: true } : item) } : current);
+      onChanged();
+    } catch (reason) {
+      showInstallError(friendlyInstallError(reason, t));
+    } finally {
+      setBusy("");
+    }
   }
 
   async function addRepo() {
@@ -200,9 +245,10 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
         {isLoading && (tab === "plugins" ? !plugins : !skills) ? <div className="claude-resource-empty">{t("dshResources.loading", "Loading...")}</div> : null}
         {tab === "plugins" ? pluginRows.map((plugin, index) => {
           const isInstalled = isPluginInstalled(plugin.packageName);
+          const installing = busy === plugin.id;
           const description = locale === "zh" ? plugin.description.zh : plugin.description.en;
-          return <article key={plugin.id} className="dsh-market-row"><div className="dsh-resource-mark"><Package size={17} aria-hidden="true" /></div><div className="dsh-market-copy"><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={t("dshResources.openRepository", "Open repository")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""}>{t(isInstalled ? "dshResources.installed" : "dshResources.install", isInstalled ? "Installed" : "Install")}</button></div></article>;
-        }) : skillRows.map((skill, index) => <article key={skill.key} className="dsh-market-row"><div className="dsh-resource-mark"><Code2 size={17} aria-hidden="true" /></div><div className="dsh-market-copy"><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={t("dshResources.openSkillDocument", "Open Skill document")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""}>{t(skill.installed ? "dshResources.installed" : "dshResources.install", skill.installed ? "Installed" : "Install")}</button></div></article>)}
+          return <article key={plugin.id} className="dsh-market-row"><div className="dsh-resource-mark"><Package size={17} aria-hidden="true" /></div><div className="dsh-market-copy"><strong>{plugin.name}</strong><p title={description}>{description}</p></div><span className="dsh-market-stars">{plugin.stars !== null ? <><Star size={12} fill="currentColor" />{plugin.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(plugin.repositoryUrl)} aria-label={t("dshResources.openRepository", "Open repository")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button dsh-market-install-button" onClick={() => void installPlugin(index)} disabled={isInstalled || busy !== ""} aria-busy={installing}>{installing ? <><LoaderCircle size={13} className="spinning" />{t("dshResources.installing", "Installing…")}</> : t(isInstalled ? "dshResources.installed" : "dshResources.install", isInstalled ? "Installed" : "Install")}</button></div></article>;
+        }) : skillRows.map((skill, index) => { const installing = busy === skill.key; return <article key={skill.key} className="dsh-market-row"><div className="dsh-resource-mark"><Code2 size={17} aria-hidden="true" /></div><div className="dsh-market-copy"><strong>{skill.name}</strong><p title={skill.description}>{skill.description}</p></div><span className="dsh-market-stars" title={`${skill.repoOwner}/${skill.repoName}`}>{skill.stars !== null ? <><Star size={12} fill="currentColor" />{skill.stars.toLocaleString()}</> : "-"}</span><div className="dsh-market-row-actions"><button type="button" onClick={() => void window.companion.openExternal(skill.readmeUrl)} aria-label={t("dshResources.openSkillDocument", "Open Skill document")}><ExternalLink size={14} /></button><button type="button" className="claude-profile-primary-button dsh-market-install-button" onClick={() => void installSkill(index)} disabled={skill.installed || busy !== ""} aria-busy={installing}>{installing ? <><LoaderCircle size={13} className="spinning" />{t("dshResources.installing", "Installing…")}</> : t(skill.installed ? "dshResources.installed" : "dshResources.install", skill.installed ? "Installed" : "Install")}</button></div></article>; })}
         {!isLoading && !error && (tab === "plugins" ? Boolean(plugins) && pluginRows.length === 0 : Boolean(skills) && skillRows.length === 0) ? <div className="claude-resource-empty">{t("dshResources.noMatches", "No matches")}</div> : null}
       </section>
     </div>
