@@ -54,11 +54,11 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 ## 开箱即用
 
-安装包已经包含三只可直接切换的桌宠：
+初始自带三只可直接切换的桌宠：
 
 - **Minato Aqua**
 - **月薪喵**
-- **DeepSeek 鲸鱼娘**（`maid-deepseek-whale`）
+- **DeepSeek 鲸鱼娘**
 
 更多桌宠可以通过 codex-pet 宠物包或应用内的安装命令继续加入。
 
@@ -70,17 +70,9 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 npx @deepseek-ai/dsh web
 ```
 
-### 安装版
+下载 [Windows 安装包](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 并安装，或下载 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip) 后解压运行其中的 `DSH Desk.exe`。
 
-1. 下载 [DSHDesk-Setup-0.1.0.exe](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 并安装。
-2. 启动 DSH Desk，在“总览”中安装 DSH 插件。
-3. 重启正在运行的 DSH Web 或 Headless profile，使插件生效。
-
-### 免安装版
-
-下载 [DSHDesk-0.1.0-portable.zip](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip)，解压后直接运行其中的 `DSH Desk.exe`。
-
-DSH Desk 使用官方 DSH CLI 将插件安装到对应 profile，无需构建 DeepSeek Harness 源码。
+启动 DSH Desk，在“总览”中安装 DSH 插件，然后重启正在运行的 DSH Web 或 Headless profile。
 
 ## 从源码运行
 
