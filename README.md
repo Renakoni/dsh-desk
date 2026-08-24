@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>DeepSeek Harness 的桌面端状态监听与桌宠交互工具。</strong>
+  <strong>DeepSeek Harness 的桌面端状态监听与桌宠交互工具，为你的 DSH 带来 5000+ 桌宠。</strong>
 </p>
 
 <p align="center">
