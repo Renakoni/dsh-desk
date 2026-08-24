@@ -54,7 +54,12 @@ function showInstallError(message: string) {
   });
 }
 
-export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onChanged: () => void }) {
+export function DshMarketPanel({ onBack, onChanged, busy, onBusyChange }: {
+  onBack: () => void;
+  onChanged: () => void;
+  busy: string;
+  onBusyChange: (value: string) => void;
+}) {
   const { locale, t } = useI18n();
   const [tab, setTab] = useState<MarketTab>("plugins");
   const [plugins, setPlugins] = useState<DshMarketplaceSnapshot | null>(null);
@@ -63,7 +68,6 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
   const [loading, setLoading] = useState<Record<MarketTab, boolean>>({ plugins: false, skills: false });
-  const [busy, setBusy] = useState("");
   const [errors, setErrors] = useState<Record<MarketTab, string>>({ plugins: "", skills: "" });
   const [repoManager, setRepoManager] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
@@ -144,7 +148,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     const plugin = pluginRows[index];
     if (!plugin || !installed) return;
     setMarketError("plugins", "");
-    setBusy(plugin.id);
+    onBusyChange(plugin.id);
     try {
       const result = await window.companion.installDshMarketplacePlugin({
         installSpec: plugin.installSpec,
@@ -167,7 +171,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     } catch (reason) {
       showInstallError(friendlyInstallError(reason, t));
     } finally {
-      setBusy("");
+      onBusyChange("");
     }
   }
 
@@ -175,7 +179,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     const skill = skillRows[index];
     if (!skill) return;
     setMarketError("skills", "");
-    setBusy(skill.key);
+    onBusyChange(skill.key);
     try {
       const result = await window.companion.installDshSkill(skill);
       if (!result.ok) { showInstallError(friendlyInstallError(result.error, t)); return; }
@@ -184,7 +188,7 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     } catch (reason) {
       showInstallError(friendlyInstallError(reason, t));
     } finally {
-      setBusy("");
+      onBusyChange("");
     }
   }
 
@@ -192,29 +196,39 @@ export function DshMarketPanel({ onBack, onChanged }: { onBack: () => void; onCh
     const value = repoUrl.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "");
     const [owner, name, ...rest] = value.split("/");
     if (!owner || !name || rest.length > 0) { setMarketError("skills", t("dshResources.invalidRepository", "Enter a GitHub repository in owner/repository format.")); return; }
-    setBusy("repo:add");
-    const result = await window.companion.addDshSkillRepo({ owner, name, branch: repoBranch.trim() || "main", enabled: true });
-    setBusy("");
-    if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryAddFailed", "Couldn't add the repository.")); return; }
-    setSkills(result.snapshot);
-    setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
-    setRepoUrl("");
-    setRepoBranch("");
+    onBusyChange("repo:add");
+    try {
+      const result = await window.companion.addDshSkillRepo({ owner, name, branch: repoBranch.trim() || "main", enabled: true });
+      if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryAddFailed", "Couldn't add the repository.")); return; }
+      setSkills(result.snapshot);
+      setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
+      setRepoUrl("");
+      setRepoBranch("");
+    } catch (reason) {
+      setMarketError("skills", reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      onBusyChange("");
+    }
   }
 
   async function removeRepo(owner: string, name: string) {
-    setBusy(`repo:${owner}/${name}`);
-    const result = await window.companion.removeDshSkillRepo(owner, name);
-    setBusy("");
-    if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryRemoveFailed", "Couldn't remove the repository.")); return; }
-    setSkills(result.snapshot);
-    setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
+    onBusyChange(`repo:${owner}/${name}`);
+    try {
+      const result = await window.companion.removeDshSkillRepo(owner, name);
+      if (!result.ok || !result.snapshot) { setMarketError("skills", result.error ?? t("dshResources.repositoryRemoveFailed", "Couldn't remove the repository.")); return; }
+      setSkills(result.snapshot);
+      setSnapshotErrors("skills", result.snapshot.errors, result.snapshot.skills.length === 0);
+    } catch (reason) {
+      setMarketError("skills", reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      onBusyChange("");
+    }
   }
 
   return (
     <div className="dsh-market-panel">
       <header className="dsh-market-header">
-        <button type="button" className="claude-profile-icon-button" onClick={onBack} aria-label={t("common.back", "Back")}><ArrowLeft size={17} /></button>
+        <button type="button" className="claude-profile-icon-button" onClick={onBack} disabled={busy !== ""} aria-label={t("common.back", "Back")}><ArrowLeft size={17} /></button>
         <nav className="dsh-market-tabs">
           <button type="button" className={tab === "plugins" ? "active" : ""} onClick={() => setTab("plugins")}><Package size={15} />{t("dshResources.pluginMarketplace", "Plugin marketplace")}</button>
           <button type="button" className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Code2 size={15} />{t("dshResources.skillMarketplace", "Skill marketplace")}</button>

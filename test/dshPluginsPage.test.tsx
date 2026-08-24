@@ -774,6 +774,53 @@ describe("DSH resource schemes page", () => {
     await waitFor(() => expect(within(demoRow).getByRole("button", { name: "安装" })).not.toBeNull());
   });
 
+  it("keeps a Plugin install locked after the market is unmounted and mounted again", async () => {
+    const mockApi = api();
+    let resolveInstall: ((result: Awaited<ReturnType<typeof mockApi.installDshMarketplacePlugin>>) => void) | undefined;
+    mockApi.installDshMarketplacePlugin = vi.fn(() => new Promise(resolve => { resolveInstall = resolve; })) as unknown as typeof mockApi.installDshMarketplacePlugin;
+    Object.assign(window, { companion: mockApi });
+    const view = render(<I18nProvider initialLocale="zh"><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
+
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    const demoRow = (await screen.findByText("DSH Demo")).closest("article") as HTMLElement;
+    fireEvent.click(within(demoRow).getByRole("button", { name: "安装" }));
+    expect((screen.getByRole("button", { name: "返回" }) as HTMLButtonElement).disabled).toBe(true);
+
+    view.rerender(<I18nProvider initialLocale="zh"><PluginsPage active={false} hideSensitiveContent={false} /></I18nProvider>);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "返回" })).toBeNull());
+    view.rerender(<I18nProvider initialLocale="zh"><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
+    const marketButton = await screen.findByRole("button", { name: "资源市场" }) as HTMLButtonElement;
+    expect(marketButton.disabled).toBe(true);
+
+    resolveInstall?.({ ok: true, changedProfiles: [], restartRequired: false, snapshot: await mockApi.listDshPlugins() });
+    await waitFor(() => expect(marketButton.disabled).toBe(false));
+  });
+
+  it("keeps a Skill install locked after the market is unmounted and releases it on failure", async () => {
+    const mockApi = api();
+    let rejectInstall: ((reason?: unknown) => void) | undefined;
+    mockApi.installDshSkill = vi.fn(() => new Promise((_resolve, reject) => { rejectInstall = reject; })) as unknown as typeof mockApi.installDshSkill;
+    Object.assign(window, { companion: mockApi });
+    const view = render(<I18nProvider initialLocale="zh"><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
+
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skill 市场" }));
+    const skillRow = (await screen.findByText("ably-automation")).closest("article") as HTMLElement;
+    fireEvent.click(within(skillRow).getByRole("button", { name: "安装" }));
+
+    view.rerender(<I18nProvider initialLocale="zh"><PluginsPage active={false} hideSensitiveContent={false} /></I18nProvider>);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "返回" })).toBeNull());
+    view.rerender(<I18nProvider initialLocale="zh"><PluginsPage active hideSensitiveContent={false} /></I18nProvider>);
+    const marketButton = await screen.findByRole("button", { name: "资源市场" }) as HTMLButtonElement;
+    expect(marketButton.disabled).toBe(true);
+
+    rejectInstall?.(new Error("network failure"));
+    await waitFor(() => expect(marketButton.disabled).toBe(false));
+    expect(sonnerMocks.error).toHaveBeenCalledTimes(1);
+  });
+
   it("maps blocked build-script output to one concise five-second error toast", async () => {
     const mockApi = api();
     mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
