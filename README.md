@@ -70,7 +70,7 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 npx @deepseek-ai/dsh web
 ```
 
-下载 [Windows 安装包](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 并安装，或下载 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip) 后解压运行其中的 `DSH Desk.exe`。
+下载 [Windows 安装包](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 并安装，或下载 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip) 后解压。
 
 启动 DSH Desk，在“总览”中安装 DSH 插件，然后重启正在运行的 DSH Web 或 Headless profile。
 
