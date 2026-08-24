@@ -50,6 +50,14 @@ function packageManifest(profileDir, packageName) {
   return existsSync(file) ? objectValue(jsonFile(file, null)) : null
 }
 
+function packageSubdirectoryManifest(profileDir, packageName, subdirectory) {
+  if (typeof subdirectory !== 'string' || subdirectory === '') return null
+  const segments = subdirectory.split('/')
+  if (segments.some(segment => segment === '' || segment === '.' || segment === '..' || segment.includes('\\'))) return null
+  const file = join(packageDir(profileDir, packageName), ...segments, 'package.json')
+  return existsSync(file) ? objectValue(jsonFile(file, null)) : null
+}
+
 const AQUA_PACKAGE_NAME = '@deepseek-ai/dsh-client-ui-aqua'
 const STALE_AQUA_SPEC = /^github:Renakoni\/DSH-Transparent-UI-Plugin#816bd68[0-9a-f]*$/i
 
@@ -187,7 +195,10 @@ function legacyGitSubdirectoryDependencies(profileDir, skin) {
   return Object.entries(dependencies(profileDir))
     .filter(([packageName, spec]) => {
       if (packageName === skin.packageName || !malformedGitSubdirectoryDependency(packageName, spec, target)) return false
-      const manifest = packageManifest(profileDir, packageName)
+      const rootManifest = packageManifest(profileDir, packageName)
+      const manifest = rootManifest?.name === skin.packageName
+        ? rootManifest
+        : packageSubdirectoryManifest(profileDir, packageName, target.path)
       return Boolean(manifest && manifest.name === skin.packageName)
     })
     .map(([packageName]) => packageName)

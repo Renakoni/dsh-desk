@@ -552,7 +552,8 @@ describe('DSH Loader inventory bridge', () => {
     const target = 'github:Small-tailqwq/dsh-deep-whale#873f5d5b0a0b5a61b9b0e0cc3c3d2f7e4c0a9f1b&path:maid-atelier'
     const legacyDirectory = join(profile, 'node_modules', legacyPackage)
     mkdirSync(legacyDirectory, { recursive: true })
-    writeFileSync(join(legacyDirectory, 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-client-ui-skin-maid-atelier', version: '0.0.1', dsh: { client: { platform: 'web' }, bundle: { patch: './cordis.patch.yml' } } }))
+    mkdirSync(join(legacyDirectory, 'maid-atelier'), { recursive: true })
+    writeFileSync(join(legacyDirectory, 'maid-atelier', 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-client-ui-skin-maid-atelier', version: '0.0.1', dsh: { client: { platform: 'web' }, bundle: { patch: './cordis.patch.yml' } } }))
     writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { [legacyPackage]: 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f' } }))
     writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
     const calls = []
