@@ -45,7 +45,7 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **本地数据面板与用量分析**
 
-集中查看会话轨迹、工具性能、最近编辑、Token 热力图，以及按模型和项目拆分的用量统计。数据保存在本地，不上传提示词、回复或工具结果。
+集中查看会话轨迹、工具性能、最近编辑、Token 热力图，以及按模型和项目拆分的用量统计。数据保存在本地的 `%APPDATA%\\DSH Desk\\dsh-usage.ndjson`，不上传提示词、回复或工具结果。
 
 **方案化扩展管理**
 
@@ -102,5 +102,6 @@ npm test --prefix ./dsh-plugin
 代码基于 [MIT 许可证](LICENSE) 发布。
 
 - **DeepSeek Harness**：DSH 事件、插件和 approval 协议来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。
+- **Minato Aqua**：内置 Aqua 桌宠为粉丝创作的二次创作素材；角色版权归 COVER Corp. 及相关创作者所有，仅限非商业使用，并遵循 [hololive 二次创作指南](https://hololivepro.com/terms/)。
 - **Clawd Companion**：部分界面与事件链路演化自 [Clawd Companion](https://github.com/Doulor/Clawd-Companion)（MIT © Doulor）。
 - **Codex Pets**：相关桌宠与自定义宠物说明见 [OpenAI 官方 Pets 文档](https://learn.chatgpt.com/docs/pets)。
