@@ -13,10 +13,6 @@
 </p>
 
 <p align="center">
-  <sub>🫧 <strong>实时状态</strong>&nbsp;&nbsp;·&nbsp;&nbsp;🐋 <strong>本地优先</strong>&nbsp;&nbsp;·&nbsp;&nbsp;🐾 <strong>5000+ 桌宠</strong></sub>
-</p>
-
-<p align="center">
   <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
   &nbsp;
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
@@ -39,11 +35,11 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 ## 核心亮点
 
-**5000+ 桌宠生态**
+**🐾 5000+ 桌宠生态**
 
 兼容 [codex-pet](https://codex-pet.org) 宠物包格式。开箱自带 Minato Aqua、月薪喵与 DeepSeek 鲸鱼娘，为你的 DSH 提供 codex-pet 生态中的 5000+ 桌宠。
 
-**DSH 工作流事件响应**
+**🫧 DSH 工作流事件响应**
 
 将 DSH 的任务、工具调用、完成状态、错误和权限事件接入 DSH Desk。任务状态变化会反映在桌宠动作、声音和桌面通知上，权限请求也可以直接在桌面端确认。
 
