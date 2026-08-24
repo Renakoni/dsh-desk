@@ -42,7 +42,7 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **DSH 工作流联动**
 
-`dsh-desk-plugin` 将 DSH 的任务、工具调用、完成状态、错误和权限事件送到 DSH Desk。任务状态变化会反映在桌宠动作、声音和桌面通知上，权限请求也可以直接在桌面端确认。
+`dsh-desk-plugin` 将 DSH 的任务、工具调用、完成状态、错误和权限事件接入 DSH Desk。任务状态变化会反映在桌宠动作、声音和桌面通知上，权限请求也可以直接在桌面端确认。
 
 **方案化扩展管理**
 
