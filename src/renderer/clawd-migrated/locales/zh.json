@@ -532,7 +532,27 @@
     "availableShort": "发现新版本",
     "errorShort": "检查失败",
     "lastChecked": "上次检查",
-    "notChecked": "尚未检查"
+    "notChecked": "尚未检查",
+    "retry": "重新检查",
+    "about": {
+      "idleTitle": "还没有检查更新",
+      "idleDescription": "手动检查 GitHub Releases 中是否有新的桌面版本。",
+      "checkingTitle": "正在检查更新",
+      "checkingDescription": "正在读取最新发布信息。",
+      "availableTitle": "发现新版本 {version}",
+      "downloadingTitle": "正在下载 {version}",
+      "downloadingAction": "正在下载...",
+      "downloadingDescription": "下载完成后，你可以选择何时重启应用。",
+      "readyTitle": "{version} 已准备好安装",
+      "readyDescription": "更新已下载完成，重启 DSH Desk 后即可应用。",
+      "latestTitle": "已是最新版本",
+      "latestDescription": "当前版本已经是可用的最新版本。",
+      "errorTitle": "检查更新失败",
+      "errorDescription": "无法连接 GitHub Releases，请稍后重试。",
+      "errorHint": "请检查网络连接后重试。",
+      "progress": "下载进度",
+      "releaseDate": "发布于"
+    }
   },
   "notifications": {
     "title": "通知和音效",

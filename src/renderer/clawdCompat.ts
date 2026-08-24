@@ -101,7 +101,7 @@ type CompanionApi = {
   onPermissionResolved: (callback: Listener<{ id: string }>) => Unsubscribe;
   respondPermission: (response: { id: string; decision: "allow" | "deny"; reason?: string }) => Promise<void>;
   checkForUpdates: () => Promise<UpdateStatus>;
-  installUpdate: () => Promise<void>;
+  installUpdate: () => Promise<{ ok: boolean; error?: string }>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getAppVersion: () => Promise<string>;
   getTokenStats: (force?: boolean) => Promise<TokenStats>;
@@ -741,7 +741,7 @@ export function installClawdCompat() {
     onPermissionResolved: callback => subscribe(permissionResolvedListeners, callback),
     respondPermission: async response => emit(permissionResolvedListeners, { id: response.id }),
     checkForUpdates: async () => updateStatus(),
-    installUpdate: async () => undefined,
+    installUpdate: async () => ({ ok: false, error: "Update installation is unavailable in this preview." }),
     getUpdateStatus: async () => updateStatus(),
     getAppVersion: async () => "0.0.0-dev",
     getTokenStats: async () => ({ sessions: [], daily: [], modelTotals: [], dailyTotals: [], projectTotals: [], recentRequests: [], totalTokens: 0, totalCostUsd: 0, totalSessions: 0, totalRequests: 0, cacheHitRatio: 0, pricing: { source: "embedded", sources: ["embedded"], updatedAt: 0, stale: true }, exchangeRates: { base: "USD", rates: { CNY: 7, USD: 1, EUR: 0.9 }, source: "embedded", updatedAt: 0, stale: true }, lastScannedAt: Date.now(), scanning: false }),

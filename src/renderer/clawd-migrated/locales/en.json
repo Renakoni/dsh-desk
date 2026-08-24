@@ -532,7 +532,27 @@
     "availableShort": "Update available",
     "errorShort": "Check failed",
     "lastChecked": "Last checked",
-    "notChecked": "Not checked yet"
+    "notChecked": "Not checked yet",
+    "retry": "Check again",
+    "about": {
+      "idleTitle": "No update check yet",
+      "idleDescription": "Check GitHub Releases manually for a newer desktop build.",
+      "checkingTitle": "Checking for updates",
+      "checkingDescription": "Reading the latest release information.",
+      "availableTitle": "Update available: {version}",
+      "downloadingTitle": "Downloading {version}",
+      "downloadingAction": "Downloading...",
+      "downloadingDescription": "You can choose when to restart after the download finishes.",
+      "readyTitle": "{version} is ready to install",
+      "readyDescription": "The update is downloaded. Restart DSH Desk when you are ready to apply it.",
+      "latestTitle": "You are up to date",
+      "latestDescription": "This is the latest available version.",
+      "errorTitle": "Update check failed",
+      "errorDescription": "GitHub Releases could not be reached. Try again in a moment.",
+      "errorHint": "Check your network connection and try again.",
+      "progress": "Download progress",
+      "releaseDate": "Released"
+    }
   },
   "notifications": {
     "title": "Notifications and sound",

@@ -150,6 +150,8 @@ type UpdateStatus = {
   available: boolean;
   upToDate: boolean;
   version?: string;
+  releaseName?: string;
+  releaseDate?: string;
   downloaded: boolean;
   downloading: boolean;
   progress?: number;
@@ -774,12 +776,15 @@ function configureAutoUpdater() {
   });
 
   autoUpdater.on("update-available", info => {
+    const metadata = info as unknown as { releaseName?: unknown; releaseDate?: unknown };
     setUpdateStatus({
       ...updateStatus,
       checking: false,
       available: true,
       upToDate: false,
-      version: info.version
+      version: info.version,
+      releaseName: typeof metadata.releaseName === "string" ? metadata.releaseName : undefined,
+      releaseDate: typeof metadata.releaseDate === "string" ? metadata.releaseDate : undefined
     });
   });
 
@@ -792,6 +797,8 @@ function configureAutoUpdater() {
       downloading: false,
       progress: undefined,
       version: undefined,
+      releaseName: undefined,
+      releaseDate: undefined,
       error: undefined,
       lastCheckedAt: Date.now()
     });
@@ -807,6 +814,7 @@ function configureAutoUpdater() {
   });
 
   autoUpdater.on("update-downloaded", info => {
+    const metadata = info as unknown as { releaseName?: unknown; releaseDate?: unknown };
     setUpdateStatus({
       checking: false,
       available: true,
@@ -815,6 +823,8 @@ function configureAutoUpdater() {
       downloaded: true,
       downloading: false,
       progress: 100,
+      releaseName: typeof metadata.releaseName === "string" ? metadata.releaseName : updateStatus.releaseName,
+      releaseDate: typeof metadata.releaseDate === "string" ? metadata.releaseDate : updateStatus.releaseDate,
       error: undefined,
       lastCheckedAt: Date.now()
     });

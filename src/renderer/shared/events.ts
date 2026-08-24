@@ -457,6 +457,8 @@ export interface UpdateStatus {
   available: boolean;
   upToDate: boolean;
   version?: string;
+  releaseName?: string;
+  releaseDate?: string;
   downloaded: boolean;
   downloading: boolean;
   progress?: number;

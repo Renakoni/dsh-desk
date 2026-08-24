@@ -957,6 +957,8 @@ function SettingsApp() {
               updateStatus={updateStatus}
               checkingUpdate={checkingUpdate}
               handleCheckUpdate={handleCheckUpdate}
+              installingUpdate={installing}
+              handleInstallUpdate={handleInstallClick}
               petPacks={petPacks}
             />
           </div>
