@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <sub>🫧 <strong>实时状态</strong>&nbsp;&nbsp;·&nbsp;&nbsp;🐋 <strong>本地优先</strong>&nbsp;&nbsp;·&nbsp;&nbsp;🐾 <strong>5000+ 桌宠</strong></sub>
+</p>
+
+<p align="center">
   <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
   &nbsp;
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
