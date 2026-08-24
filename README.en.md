@@ -9,70 +9,87 @@
 </p>
 
 <p align="center">
-  <em>A live desktop pet and local usage workbench for DeepSeek Harness.</em>
+  <strong>A desktop status monitor and pet companion for DeepSeek Harness, with 5,000+ pets for your DSH.</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness">
+  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="Latest release"></a>
+  &nbsp;
+  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
   &nbsp;
   <img src="https://img.shields.io/badge/Windows-10%2F11%20x64-4c8492?style=flat-square&logo=windows&logoColor=white" alt="Windows 10/11 x64">
   &nbsp;
-  <img src="https://img.shields.io/badge/License-MIT-4c566a?style=flat-square" alt="License: MIT">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4c566a?style=flat-square" alt="License: MIT"></a>
 </p>
 
-> [!NOTE]
-> This is an unofficial community project and is not affiliated with DeepSeek or COVER Corp. The default pet uses Minato Aqua fan art; see [License and attribution](#license-and-attribution).
+## What is DSH Desk
 
-## About
+DSH Desk is a desktop management and interaction companion for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It turns DSH task progress, approval requests, and status changes into desktop pet interactions and system notifications. It also brings plugin, Skill, and theme management into one place.
 
-DSH Desk is a Windows desktop app for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). A DSH plugin forwards session lifecycle, tool, completion, error, and approval events so the desktop pet can react in real time.
+## Interface preview
 
-The integration targets the `npx @deepseek-ai/dsh` workflow used by end users. The DSH source checkout is only needed for protocol analysis; users do not need to build DSH from source.
+<p align="center">
+  <img src="docs/screenshots/dsh-themes.webp" alt="DSH theme library" width="42%">
+  <img src="docs/screenshots/dsh-pets.webp" alt="Desktop pet library and import dialog" width="42%">
+</p>
 
-## Supported today
+## Highlights
 
-- One-click installation of `dsh-desk-plugin` into both the DSH `web` and `headless` profiles.
-- Live session start, running, tool call, tool result, completion, blocked, and error states.
-- DSH approvals through desktop permission cards; when DSH Desk is absent, the request falls through to the next DSH approval handler.
-- Local trajectories, tool performance, recent edits, token heatmaps, and model/project usage views.
-- `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, and `reasoningTokens` capture.
-- Pet themes, animation mapping, notifications, sounds, and sensitive-content masking.
+**🐾 5,000+ desktop pets**
 
-## Privacy
+Works with the [codex-pet](https://codex-pet.org) package format. DSH Desk ships with Minato Aqua, Yuexinmiao, and the DeepSeek Whale, giving your DSH access to more than 5,000 pets in the codex-pet ecosystem.
 
-The plugin sends bounded event metadata only to `127.0.0.1:17321`. Usage records contain a session ID, sequence number, timestamp, provider, model, cwd, and numeric token fields.
+**🫧 DSH workflow events**
 
-It does not send prompts, assistant output, tool results, credentials, or model request bodies. Usage is stored under Electron's DSH Desk user-data directory:
+DSH task progress, tool calls, completions, errors, and approval requests appear in DSH Desk. Status changes drive pet animations, sounds, and desktop notifications. Permission requests can be approved directly from the desktop.
 
-```text
-%APPDATA%\DSH Desk\dsh-usage.ndjson
-```
+**📈 Local data dashboard and usage analytics**
 
-## Install
+Review session traces, tool performance, recent edits, token heatmaps, and usage broken down by model and project. Data stays local at `%APPDATA%\DSH Desk\dsh-usage.ndjson`; prompts, responses, and tool results are never uploaded.
 
-Requires Windows 10 / 11 x64, Node.js, and a DeepSeek Harness installation available through:
+**🧩 Profile-based extension management**
 
-```powershell
-npx @deepseek-ai/dsh web
-```
+Compose plugins, Skills, and themes into reusable profiles. Enable or disable plugins and switch profiles to match different workflows.
 
-1. Install DSH Desk from this repository's Releases page.
-2. Launch the app and install the DSH plugin from Overview.
-3. Restart any running DSH Web or Headless profile so it loads the new plugin.
+**🪄 Plugin and theme marketplace**
 
-The app uses the official DSH CLI to install the same plugin package into both profiles. Building DeepSeek Harness from source is not required.
+Browse and install DSH plugins and Skills from the plugin marketplace. Preview, install, and update DSH Web themes, with support for common legacy theme registration patterns.
 
-## Build from source
+*Catalog sources:*
+
+* **Plugins:** [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)
+* **Skills:** [anthropics/skills](https://github.com/anthropics/skills) · [awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) · [myclaude](https://github.com/cexll/myclaude) · [baoyu-skills](https://github.com/JimLiu/baoyu-skills)
+* **Themes:** [awesome-dsh-themes](https://github.com/Renakoni/awesome-dsh-themes)
+
+## Quick start
+
+### Requirements
+
+- Windows 10 / 11 x64
+- Node.js (v22.12+)
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+
+### Install
+
+1. Download the [Windows installer (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) or [portable ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip).
+2. Launch DSH Desk and click **Install DSH plugin** in **Overview**.
+3. Start (or restart) the DSH service:
+
+   ```powershell
+   npx @deepseek-ai/dsh web
+   ```
+
+<p align="center">
+  <img src="docs/screenshots/pet-states.gif" alt="A desktop pet reacting to different DSH session states" width="360">
+</p>
+
+## Run from source
 
 ```powershell
 npm install
-npm run dev:electron
-npm test
-npm run typecheck
-npm run dist:win
+npm run build
+npm run start
 ```
-
-`npm run build` first packs `dsh-plugin/` into a tarball. The Windows package includes that tarball as an app resource for the in-app installer.
 
 Run the plugin tests separately with:
 
@@ -84,11 +101,7 @@ npm test --prefix ./dsh-plugin
 
 The code is released under the [MIT License](LICENSE).
 
-- **DeepSeek Harness**: DSH events, plugins, and approval protocols come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness).
-- **Minato Aqua**: the default theme artwork is fan-made derivative work. The character belongs to COVER Corp. and the respective artists. Non-commercial use only, in line with the [hololive derivative works guidelines](https://hololivepro.com/terms/).
-- **Clawd Companion**: parts of the UI and event pipeline evolved from [Clawd Companion](https://github.com/Doulor/Clawd-Companion) (MIT © Doulor).
-- Pet themes remain compatible with the [codex-pet](https://codex-pet.org) package format.
-
----
-
-<p align="center"><sub><em>A live desktop pet and local usage workbench for DeepSeek Harness.</em></sub></p>
+- **DeepSeek Harness:** DSH events, plugins, and approval protocols come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness).
+- **Minato Aqua:** the built-in Aqua pet is fan-made derivative artwork. The character belongs to COVER Corp. and the respective creators. It is for non-commercial use only and follows the [hololive derivative works guidelines](https://hololivepro.com/terms/).
+- **Clawd Companion:** parts of the interface and event pipeline evolved from [Clawd Companion](https://github.com/Doulor/Clawd-Companion) (MIT © Doulor).
+- **Codex Pets:** see the [OpenAI Pets documentation](https://learn.chatgpt.com/docs/pets) for the related pet format and customization details.
