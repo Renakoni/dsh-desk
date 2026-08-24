@@ -30,7 +30,7 @@ function rawErrorMessage(value: unknown): string {
 function friendlyInstallError(value: unknown, t: I18nTranslate): string {
   const raw = rawErrorMessage(value);
   const normalized = raw.toLocaleLowerCase();
-  if (/git_dep_prepare_not_allowed|prepare.*not allowed|needs to execute build scripts/.test(normalized)) {
+  if (/git_dep_prepare_not_allowed|prepare.*not allowed|needs to execute build scripts|prepare.*blocks?.*until allowed/.test(normalized)) {
     return t("dshResources.buildScriptBlocked", "This resource needs a build script, but pnpm blocked it. Allow its build script in the DSH profile, then try again.");
   }
   if (/pnpm.*not found|pnpm-missing/.test(normalized)) {

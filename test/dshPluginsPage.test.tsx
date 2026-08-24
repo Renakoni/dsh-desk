@@ -843,6 +843,25 @@ describe("DSH resource schemes page", () => {
     expect(screen.queryByText(/ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED/)).toBeNull();
   });
 
+  it("maps DSH's wrapped prepare-script block message to the build-script toast", async () => {
+    const mockApi = api();
+    mockApi.installDshMarketplacePlugin = vi.fn(async () => ({
+      ok: false,
+      changedProfiles: [],
+      restartRequired: false,
+      error: "dsh: git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed"
+    })) as unknown as typeof mockApi.installDshMarketplacePlugin;
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    const demoRow = (await screen.findByText("DSH Demo")).closest("article") as HTMLElement;
+    fireEvent.click(within(demoRow).getByRole("button", { name: "安装" }));
+
+    await waitFor(() => expect(sonnerMocks.error).toHaveBeenCalledTimes(1));
+    expect(sonnerMocks.error.mock.calls[0][0]).toContain("构建脚本");
+    expect(sonnerMocks.error.mock.calls[0][0]).not.toContain("profile");
+  });
+
   it("keeps the install action available when a plugin is missing from one profile", async () => {
     const mockApi = api();
     mockApi.listDshPlugins = vi.fn(async () => ({
