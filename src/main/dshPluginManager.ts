@@ -99,15 +99,26 @@ export function runDshCommand(command: string, args: string[]): Promise<void> {
   });
 }
 
-export function resolvePnpmInvocation(pnpmPath: string, args: string[], platform = process.platform, executablePath = process.execPath): { command: string; args: string[] } {
+export function resolvePnpmInvocation(
+  pnpmPath: string,
+  args: string[],
+  platform = process.platform,
+  executablePath = process.execPath,
+  pathValue = process.env.PATH ?? ""
+): { command: string; args: string[] } {
   if (platform !== "win32" || !pnpmPath.toLowerCase().endsWith(".cmd")) {
     return { command: pnpmPath, args };
   }
   const root = dirname(pnpmPath);
-  const nodePath = existsSync(join(root, "node.exe")) ? join(root, "node.exe") : executablePath;
+  const nodeCandidates = [
+    join(root, "node.exe"),
+    ...pathValue.split(delimiter).filter(Boolean).map(directory => join(directory, "node.exe")),
+    ...(/[\\/]node(?:\.exe)?$/i.test(executablePath) ? [executablePath] : [])
+  ];
+  const nodePath = nodeCandidates.find(candidate => existsSync(candidate));
   const cliPath = join(root, "node_modules", "pnpm", "bin", "pnpm.cjs");
-  if (!existsSync(nodePath) || !existsSync(cliPath)) {
-    throw new Error("The pnpm installation is incomplete (pnpm.cjs is missing).");
+  if (!nodePath || !existsSync(cliPath)) {
+    throw new Error("The pnpm installation is incomplete (node.exe or pnpm.cjs is missing).");
   }
   return { command: nodePath, args: [cliPath, ...args] };
 }
