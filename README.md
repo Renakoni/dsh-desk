@@ -37,7 +37,7 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **🐾 5000+ 桌宠生态**
 
-兼容 [codex-pet](https://codex-pet.org) 宠物包格式。开箱自带 Minato Aqua、月薪喵与 DeepSeek 鲸鱼娘，为你的 DSH 提供 codex-pet 生态中的 5000+ 桌宠。
+兼容 Codex Pet 宠物包格式。开箱自带 Minato Aqua、月薪喵与 DeepSeek 鲸鱼娘，为你的 DSH 提供 5000+ 桌宠选择。
 
 **🫧 DSH 工作流事件响应**
 
