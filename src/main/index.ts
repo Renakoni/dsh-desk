@@ -82,7 +82,7 @@ import { aggregateUsageRankings, countToolUseBlocks, countUserCommands, createUs
 import { DshUsageStore, normalizeDshUsageRecord } from "./dshUsage";
 import { DshSessionScanner, isDshSessionLogPath } from "./dshSessionScanner";
 import { resolveDshHome } from "./dshPaths";
-import { findNpxExecutable, getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, type DshPluginManagerOptions } from "./dshPluginManager";
+import { findPnpmExecutable, getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, type DshPluginManagerOptions } from "./dshPluginManager";
 import {
   deleteDshProvider,
   duplicateDshProvider,
@@ -3652,14 +3652,14 @@ function dshPluginManagerOptions(): DshPluginManagerOptions {
   return {
     profilesRoot: join(resolveDshHome(), "profiles"),
     pluginPath: resolveBundledDshPluginPath(app.getAppPath(), process.resourcesPath ?? "", app.isPackaged),
-    npxPath: findNpxExecutable()
+    pnpmPath: findPnpmExecutable()
   };
 }
 
 function dshPluginCatalog() {
   return new DshPluginCatalog({
     dshHome: resolveDshHome(),
-    npxPath: findNpxExecutable(),
+    pnpmPath: findPnpmExecutable(),
     marketplaceCachePath: join(app.getPath("userData"), "awesome-dsh-plugin-cache.json")
   });
 }

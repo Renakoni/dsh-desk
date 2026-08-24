@@ -17,7 +17,7 @@ function fixture(run?: DshCommandRunner) {
   const dshHome = join(root, "dsh");
   const options: DshPluginCatalogOptions = {
     dshHome,
-    npxPath: "C:\\node\\npx.cmd",
+    pnpmPath: "C:\\node\\pnpm.cmd",
     marketplaceCachePath: join(root, "marketplace.json"),
     ...(run ? { commandRunner: run } : {})
   };
@@ -127,8 +127,8 @@ describe("DSH plugin catalog", () => {
     const installed = await catalog.install({ installSpec: "github:owner/dsh-plugin", profiles: ["web", "headless"] });
     expect(installed).toMatchObject({ ok: true, changedProfiles: ["web", "headless"], restartRequired: true });
     expect(calls).toEqual([
-      ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", "web", "add", "github:owner/dsh-plugin"],
-      ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", "headless", "add", "github:owner/dsh-plugin"]
+      ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", "web", "add", "github:owner/dsh-plugin"],
+      ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", "headless", "add", "github:owner/dsh-plugin"]
     ]);
 
     expect(await catalog.install({ installSpec: "plugin; Remove-Item C:\\", profiles: ["web"] })).toMatchObject({ ok: false, code: "invalid-input" });
@@ -178,7 +178,7 @@ describe("DSH plugin catalog", () => {
 
     const result = await new DshPluginCatalog(options).remove({ packageName: "demo-plugin", profiles: ["web", "headless"] });
     expect(result).toMatchObject({ ok: true, changedProfiles: ["web", "headless"], restartRequired: true });
-    expect(calls).toEqual([["--yes", "@deepseek-ai/dsh", "plugin", "--profile", "web", "remove", "demo-plugin"]]);
+    expect(calls).toEqual([["dlx", "@deepseek-ai/dsh", "plugin", "--profile", "web", "remove", "demo-plugin"]]);
     expect(result.snapshot.plugins.some(plugin => plugin.packageName === "demo-plugin")).toBe(false);
   });
 });

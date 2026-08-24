@@ -12,7 +12,7 @@ type JsonObject = Record<string, unknown>;
 export type DshPluginManagerOptions = {
   profilesRoot: string;
   pluginPath: string;
-  npxPath: string | null;
+  pnpmPath: string | null;
 };
 
 export type DshCommandRunner = (command: string, args: string[]) => Promise<void>;
@@ -77,30 +77,37 @@ export function getDshPluginStatus(options: DshPluginManagerOptions): HookStatus
     commandMatches: profiles.every(profile => profile.dependencyRegistered && profile.bundleRegistered),
     settingsPath: options.profilesRoot,
     bundle: { expectedPath: options.pluginPath, exists: existsSync(options.pluginPath) },
-    npxAvailable: options.npxPath !== null,
+    pnpmAvailable: options.pnpmPath !== null,
     profiles
   };
 }
 
 export function runDshCommand(command: string, args: string[]): Promise<void> {
-  const invocation = resolveNpxInvocation(command, args);
+  const invocation = resolvePnpmInvocation(command, args);
   return new Promise((resolve, reject) => {
-    execFile(invocation.command, invocation.args, { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 }, error => {
-      if (error) reject(error);
+    execFile(invocation.command, invocation.args, { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        const output = [stderr, stdout].filter(Boolean).join("\n").trim();
+        if (error.code === "ETIMEDOUT") {
+          reject(new Error("DSH CLI timed out after 120 seconds."));
+        } else {
+          reject(new Error((output || error.message).slice(-8_000)));
+        }
+      }
       else resolve();
     });
   });
 }
 
-export function resolveNpxInvocation(npxPath: string, args: string[], platform = process.platform): { command: string; args: string[] } {
-  if (platform !== "win32" || !npxPath.toLowerCase().endsWith(".cmd")) {
-    return { command: npxPath, args };
+export function resolvePnpmInvocation(pnpmPath: string, args: string[], platform = process.platform, executablePath = process.execPath): { command: string; args: string[] } {
+  if (platform !== "win32" || !pnpmPath.toLowerCase().endsWith(".cmd")) {
+    return { command: pnpmPath, args };
   }
-  const root = dirname(npxPath);
-  const nodePath = join(root, "node.exe");
-  const cliPath = join(root, "node_modules", "npm", "bin", "npx-cli.js");
+  const root = dirname(pnpmPath);
+  const nodePath = existsSync(join(root, "node.exe")) ? join(root, "node.exe") : executablePath;
+  const cliPath = join(root, "node_modules", "pnpm", "bin", "pnpm.cjs");
   if (!existsSync(nodePath) || !existsSync(cliPath)) {
-    throw new Error("The npx installation is incomplete (node.exe or npx-cli.js is missing).");
+    throw new Error("The pnpm installation is incomplete (pnpm.cjs is missing).");
   }
   return { command: nodePath, args: [cliPath, ...args] };
 }
@@ -110,8 +117,8 @@ function operationPreflight(options: DshPluginManagerOptions): HookOperationResu
   if (!status.bundle.exists) {
     return { success: false, errorKind: "bundle-missing", bundlePath: options.pluginPath, error: `DSH plugin bundle not found: ${options.pluginPath}`, status };
   }
-  if (!options.npxPath) {
-    return { success: false, errorKind: "npx-missing", error: "npx was not found on PATH", status };
+  if (!options.pnpmPath) {
+    return { success: false, errorKind: "pnpm-missing", error: "pnpm was not found on PATH", status };
   }
   return null;
 }
@@ -122,9 +129,9 @@ export async function installDshPlugin(options: DshPluginManagerOptions, run: Ds
   try {
     for (const profile of PROFILES) {
       if (registeredDeskPlugins(options.profilesRoot, profile).includes(LEGACY_PLUGIN_NAME)) {
-        await run(options.npxPath!, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", LEGACY_PLUGIN_NAME]);
+        await run(options.pnpmPath!, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", LEGACY_PLUGIN_NAME]);
       }
-      await run(options.npxPath!, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", options.pluginPath]);
+      await run(options.pnpmPath!, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", options.pluginPath]);
     }
     const status = getDshPluginStatus(options);
     return { success: status.installed, error: status.installed ? undefined : "The DSH plugin was not active in every required profile.", status };
@@ -135,8 +142,8 @@ export async function installDshPlugin(options: DshPluginManagerOptions, run: Ds
 
 export async function removeDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const statusBefore = getDshPluginStatus(options);
-  if (!options.npxPath) {
-    return { success: false, errorKind: "npx-missing", error: "npx was not found on PATH", status: statusBefore };
+  if (!options.pnpmPath) {
+    return { success: false, errorKind: "pnpm-missing", error: "pnpm was not found on PATH", status: statusBefore };
   }
   let removed = 0;
   try {
@@ -144,7 +151,7 @@ export async function removeDshPlugin(options: DshPluginManagerOptions, run: Dsh
       const registered = registeredDeskPlugins(options.profilesRoot, profile.name);
       if (registered.length === 0) continue;
       for (const packageName of registered) {
-        await run(options.npxPath, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile.name, "remove", packageName]);
+        await run(options.pnpmPath, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile.name, "remove", packageName]);
       }
       removed += 1;
     }
@@ -159,8 +166,8 @@ export async function removeDshPlugin(options: DshPluginManagerOptions, run: Dsh
   }
 }
 
-export function findNpxExecutable(pathValue = process.env.PATH ?? "", executablePath = process.execPath): string | null {
-  const names = process.platform === "win32" ? ["npx.cmd", "npx.exe"] : ["npx"];
+export function findPnpmExecutable(pathValue = process.env.PATH ?? "", executablePath = process.execPath): string | null {
+  const names = process.platform === "win32" ? ["pnpm.cmd", "pnpm.exe", "pnpm"] : ["pnpm"];
   const directories = [dirname(executablePath), ...pathValue.split(delimiter)].filter(Boolean);
   for (const directory of directories) {
     for (const name of names) {

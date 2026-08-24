@@ -30,7 +30,7 @@ export type DshPluginSnapshot = {
   profiles: DshPluginProfile[];
   plugins: DshInstalledPlugin[];
   dshHome: string;
-  npxAvailable: boolean;
+  pnpmAvailable: boolean;
   scannedAt: number;
 };
 
@@ -106,7 +106,7 @@ export type DshPluginMutationCode =
   | "plugin-not-found"
   | "protected-plugin"
   | "not-a-bundle"
-  | "npx-missing"
+  | "pnpm-missing"
   | "concurrent-change"
   | "operation-failed";
 

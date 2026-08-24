@@ -36,7 +36,7 @@ function status(overrides: Partial<HookStatus> = {}): HookStatus {
     commandMatches: false, // needs repair unless a case overrides it
     settingsPath: "C:/users/test/.dsh/profiles",
     bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: true },
-    npxAvailable: true,
+    pnpmAvailable: true,
     profiles: fullyInstalled ? [profile("web", true), profile("headless", true)] : [profile("web", true), profile("headless", false)],
     ...overrides
   };
