@@ -82,17 +82,13 @@ npx @deepseek-ai/dsh web
 
 DSH Desk 使用官方 DSH CLI 将插件安装到对应 profile，无需构建 DeepSeek Harness 源码。
 
-## 从源码构建
+## 从源码运行
 
 ```powershell
 npm install
-npm run dev:electron
-npm test
-npm run typecheck
-npm run dist:win
+npm run build
+npm run start
 ```
-
-`npm run build` 会先把 `dsh-plugin/` 打包成 tarball；Windows 安装包会将它放入应用资源目录，供界面中的插件安装操作使用。
 
 插件自身测试：
 
