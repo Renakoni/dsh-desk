@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse, stringify } from 'yaml'
 
@@ -134,7 +134,31 @@ function packageNameFromBlockedMessage(value) {
 }
 
 function gitHostedAdd(args) {
-  return args.includes('add') && args.some(argument => /^(?:git\+|github:)|\.git(?:#|$)/.test(argument))
+  return args.includes('add') && args.some(argument => /^(?:git\+|github:)|\.git(?:#|$)|^[^@\s]+@(?:git\+|github:)/.test(argument))
+}
+
+// DSH's Windows plugin command forwards pnpm through cmd.exe. An ampersand in
+// pnpm's Git subdirectory syntax is therefore consumed by the shell before
+// pnpm sees it. The Desk bridge runs that one add directly through pnpm, where
+// the original target remains intact. This parser is also used to migrate the
+// malformed root dependency created by the shell-truncated command.
+function gitSubdirectoryTarget(value) {
+  if (typeof value !== 'string') return null
+  const match = value.match(/^(?<base>(?:github:[^#]+|git\+[^#]+|https?:\/\/[^#]+)#[^&]+)&path:(?<path>[^&]+)$/i)
+  if (!match?.groups?.base || !match.groups.path || match.groups.path.startsWith('/')) return null
+  return { base: match.groups.base, path: match.groups.path }
+}
+
+function legacyGitSubdirectoryDependencies(profileDir, skin) {
+  const target = gitSubdirectoryTarget(skin?.install?.target)
+  if (!target || typeof skin?.packageName !== 'string') return []
+  return Object.entries(dependencies(profileDir))
+    .filter(([packageName, spec]) => packageName !== skin.packageName && spec === target.base)
+    .map(([packageName]) => packageName)
+}
+
+export function isGitSubdirectoryTarget(value) {
+  return gitSubdirectoryTarget(value) !== null
 }
 
 export function blockedBuildPackage(output) {
@@ -460,11 +484,10 @@ function parsePnpmOutput(chunk, packages, onProgress, parserState) {
   }
 }
 
-function spawnPlugin(profile, args, onProgress) {
+function spawnCommand(command, cwd, args, onProgress) {
   return new Promise(resolvePromise => {
-    const command = invocation()
     const reporterArgs = args.some(argument => argument === '--reporter' || argument.startsWith('--reporter=')) ? args : [...args, '--reporter', 'ndjson']
-    const child = spawn(command.file, [...command.prefix, 'plugin', '--profile', profile, ...reporterArgs], { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CI: 'true' } })
+    const child = spawn(command.file, [...command.prefix, ...reporterArgs], { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CI: 'true' } })
     let stdout = ''; let stderr = ''
     const packages = new Map()
     const stdoutParserState = { value: '' }
@@ -477,12 +500,32 @@ function spawnPlugin(profile, args, onProgress) {
   })
 }
 
+function spawnPlugin(profile, args, onProgress) {
+  const command = invocation()
+  return spawnCommand(command, undefined, ['plugin', '--profile', profile, ...args], onProgress)
+}
+
+function spawnPnpm(profileDir, args, onProgress) {
+  const directories = [dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]
+  const cliPath = directories
+    .map(directory => join(directory, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'))
+    .find(path => existsSync(path))
+  const command = cliPath
+    ? { file: process.execPath, prefix: [cliPath] }
+    : { file: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', prefix: [] }
+  return spawnCommand(command, profileDir, args, onProgress)
+}
+
 export function runPlugin(profile, args, onProgress, profileDir) {
-  return spawnPlugin(profile, args, onProgress).then(async result => {
+  const directSubdirectoryAdd = Boolean(profileDir && args.includes('add') && args.some(argument => isGitSubdirectoryTarget(argument)))
+  const run = directSubdirectoryAdd
+    ? () => spawnPnpm(profileDir, args, onProgress)
+    : () => spawnPlugin(profile, args, onProgress)
+  return run().then(async result => {
     if (result.exitCode !== 0 && profileDir && gitHostedAdd(args)) {
       const packageName = blockedBuildPackage(`${result.stderr}\n${result.stdout}`)
       if (packageName && allowGitHostedBuild(profileDir, packageName)) {
-        result = await spawnPlugin(profile, args, onProgress)
+        result = await run()
       }
     }
     if (profileDir && result.exitCode === 0 && mutatesProfile(args)) {
@@ -587,10 +630,24 @@ class AppearanceManager {
       const existing = stored.skins[skin.id] ?? { active: legacyState?.activeSkinId === skin.id }
       if (operation.kind === 'install' || operation.kind === 'update') {
         const pendingRepairs = pendingThemeDependencyRepairs(this.profileDir, catalog)
-        const needsInstall = operation.kind === 'update' || !validThemePackage(this.profileDir, skin.packageName) || pendingRepairs !== null
+        const legacySubdirectoryDependencies = legacyGitSubdirectoryDependencies(this.profileDir, skin)
+        const needsInstall = operation.kind === 'update'
+          || !validThemePackage(this.profileDir, skin.packageName)
+          || pendingRepairs !== null
+          || legacySubdirectoryDependencies.length > 0
         if (needsInstall) {
-          if (pendingRepairs) rollback = createProfileRollback(this.profileDir, [skin.packageName, ...pendingRepairs.replacements.keys()])
+          if (pendingRepairs || legacySubdirectoryDependencies.length > 0) {
+            rollback = createProfileRollback(this.profileDir, [
+              skin.packageName,
+              ...(pendingRepairs ? [...pendingRepairs.replacements.keys()] : []),
+              ...legacySubdirectoryDependencies,
+            ])
+          }
           repairKnownThemeDependencies(this.profileDir, catalog)
+          for (const packageName of legacySubdirectoryDependencies) {
+            const result = await this.pluginRunner(this.profile, ['remove', packageName], undefined, this.profileDir)
+            if (result.exitCode !== 0) throw new Error(commandError(result))
+          }
           if (operation.kind === 'update' && existing.active === true && !rollback) rollback = createActiveThemeUpdateRollback(this.profileDir, skin.packageName)
           operation.phase = 'downloading'
           const result = await this.pluginRunner(this.profile, ['add', skin.install.target], progress => {
@@ -646,12 +703,22 @@ class AppearanceManager {
       } else {
         operation.phase = 'uninstalling'
         await disableLoaderEntries(this.loader, skin)
-        if (Object.hasOwn(dependencies(this.profileDir), skin.packageName)) {
+        const legacySubdirectoryDependencies = legacyGitSubdirectoryDependencies(this.profileDir, skin)
+        if (Object.hasOwn(dependencies(this.profileDir), skin.packageName) || legacySubdirectoryDependencies.length > 0) {
           const pendingRepairs = pendingThemeDependencyRepairs(this.profileDir, catalog)
-          if (pendingRepairs) rollback = createProfileRollback(this.profileDir, [skin.packageName, ...pendingRepairs.replacements.keys()])
+          rollback = createProfileRollback(this.profileDir, [
+            skin.packageName,
+            ...legacySubdirectoryDependencies,
+            ...(pendingRepairs ? [...pendingRepairs.replacements.keys()] : []),
+          ])
           repairKnownThemeDependencies(this.profileDir, catalog)
-          const result = await this.pluginRunner(this.profile, ['remove', skin.packageName], undefined, this.profileDir)
-          if (result.exitCode !== 0) throw new Error(commandError(result))
+          const packageNames = Object.hasOwn(dependencies(this.profileDir), skin.packageName)
+            ? [skin.packageName, ...legacySubdirectoryDependencies]
+            : legacySubdirectoryDependencies
+          for (const packageName of packageNames) {
+            const result = await this.pluginRunner(this.profile, ['remove', packageName], undefined, this.profileDir)
+            if (result.exitCode !== 0) throw new Error(commandError(result))
+          }
         }
         removeRegistration(this.profileDir, skin)
         delete stored.skins[skin.id]

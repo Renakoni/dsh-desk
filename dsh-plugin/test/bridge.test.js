@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, describe, it } from 'node:test'
 import { pathToFileURL } from 'node:url'
@@ -22,6 +22,7 @@ import {
   createAgentSkillPolicy,
   createPluginPackageController,
   detectThemeCompatibility,
+  isGitSubdirectoryTarget,
   loaderInventory,
   mountAppearanceManager,
   repairKnownThemeDependencies,
@@ -296,6 +297,39 @@ describe('DSH Desk loopback transport', () => {
 })
 
 describe('DSH Loader inventory bridge', () => {
+  it('keeps Git subdirectory targets intact when bypassing the Windows DSH shell', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-git-subdirectory-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(profile, { recursive: true })
+    const pnpmCli = join(root, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+    const pnpmLog = join(root, 'pnpm.log')
+    const dshBin = join(root, 'bin', 'dsh')
+    mkdirSync(join(root, 'node_modules', 'pnpm', 'bin'), { recursive: true })
+    mkdirSync(join(root, 'bin'), { recursive: true })
+    writeFileSync(pnpmCli, `require('node:fs').appendFileSync(${JSON.stringify(pnpmLog)}, JSON.stringify(process.argv.slice(2)) + '\\n')`)
+    writeFileSync(dshBin, `require('node:fs').appendFileSync(${JSON.stringify(pnpmLog)}, JSON.stringify(process.argv.slice(2)) + '\\n')`)
+    const target = 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f&path:maid-atelier'
+    assert.equal(isGitSubdirectoryTarget(target), true)
+    const previousPath = process.env.PATH
+    const previousEntry = process.argv[1]
+    const previousExecArgv = process.execArgv
+    process.env.PATH = `${root}${delimiter}${previousPath ?? ''}`
+    process.argv[1] = dshBin
+    process.execArgv = []
+    try {
+      const result = await runPlugin('web', ['add', target], undefined, profile)
+      assert.equal(result.exitCode, 0)
+      const calls = readFileSync(pnpmLog, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line))
+      assert.deepEqual(calls[0].slice(0, 2), ['add', target])
+      assert.deepEqual(calls[1].slice(0, 4), ['plugin', '--profile', 'web', 'prune'])
+    } finally {
+      process.env.PATH = previousPath
+      process.argv[1] = previousEntry
+      process.execArgv = previousExecArgv
+    }
+  })
+
   it('extracts and persists the exact git build approval requested by pnpm', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-theme-build-approval-'))
     temporaryDirectories.add(root)
@@ -467,6 +501,58 @@ describe('DSH Loader inventory bridge', () => {
     assert.deepEqual(calls, [['add', 'github:demo/other#commit']])
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(manifest.dependencies['@deepseek-ai/dsh-client-ui-aqua'], current)
+    dispose()
+  })
+
+  it('migrates a shell-truncated Git subdirectory theme dependency before reinstalling it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-theme-git-subdirectory-migration-'))
+    temporaryDirectories.add(root)
+    const profile = join(root, 'web')
+    mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+    const legacyPackage = 'dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f'
+    const target = 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f&path:maid-atelier'
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { [legacyPackage]: target.replace('&path:maid-atelier', '') } }))
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+    const calls = []
+    const routes = []
+    const dispose = mountAppearanceManager({
+      webServer: { register(route) { routes.push(route); return () => undefined } },
+      loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+      runPlugin: async (_profile, args) => {
+        calls.push(args)
+        const manifestPath = join(profile, 'package.json')
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+        if (args[0] === 'remove') delete manifest.dependencies[args[1]]
+        if (args[0] === 'add') manifest.dependencies['@dsh-external/dsh-client-ui-skin-maid-atelier'] = target
+        writeFileSync(manifestPath, JSON.stringify(manifest))
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    })
+    const install = routes.find(route => route.path === '/dsh-appearance-manager/install')
+    const operations = routes.find(route => route.kind === 'prefix')
+    const started = await invokeRoute(install, { method: 'POST', body: {
+      skin: {
+        id: 'small-tailqwq.maid-atelier',
+        packageName: '@dsh-external/dsh-client-ui-skin-maid-atelier',
+        rowId: 'ui-skin-maid-atelier',
+        install: { target, version: '0.0.1' },
+      },
+      catalog: [],
+    } })
+    let operation
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+      if (operation.body?.phase === 'done') break
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.equal(operation.body.phase, 'done')
+    assert.deepEqual(calls, [
+      ['remove', legacyPackage],
+      ['add', target],
+    ])
+    const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(manifest.dependencies[legacyPackage], undefined)
+    assert.equal(manifest.dependencies['@dsh-external/dsh-client-ui-skin-maid-atelier'], target)
     dispose()
   })
 
