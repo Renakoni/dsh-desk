@@ -93,9 +93,8 @@ npm test --prefix ./dsh-plugin
 代码基于 [MIT 许可证](LICENSE) 发布。
 
 - **DeepSeek Harness**：DSH 事件、插件和 approval 协议来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。
-- **凑阿库娅（Minato Aqua）**：内置桌宠素材为二次创作，角色版权归 COVER Corp. 及原绘制者所有，仅限非商业使用，并遵循 [hololive 二次创作指南](https://hololivepro.com/terms/)。
 - **Clawd Companion**：部分界面与事件链路演化自 [Clawd Companion](https://github.com/Doulor/Clawd-Companion)（MIT © Doulor）。
-- 宠物主题兼容 [codex-pet](https://codex-pet.org) 格式。
+- **Codex Pets**：公开上传、桌宠包下载和使用规则见 [Codex Pets 使用条款](https://codex-pet.org/zh/terms/)。
 
 ---
 
