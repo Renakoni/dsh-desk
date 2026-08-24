@@ -32,7 +32,7 @@
 
 ## DSH Desk 是什么
 
-DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Web / Headless profiles，提供桌宠、状态通知、权限请求和用量记录。插件、Skill、主题、方案和市场入口集中在同一个桌面应用里。
+DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 开发的桌面端管理与交互工具。它将 DSH 后台的任务进度、权限审批和状态变化，以**桌面宠物交互**与**系统通知**的形式展现，同时集成了插件、Skill 和主题的集中管理。
 
 ## 核心亮点
 
