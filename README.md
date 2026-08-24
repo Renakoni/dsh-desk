@@ -50,7 +50,7 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **插件与主题市场**
 
-插件市场提供海量 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新、卸载和预览缓存，并兼容常见旧版主题注册方式。
+插件市场提供海量 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新，并兼容常见旧版主题注册方式。
 
 ## 开箱即用
 
