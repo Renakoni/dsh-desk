@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>让 DeepSeek Harness 变成一个会回应你的桌面工作台。</strong>
+  <strong>DeepSeek Harness 的桌面端状态监听与桌宠交互工具。</strong>
 </p>
 
 <p align="center">
