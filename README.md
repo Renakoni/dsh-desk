@@ -94,7 +94,7 @@ npm test --prefix ./dsh-plugin
 
 - **DeepSeek Harness**：DSH 事件、插件和 approval 协议来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。
 - **Clawd Companion**：部分界面与事件链路演化自 [Clawd Companion](https://github.com/Doulor/Clawd-Companion)（MIT © Doulor）。
-- **Codex Pets**：公开上传、桌宠包下载和使用规则见 [Codex Pets 使用条款](https://codex-pet.org/zh/terms/)。
+- **Codex Pets**：相关桌宠与自定义宠物说明见 [OpenAI 官方 Pets 文档](https://learn.chatgpt.com/docs/pets)。
 
 ---
 
