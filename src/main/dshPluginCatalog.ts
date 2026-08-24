@@ -58,7 +58,7 @@ type MarketplaceCache = {
 
 export type DshPluginCatalogOptions = {
   dshHome: string;
-  npxPath: string | null;
+  pnpmPath: string | null;
   marketplaceCachePath: string;
   commandRunner?: DshCommandRunner;
   fetcher?: typeof fetch;
@@ -365,7 +365,7 @@ export class DshPluginCatalog {
       profiles: records.map(record => record.profile),
       plugins: aggregatePlugins(records, this.options.dshHome),
       dshHome: this.options.dshHome,
-      npxAvailable: this.options.npxPath !== null,
+      pnpmAvailable: this.options.pnpmPath !== null,
       scannedAt: this.now()
     };
   }
@@ -401,13 +401,13 @@ export class DshPluginCatalog {
       if (!input || typeof input.installSpec !== "string" || !INSTALL_SPEC.test(input.installSpec)) {
         throw new CatalogError("invalid-input", "The marketplace install specification is not supported.");
       }
-      if (!this.options.npxPath) throw new CatalogError("npx-missing", "npx was not found on PATH.");
+      if (!this.options.pnpmPath) throw new CatalogError("pnpm-missing", "pnpm was not found on PATH.");
       const profiles = normalizeProfiles(input.profiles, new Set(before.profiles.map(profile => profile.name)));
       const records = discoverProfiles(this.options.dshHome);
       for (const profile of profiles) {
         const disabledBundles = records.find(item => item.profile.name === profile);
         const preserveDisabled = disabledBundles ? disabledBundleDependencies(disabledBundles, this.options.dshHome) : [];
-        await this.commandRunner(this.options.npxPath, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", input.installSpec]);
+        await this.commandRunner(this.options.pnpmPath, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", input.installSpec]);
         changedProfiles.push(profile);
         const refreshed = discoverProfiles(this.options.dshHome).find(item => item.profile.name === profile);
         if (refreshed) restoreDisabledBundles(refreshed, preserveDisabled, this.options.dshHome);
@@ -427,7 +427,7 @@ export class DshPluginCatalog {
       const plugin = before.plugins.find(item => item.packageName === input.packageName);
       if (!plugin) throw new CatalogError("plugin-not-found", "The DSH plugin is no longer installed.");
       if (plugin.protected) throw new CatalogError("protected-plugin", "This bundle is required by DSH or DSH Desk and cannot be removed.");
-      if (!this.options.npxPath) throw new CatalogError("npx-missing", "npx was not found on PATH.");
+      if (!this.options.pnpmPath) throw new CatalogError("pnpm-missing", "pnpm was not found on PATH.");
       const profiles = normalizeProfiles(input.profiles, new Set(before.profiles.map(profile => profile.name)));
       const records = discoverProfiles(this.options.dshHome);
       for (const profile of profiles) {
@@ -435,7 +435,7 @@ export class DshPluginCatalog {
         if (state?.dependencySpec) {
           const record = records.find(item => item.profile.name === profile);
           const preserveDisabled = record ? disabledBundleDependencies(record, this.options.dshHome) : [];
-          await this.commandRunner(this.options.npxPath, ["--yes", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", input.packageName]);
+          await this.commandRunner(this.options.pnpmPath, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", input.packageName]);
           changedProfiles.push(profile);
           const refreshed = discoverProfiles(this.options.dshHome).find(item => item.profile.name === profile);
           if (refreshed) restoreDisabledBundles(refreshed, preserveDisabled, this.options.dshHome);

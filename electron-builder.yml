@@ -20,7 +20,7 @@ files:
   - package.json
 
 # Files that MUST live on disk OUTSIDE app.asar:
-#  - The DSH plugin tarball is installed into the user's web/headless profiles via npx.
+#  - The DSH plugin tarball is installed into the user's web/headless profiles via pnpm.
 #  - kuaclock.png is the tray icon, loaded from process.resourcesPath when packaged.
 extraResources:
   - from: build/dsh-desk-plugin-0.1.0.tgz

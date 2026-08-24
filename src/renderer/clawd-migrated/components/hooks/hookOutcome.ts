@@ -46,7 +46,7 @@ export function hookOutcomeMessage(outcome: HookOperationOutcome, t: Translate, 
       ? fill(t("doctor.bundleMissingPath", "找不到 DSH 插件安装包：{path}"), { path: display.path })
       : t("doctor.bundleMissing", "找不到 DSH 插件安装包，请重新安装应用。");
   }
-  if (display.kind === "npx-missing") return t("doctor.npxMissing", "未找到 npx。请先安装 Node.js/npm 并重新启动 DSH Desk。");
+  if (display.kind === "pnpm-missing") return t("doctor.pnpmMissing", "未找到 pnpm。请先安装 pnpm 并重新启动 DSH Desk。");
   if (display.kind === "hidden") return t(HIDDEN_KEY[outcome.operation], HIDDEN_FALLBACK[outcome.operation]);
   return fill(t(FAILED_KEY[outcome.operation], FAILED_FALLBACK[outcome.operation]), { error: display.text });
 }

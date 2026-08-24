@@ -40,7 +40,7 @@ function status(marker: string): HookStatus {
     commandMatches: true,
     settingsPath: marker,
     bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: true },
-    npxAvailable: true,
+    pnpmAvailable: true,
     profiles: ["web", "headless"].map(name => ({
       name: name as "web" | "headless",
       configExists: true,

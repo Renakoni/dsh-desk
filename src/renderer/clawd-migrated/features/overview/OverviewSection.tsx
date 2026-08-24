@@ -25,7 +25,7 @@ export function ConnectionRow({ label, value, state }: { label: string; value: s
 // not-configured onboarding / factual workbench) and it never re-shows first-run
 // onboarding for an installed-but-broken config — that keeps the workbench with a
 // contextual Repair. The Overview stays compact with one row per required DSH
-// profile; installer, npx, listener, and destructive Remove details live in
+// profile; installer, pnpm, listener, and destructive Remove details live in
 // Settings.
 export function OverviewSection({
   settings,

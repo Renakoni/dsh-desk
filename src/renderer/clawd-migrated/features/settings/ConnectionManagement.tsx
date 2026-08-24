@@ -69,9 +69,9 @@ export function ConnectionManagement({
             state={facts.bundleState}
           />
           <ConnectionRow
-            label="npx"
-            value={facts.npxAvailable ? t("connection.available", "可用") : t("connection.npxMissing", "未找到")}
-            state={facts.npxState}
+            label="pnpm"
+            value={facts.pnpmAvailable ? t("connection.available", "可用") : t("connection.pnpmMissing", "未找到")}
+            state={facts.pnpmState}
           />
           <ConnectionRow
             label={t("status.localServer", "本地监听")}

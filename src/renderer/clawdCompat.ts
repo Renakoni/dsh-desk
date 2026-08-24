@@ -325,7 +325,7 @@ let mockDshPluginSnapshot: DshPluginSnapshot = {
     ]
   }],
   dshHome: "~/.dsh",
-  npxAvailable: true,
+  pnpmAvailable: true,
   scannedAt: Date.now()
 };
 const mockDshMarketplace: DshMarketplaceSnapshot = {
@@ -661,7 +661,7 @@ function hooksStatus(): HookStatus {
     commandMatches: false,
     settingsPath: "",
     bundle: { expectedPath: "dsh-plugin", exists: false },
-    npxAvailable: false,
+    pnpmAvailable: false,
     profiles: missingHookEvents.map(name => ({
       name,
       configExists: false,

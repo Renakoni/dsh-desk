@@ -9,7 +9,7 @@ const healthyPlugin: HookStatusInput = {
   commandMatches: true,
   configReadError: false,
   bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: true },
-  npxAvailable: true
+  pnpmAvailable: true
 };
 
 describe("deriveConnectionState: DSH plugin modes", () => {
@@ -48,7 +48,7 @@ describe("deriveConnectionState: DSH plugin modes", () => {
 describe("deriveConnectionState: repair prerequisites", () => {
   const needsRepair: HookStatusInput = { ...healthyPlugin, installed: false, hookCount: 1, missingEvents: ["headless"], commandMatches: false };
 
-  it("offers repair when the bundle and npx are available", () => {
+  it("offers repair when the bundle and pnpm are available", () => {
     const facts = deriveConnectionState(needsRepair, { serverListening: true });
     expect(facts.needsHookRepair).toBe(true);
     expect(facts.canRepair).toBe(true);
@@ -61,7 +61,7 @@ describe("deriveConnectionState: repair prerequisites", () => {
     expect(facts.listenerDown).toBe(true);
   });
 
-  it("blocks repair when the bundled plugin or npx is missing", () => {
+  it("blocks repair when the bundled plugin or pnpm is missing", () => {
     const missingBundle = deriveConnectionState({
       ...needsRepair,
       bundle: { expectedPath: "C:/app/dsh-desk-plugin.tgz", exists: false }
@@ -69,9 +69,9 @@ describe("deriveConnectionState: repair prerequisites", () => {
     expect(missingBundle.bundleMissing).toBe(true);
     expect(missingBundle.canRepair).toBe(false);
 
-    const missingNpx = deriveConnectionState({ ...needsRepair, npxAvailable: false }, { serverListening: true });
-    expect(missingNpx.npxState).toBe("unavailable");
-    expect(missingNpx.canRepair).toBe(false);
+    const missingPnpm = deriveConnectionState({ ...needsRepair, pnpmAvailable: false }, { serverListening: true });
+    expect(missingPnpm.pnpmState).toBe("unavailable");
+    expect(missingPnpm.canRepair).toBe(false);
   });
 });
 

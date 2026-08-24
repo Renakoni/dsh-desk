@@ -2,7 +2,7 @@
 // (@ts-nocheck) component so the delivery-chain model can be unit-tested.
 //
 // Each link in the chain is an INDEPENDENT fact: DSH profile registration, the
-// bundled installer package, npx availability, the local listener, and the
+// bundled installer package, pnpm availability, the local listener, and the
 // recent-event history are reported separately. A listening server with no
 // events yet is a healthy, non-failure state ("waiting for the first event") —
 // a past event is never treated as proof the live link is currently up, and its
@@ -28,11 +28,11 @@ export type ConnectionErrorReason = "check-failed" | "settings-unreadable";
 
 // The derivation intentionally needs only a subset of the shared HookStatus; a
 // Pick keeps it tied to the single source of truth so it cannot silently drift.
-// Bundle/npx facts are optional HERE ONLY so the pure derivation remains
+// Bundle/pnpm facts are optional HERE ONLY so the pure derivation remains
 // defensive if an older renderer receives an incomplete payload.
 export type HookStatusInput =
   Pick<HookStatus, "installed" | "hookCount" | "requiredCount" | "missingEvents" | "commandMatches" | "configReadError">
-  & Partial<Pick<HookStatus, "bundle" | "npxAvailable">>;
+  & Partial<Pick<HookStatus, "bundle" | "pnpmAvailable">>;
 
 export interface ConnectionInput {
   serverListening?: boolean;
@@ -51,14 +51,14 @@ export interface ConnectionFacts {
   commandOk: boolean;
   bundleKnown: boolean;
   bundleOk: boolean;
-  npxAvailable: boolean;
+  pnpmAvailable: boolean;
   listening: boolean;
   hasRecentEvent: boolean;
   /** Overall health does NOT depend on a recent event, only on the live links. */
   healthy: boolean;
   /** Hook configuration or command needs fixing (the things Repair actually fixes). */
   needsHookRepair: boolean;
-  /** Repair can run only when both the bundled package and npx are available. */
+  /** Repair can run only when both the bundled package and pnpm are available. */
   canRepair: boolean;
   bundleMissing: boolean;
   /** Local listener is down — a Repair cannot restart it; needs its own guidance. */
@@ -66,7 +66,7 @@ export interface ConnectionFacts {
   configState: ConnectionRowState;
   commandState: ConnectionRowState;
   bundleState: ConnectionRowState;
-  npxState: ConnectionRowState;
+  pnpmState: ConnectionRowState;
   listenerState: ConnectionRowState;
   recentEventState: ConnectionRowState;
 }
@@ -85,7 +85,7 @@ export function deriveConnectionState(
 
   const bundleKnown = Boolean(hookStatus?.bundle);
   const bundleOk = hookStatus?.bundle ? hookStatus.bundle.exists : false;
-  const npxAvailable = hookStatus?.npxAvailable === true;
+  const pnpmAvailable = hookStatus?.pnpmAvailable === true;
 
   const listening = connection.serverListening === true;
   const hasRecentEvent = Boolean(connection.lastEventAt);
@@ -98,7 +98,7 @@ export function deriveConnectionState(
   const bundleMissing = bundleKnown && !bundleOk;
   const listenerDown = !listening;
   // Repair re-runs the official DSH profile add command for both profiles.
-  const canRepair = needsHookRepair && bundleOk && npxAvailable;
+  const canRepair = needsHookRepair && bundleOk && pnpmAvailable;
 
   let mode: ConnectionMode;
   let errorReason: ConnectionErrorReason | null = null;
@@ -130,7 +130,7 @@ export function deriveConnectionState(
     commandOk,
     bundleKnown,
     bundleOk,
-    npxAvailable,
+    pnpmAvailable,
     listening,
     hasRecentEvent,
     healthy,
@@ -141,7 +141,7 @@ export function deriveConnectionState(
     configState: configComplete ? "healthy" : "partial",
     commandState: commandOk ? "healthy" : "repair",
     bundleState: bundleOk ? "healthy" : "unavailable",
-    npxState: npxAvailable ? "healthy" : "unavailable",
+    pnpmState: pnpmAvailable ? "healthy" : "unavailable",
     listenerState: listening ? "healthy" : "unavailable",
     recentEventState: hasRecentEvent ? "healthy" : "waiting"
   };
