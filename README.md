@@ -46,7 +46,7 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 **方案化扩展管理**
 
-统一管理 DSH 插件、Skill 和组件状态。插件和组件支持默认、启用、停用三种状态，并可在方案中组合；安装、启用、停用和移除都在同一个界面完成。
+提供更强的 DSH 插件管理能力：插件可随时启用或停用，还能和 Skill、主题一起编排成模板，按不同工作场景快速切换。
 
 **插件与主题市场**
 
