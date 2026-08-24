@@ -110,6 +110,12 @@ import type { DshSkinMutationInput } from "../shared/dshSkins";
 import { DshSkinMarketplace, DSH_SKIN_MARKET_PACKAGE, DSH_SKIN_PREVIEW_PROTOCOL, DEFAULT_DSH_WEB_ORIGIN, readManagedDshThemePackages, resolveDshSkinPreviewPath } from "./dshSkinMarketplace";
 import { normalizeDshThemeOverride, resolveDshThemeId } from "../shared/dshThemes";
 
+// Set the Windows identity before creating any BrowserWindow. Windows uses this
+// identity to select the taskbar grouping and shortcut icon; setting it later
+// leaves development windows associated with Electron's generic icon.
+const APP_USER_MODEL_ID = "DSHDesk";
+if (process.platform === "win32") app.setAppUserModelId(APP_USER_MODEL_ID);
+
 type DailyRuntimeStats = {
   events: number;
   toolCalls: number;
@@ -885,13 +891,6 @@ function applyLaunchAtLoginSetting() {
 }
 
 function runStartupBehaviors() {
-  if (process.platform === "win32") {
-    // Windows shell / taskbar / notification identity. When packaging is
-    // configured, the installer's shortcut AppUserModelID (electron-builder
-    // `appId`) MUST match this string, or toast notifications won't group
-    // under the app.
-    app.setAppUserModelId("DSHDesk");
-  }
   applyLaunchAtLoginSetting();
   if (companionSettings.openSettingsOnStart) showPanelWindow();
   scheduleStartupWarmup();
