@@ -60,17 +60,23 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 更多桌宠可以通过 codex-pet 宠物包或应用内的安装命令继续加入。
 
-## 安装与快速开始
+## 快速开始
 
-需要 Windows 10 / 11 x64、Node.js，以及可以运行的 DeepSeek Harness：
+### 准备环境
 
-```powershell
-npx @deepseek-ai/dsh web
-```
+- Windows 10 / 11 x64
+- Node.js (v18+)
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 
-下载 [Windows 安装包](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 并安装，或下载 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip) 后解压。
+### 安装步骤
 
-启动 DSH Desk，在“总览”中安装 DSH 插件，然后重启正在运行的 DSH Web 或 Headless profile。
+1. 下载 [Windows 安装包 (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 或 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip)。
+2. 启动 DSH Desk，在 **总览** 中点击安装 DSH 插件。
+3. 启动（或重启）DSH 服务：
+
+   ```powershell
+   npx @deepseek-ai/dsh web
+   ```
 
 ## 从源码运行
 
@@ -93,7 +99,3 @@ npm test --prefix ./dsh-plugin
 - **DeepSeek Harness**：DSH 事件、插件和 approval 协议来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。
 - **Clawd Companion**：部分界面与事件链路演化自 [Clawd Companion](https://github.com/Doulor/Clawd-Companion)（MIT © Doulor）。
 - **Codex Pets**：相关桌宠与自定义宠物说明见 [OpenAI 官方 Pets 文档](https://learn.chatgpt.com/docs/pets)。
-
----
-
-<p align="center"><sub><em>桌宠是入口，DSH 的实时反馈与扩展管理才是完整的工作台。</em></sub></p>
