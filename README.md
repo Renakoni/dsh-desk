@@ -13,14 +13,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe">下载安装版</a>
-  ·
-  <a href="https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip">下载免安装版</a>
-  ·
-  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0">查看 v0.1.0 Release</a>
-</p>
-
-<p align="center">
   <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
   &nbsp;
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
@@ -52,7 +44,10 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 插件市场提供海量 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新，并兼容常见旧版主题注册方式。
 
-市场上游：插件目录来自 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)；Skill 默认收录 [anthropics/skills](https://github.com/anthropics/skills)、[awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[myclaude](https://github.com/cexll/myclaude) 和 [baoyu-skills](https://github.com/JimLiu/baoyu-skills)；主题目录来自 [awesome-dsh-themes](https://github.com/Renakoni/awesome-dsh-themes)。
+市场上游：<br>
+插件目录来自 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)；<br>
+Skill 默认收录 [anthropics/skills](https://github.com/anthropics/skills)、[awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[myclaude](https://github.com/cexll/myclaude) 和 [baoyu-skills](https://github.com/JimLiu/baoyu-skills)；<br>
+主题目录来自 [awesome-dsh-themes](https://github.com/Renakoni/awesome-dsh-themes)。
 
 ## 开箱即用
 
