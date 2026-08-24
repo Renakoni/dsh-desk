@@ -26,6 +26,17 @@
 
 DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 开发的桌面端管理与交互工具。它将 DSH 后台的任务进度、权限审批和状态变化，以**桌面宠物交互**与**系统通知**的形式展现，同时集成了插件、Skill 和主题的集中管理。
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/screenshots/pet-states.gif" alt="桌宠响应不同的 DSH 会话状态" width="480">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dsh-themes.webp" alt="DSH 主题库" width="49%">
+  <img src="docs/screenshots/dsh-pets.webp" alt="桌宠库与导入对话框" width="49%">
+</p>
+
 ## 核心亮点
 
 **5000+ 桌宠生态**
@@ -35,6 +46,10 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 **DSH 工作流事件响应**
 
 `dsh-desk-plugin` 将 DSH 的任务、工具调用、完成状态、错误和权限事件接入 DSH Desk。任务状态变化会反映在桌宠动作、声音和桌面通知上，权限请求也可以直接在桌面端确认。
+
+**本地数据面板与用量分析**
+
+集中查看会话轨迹、工具性能、最近编辑、Token 热力图，以及按模型和项目拆分的用量统计。数据保存在本地，不上传提示词、回复或工具结果。
 
 **方案化扩展管理**
 
@@ -55,7 +70,7 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 ### 准备环境
 
 - Windows 10 / 11 x64
-- Node.js (v18+)
+- Node.js (v22.12+)
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 
 ### 安装步骤
