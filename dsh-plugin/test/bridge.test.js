@@ -26,6 +26,7 @@ import {
   loaderInventory,
   mountAppearanceManager,
   repairKnownThemeDependencies,
+  resolvePnpmInvocation,
   runPlugin,
   runtimeEntryOwners,
 } from '../src/index.js'
@@ -297,6 +298,44 @@ describe('DSH Desk loopback transport', () => {
 })
 
 describe('DSH Loader inventory bridge', () => {
+  it('uses a cmd.exe invocation when Windows only exposes a pnpm shim', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-pnpm-shim-'))
+    temporaryDirectories.add(root)
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'pnpm.cmd'), '@echo off\n')
+    const invocation = resolvePnpmInvocation('win32', root)
+    assert.equal(invocation.file, process.env.ComSpec ?? 'cmd.exe')
+    assert.deepEqual(invocation.prefix, ['/d', '/s', '/c'])
+    assert.equal(invocation.command, 'call pnpm.cmd')
+    assert.equal(invocation.mode, 'cmd')
+  })
+
+  it('executes a Windows pnpm.cmd shim without a local pnpm.cjs', async () => {
+    if (process.platform !== 'win32') return
+    const root = mkdtempSync(join(tmpdir(), 'dsh-pnpm-cmd-fallback-'))
+    temporaryDirectories.add(root)
+    const shim = join(root, 'pnpm.cmd')
+    const runner = join(root, 'bin.js')
+    writeFileSync(shim, '@echo off\necho %*\n')
+    writeFileSync(runner, '')
+    const target = 'github:Small-tailqwq/dsh-deep-whale#873f5d5b0a0b5a61b9b0e0cc3c3d2f7e4c0a9f1b&path:maid-atelier'
+    const previousPath = process.env.PATH
+    const previousEntry = process.argv[1]
+    const previousExecArgv = process.execArgv
+    process.env.PATH = root
+    process.argv[1] = runner
+    process.execArgv = []
+    try {
+      const result = await runPlugin('web', ['add', target], undefined, root)
+      assert.equal(result.exitCode, 0)
+      assert.match(result.stdout, /873f5d5b0a0b5a61b9b0e0cc3c3d2f7e4c0a9f1b&path:maid-atelier/)
+    } finally {
+      process.env.PATH = previousPath
+      process.argv[1] = previousEntry
+      process.execArgv = previousExecArgv
+    }
+  })
+
   it('keeps Git subdirectory targets intact when bypassing the Windows DSH shell', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-theme-git-subdirectory-'))
     temporaryDirectories.add(root)
@@ -510,8 +549,11 @@ describe('DSH Loader inventory bridge', () => {
     const profile = join(root, 'web')
     mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
     const legacyPackage = 'dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f'
-    const target = 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f&path:maid-atelier'
-    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { [legacyPackage]: target.replace('&path:maid-atelier', '') } }))
+    const target = 'github:Small-tailqwq/dsh-deep-whale#873f5d5b0a0b5a61b9b0e0cc3c3d2f7e4c0a9f1b&path:maid-atelier'
+    const legacyDirectory = join(profile, 'node_modules', legacyPackage)
+    mkdirSync(legacyDirectory, { recursive: true })
+    writeFileSync(join(legacyDirectory, 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-client-ui-skin-maid-atelier', version: '0.0.1', dsh: { client: { platform: 'web' }, bundle: { patch: './cordis.patch.yml' } } }))
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { [legacyPackage]: 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f' } }))
     writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
     const calls = []
     const routes = []
@@ -554,6 +596,65 @@ describe('DSH Loader inventory bridge', () => {
     assert.equal(manifest.dependencies[legacyPackage], undefined)
     assert.equal(manifest.dependencies['@dsh-external/dsh-client-ui-skin-maid-atelier'], target)
     dispose()
+  })
+
+  it('migrates an older commit during update and removes it during uninstall', async () => {
+    const legacyPackage = 'dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f'
+    const unrelatedPackage = 'dsh-deep-whale#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const target = 'github:Small-tailqwq/dsh-deep-whale#873f5d5b0a0b5a61b9b0e0cc3c3d2f7e4c0a9f1b&path:maid-atelier'
+    for (const action of ['update', 'uninstall']) {
+      const root = mkdtempSync(join(tmpdir(), `dsh-theme-git-subdirectory-${action}-`))
+      temporaryDirectories.add(root)
+      const profile = join(root, 'web')
+      const legacyDirectory = join(profile, 'node_modules', legacyPackage)
+      const unrelatedDirectory = join(profile, 'node_modules', unrelatedPackage)
+      mkdirSync(join(profile, '.dsh-appearance-manager'), { recursive: true })
+      mkdirSync(legacyDirectory, { recursive: true })
+      mkdirSync(unrelatedDirectory, { recursive: true })
+      writeFileSync(join(legacyDirectory, 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-client-ui-skin-maid-atelier', version: '0.0.1', dsh: { client: { platform: 'web' } } }))
+      writeFileSync(join(unrelatedDirectory, 'package.json'), JSON.stringify({ name: '@dsh-external/other-skin', version: '0.0.1' }))
+      writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+        [legacyPackage]: 'github:Small-tailqwq/dsh-deep-whale#be6146ed8724fe268a3b48806c51f12d30e9fd1f',
+        [unrelatedPackage]: 'github:Small-tailqwq/dsh-deep-whale#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      } }))
+      writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n')
+      if (action === 'update') writeFileSync(join(profile, '.dsh-appearance-manager', 'state.json'), JSON.stringify({ version: 1, skins: { 'maid.skin': { active: false, packageName: '@dsh-external/dsh-client-ui-skin-maid-atelier', themeId: 'maid.skin' } } }))
+      const calls = []
+      const routes = []
+      const dispose = mountAppearanceManager({
+        webServer: { register(route) { routes.push(route); return () => undefined } },
+        loader: { entries: () => [{ options: { id: 'include', name: 'cordis:include', config: { path: join(profile, 'cordis.patch.yml') } } }] },
+        runPlugin: async (_profile, args) => {
+          calls.push(args)
+          const manifestPath = join(profile, 'package.json')
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+          if (args[0] === 'remove') delete manifest.dependencies[args[1]]
+          if (args[0] === 'add') manifest.dependencies['@dsh-external/dsh-client-ui-skin-maid-atelier'] = target
+          writeFileSync(manifestPath, JSON.stringify(manifest))
+          return { exitCode: 0, stdout: '', stderr: '' }
+        },
+      })
+      const route = routes.find(item => item.path === `/dsh-appearance-manager/${action}`)
+      const operations = routes.find(item => item.kind === 'prefix')
+      const started = await invokeRoute(route, { method: 'POST', body: {
+        skin: { id: 'maid.skin', packageName: '@dsh-external/dsh-client-ui-skin-maid-atelier', rowId: 'ui-skin-maid-atelier', install: { target, version: '0.0.2' } },
+        catalog: [],
+      } })
+      let operation
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        operation = await invokeRoute(operations, { path: `/dsh-appearance-manager/operations/${started.body.operationId}` })
+        if (operation.body?.phase === 'done') break
+        await new Promise(resolve => setImmediate(resolve))
+      }
+      assert.equal(operation.body.phase, 'done')
+      assert.deepEqual(calls, action === 'update'
+        ? [['remove', legacyPackage], ['add', target]]
+        : [['remove', legacyPackage]])
+      const dependencies = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')).dependencies
+      assert.equal(dependencies[legacyPackage], undefined)
+      assert.equal(dependencies[unrelatedPackage], 'github:Small-tailqwq/dsh-deep-whale#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+      dispose()
+    }
   })
 
   it('rolls back dependency migrations when a theme mutation fails', async () => {

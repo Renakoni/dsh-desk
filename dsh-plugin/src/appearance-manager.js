@@ -149,11 +149,47 @@ function gitSubdirectoryTarget(value) {
   return { base: match.groups.base, path: match.groups.path }
 }
 
+function gitRepositoryRef(value) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  const hash = normalized.indexOf('#')
+  if (hash <= 0 || hash === normalized.length - 1 || normalized.includes('&path:')) return null
+  const base = normalized.slice(0, hash)
+  const ref = normalized.slice(hash + 1)
+  let repository = base
+  if (/^github:/i.test(repository)) repository = repository.slice('github:'.length)
+  else {
+    repository = repository.replace(/^git\+/i, '')
+    try {
+      const url = new URL(repository)
+      repository = `${url.hostname}${url.pathname}`
+    } catch { return null }
+  }
+  repository = repository.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').toLowerCase()
+  return repository && ref ? { repository, ref } : null
+}
+
+function malformedGitSubdirectoryDependency(packageName, spec, target) {
+  if (typeof packageName !== 'string' || packageName.includes('/')) return false
+  const packageMatch = packageName.match(/^(.+)#([0-9a-f]{7,64})$/i)
+  if (!packageMatch) return false
+  const dependency = gitRepositoryRef(spec)
+  const desired = gitRepositoryRef(target.base)
+  if (!dependency || !desired || dependency.repository !== desired.repository) return false
+  if (dependency.ref.toLowerCase() !== packageMatch[2].toLowerCase()) return false
+  const repositoryName = dependency.repository.slice(dependency.repository.lastIndexOf('/') + 1)
+  return packageMatch[1].toLowerCase() === repositoryName
+}
+
 function legacyGitSubdirectoryDependencies(profileDir, skin) {
   const target = gitSubdirectoryTarget(skin?.install?.target)
   if (!target || typeof skin?.packageName !== 'string') return []
   return Object.entries(dependencies(profileDir))
-    .filter(([packageName, spec]) => packageName !== skin.packageName && spec === target.base)
+    .filter(([packageName, spec]) => {
+      if (packageName === skin.packageName || !malformedGitSubdirectoryDependency(packageName, spec, target)) return false
+      const manifest = packageManifest(profileDir, packageName)
+      return Boolean(manifest && manifest.name === skin.packageName)
+    })
     .map(([packageName]) => packageName)
 }
 
@@ -458,6 +494,12 @@ function invocation() {
   if (entry && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) return { file: process.execPath, prefix: [...process.execArgv, resolve(entry)] }
   return { file: 'dsh', prefix: [] }
 }
+
+function quoteCmdArgument(value) {
+  const text = String(value)
+  return /[\s&|<>^\"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
 function parsePnpmOutput(chunk, packages, onProgress, parserState) {
   if (typeof onProgress !== 'function') return
   const text = `${parserState.value}${String(chunk)}`.replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '')
@@ -487,7 +529,10 @@ function parsePnpmOutput(chunk, packages, onProgress, parserState) {
 function spawnCommand(command, cwd, args, onProgress) {
   return new Promise(resolvePromise => {
     const reporterArgs = args.some(argument => argument === '--reporter' || argument.startsWith('--reporter=')) ? args : [...args, '--reporter', 'ndjson']
-    const child = spawn(command.file, [...command.prefix, ...reporterArgs], { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CI: 'true' } })
+    const childArgs = command.mode === 'cmd'
+      ? [...command.prefix, `${command.command} ${reporterArgs.map(quoteCmdArgument).join(' ')}`]
+      : [...command.prefix, ...reporterArgs]
+    const child = spawn(command.file, childArgs, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...command.env, CI: 'true' } })
     let stdout = ''; let stderr = ''
     const packages = new Map()
     const stdoutParserState = { value: '' }
@@ -505,15 +550,39 @@ function spawnPlugin(profile, args, onProgress) {
   return spawnCommand(command, undefined, ['plugin', '--profile', profile, ...args], onProgress)
 }
 
-function spawnPnpm(profileDir, args, onProgress) {
-  const directories = [dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]
+function resolvePnpmCommand(platform = process.platform, pathValue = process.env.PATH ?? '') {
+  const directories = [dirname(process.execPath), ...pathValue.split(delimiter).filter(Boolean)]
   const cliPath = directories
     .map(directory => join(directory, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'))
     .find(path => existsSync(path))
-  const command = cliPath
-    ? { file: process.execPath, prefix: [cliPath] }
-    : { file: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', prefix: [] }
-  return spawnCommand(command, profileDir, args, onProgress)
+  if (cliPath) return { file: process.execPath, prefix: [cliPath] }
+  if (platform !== 'win32') return { file: 'pnpm', prefix: [] }
+
+  // A pnpm shim is a batch file, which Node cannot spawn with shell:false.
+  // Keep the target as one quoted cmd argument so Git subdirectory targets
+  // containing '&path:' are not split into a second shell command.
+  const shimPath = directories
+    .map(directory => join(directory, 'pnpm.cmd'))
+    .find(path => existsSync(path))
+  const shimDirectory = shimPath ? dirname(shimPath) : null
+  const command = {
+    file: process.env.ComSpec ?? 'cmd.exe',
+    prefix: ['/d', '/s', '/c'],
+    command: 'call pnpm.cmd',
+    mode: 'cmd',
+    env: shimDirectory
+      ? { ...process.env, PATH: `${shimDirectory}${delimiter}${pathValue}` }
+      : process.env,
+  }
+  return command
+}
+
+function spawnPnpm(profileDir, args, onProgress) {
+  return spawnCommand(resolvePnpmCommand(), profileDir, args, onProgress)
+}
+
+export function resolvePnpmInvocation(platform = process.platform, pathValue = process.env.PATH ?? '') {
+  return resolvePnpmCommand(platform, pathValue)
 }
 
 export function runPlugin(profile, args, onProgress, profileDir) {
