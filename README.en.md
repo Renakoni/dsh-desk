@@ -37,7 +37,7 @@ DSH Desk is a desktop management and interaction companion for [DeepSeek Harness
 
 **🐾 5,000+ desktop pets**
 
-Works with the [codex-pet](https://codex-pet.org) package format. DSH Desk ships with Minato Aqua, Yuexinmiao, and the DeepSeek Whale, giving your DSH access to more than 5,000 pets in the codex-pet ecosystem.
+Works with the Codex Pet package format. DSH Desk ships with Minato Aqua, Yuexinmiao, and the DeepSeek Whale, giving your DSH access to more than 5,000 pets.
 
 **🫧 DSH workflow events**
 
