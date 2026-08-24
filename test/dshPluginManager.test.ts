@@ -64,6 +64,23 @@ describe("DSH plugin status", () => {
     expect(resolvePnpmInvocation(pnpmPath, ["dlx", "@deepseek-ai/dsh"], "win32"))
       .toEqual({ command: nodePath, args: [cliPath, "dlx", "@deepseek-ai/dsh"] });
   });
+
+  it("finds Node on PATH when Electron is the host executable", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-pnpm-path-"));
+    const nodeRoot = join(root, "node");
+    roots.push(root);
+    const pnpmPath = join(root, "pnpm", "pnpm.cmd");
+    const nodePath = join(nodeRoot, "node.exe");
+    const cliPath = join(root, "pnpm", "node_modules", "pnpm", "bin", "pnpm.cjs");
+    mkdirSync(join(root, "pnpm", "node_modules", "pnpm", "bin"), { recursive: true });
+    mkdirSync(nodeRoot, { recursive: true });
+    writeFileSync(pnpmPath, "", "utf8");
+    writeFileSync(nodePath, "", "utf8");
+    writeFileSync(cliPath, "", "utf8");
+
+    expect(resolvePnpmInvocation(pnpmPath, ["--version"], "win32", "C:\\Program Files\\DSH Desk\\electron.exe", nodeRoot))
+      .toEqual({ command: nodePath, args: [cliPath, "--version"] });
+  });
 });
 
 describe("DSH plugin operations", () => {
