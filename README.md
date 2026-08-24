@@ -21,51 +21,26 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本">
+  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
   &nbsp;
-  <img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness">
+  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
   &nbsp;
   <img src="https://img.shields.io/badge/Windows-10%2F11%20x64-4c8492?style=flat-square&logo=windows&logoColor=white" alt="Windows 10/11 x64">
   &nbsp;
-  <img src="https://img.shields.io/badge/License-MIT-4c566a?style=flat-square" alt="许可证：MIT">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4c566a?style=flat-square" alt="许可证：MIT"></a>
 </p>
-
-> [!NOTE]
-> DSH Desk 是一个非官方社区项目，与 DeepSeek、COVER Corp. 均无关联。内置 Minato Aqua 桌宠素材为二次创作，详见[许可证与署名](#许可证与署名)。
 
 ## DSH Desk 是什么
 
-DSH Desk 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Windows 桌面伴侣与扩展控制台。
+DSH Desk 把 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 带到桌面：实时显示会话、工具、权限和用量，统一管理桌宠、插件、Skill 与 DSH Web 主题。
 
-它把 DSH 的实时运行状态、桌宠反馈、插件、Skill、Web 主题和用量信息集中在一个界面，让桌宠不只是装饰，而是 DSH 工作状态的一部分。
+## 核心能力
 
-## 核心亮点
-
-### 5000+ 桌宠生态
-
-DSH Desk 兼容 [codex-pet](https://codex-pet.org) 宠物包格式。安装包内置 Aqua、月薪喵和 DeepSeek 鲸鱼娘，还可以继续从 codex-pet 生态接入 5000+ 桌宠。
-
-### DSH 实时联动
-
-通过 DSH 插件接收会话生命周期、工具调用、任务结果、错误和权限请求，让桌宠、通知和声音随工作状态实时响应。
-
-- 支持 DSH Web 与 Headless profiles
-- 支持权限请求与桌面确认
-- 展示会话轨迹、工具性能、最近编辑和运行状态
-- 记录模型、项目和 Token 用量
-
-### 统一的扩展管理
-
-在一个界面中管理 DSH 的插件、Skill 和组件状态，支持安装、启用、停用、移除和状态检查。
-
-把 Plugin、Skill 和 DSH Web 主题组合成一套方案，保存后即可按工作场景一键切换。
-
-### 插件与主题市场
-
-- 浏览并安装 DSH 插件和 Skill
-- 浏览、预览、安装、更新和卸载 DSH Web 主题
-- 缓存主题预览资源，减少重复下载
-- 在使用主题时自动处理常见旧版注册方式
+| 5000+ 桌宠生态 | DSH 实时联动 |
+| --- | --- |
+| 兼容 [codex-pet](https://codex-pet.org) 宠物包格式。内置 Aqua、月薪喵和 DeepSeek 鲸鱼娘，可继续接入 5000+ 桌宠。 | 接收会话、工具、任务、错误和权限事件。支持 DSH Web / Headless，桌宠、通知和声音随状态响应。 |
+| **统一扩展管理** | **插件市场与主题市场** |
+| 统一管理 DSH 插件、Skill 和组件。把 Plugin、Skill、DSH Web 主题组合成方案，按工作场景一键切换。 | 浏览并安装插件和 Skill；预览、安装、更新、卸载 DSH Web 主题，缓存预览资源，处理常见旧版注册方式。 |
 
 ## 开箱即用
 
