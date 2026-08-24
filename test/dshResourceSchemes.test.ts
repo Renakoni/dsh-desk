@@ -16,6 +16,46 @@ function writeSkill(root: string, name: string) {
 }
 
 describe("DSH resource schemes", () => {
+  it("repairs the default scheme when the Desk bridge is installed after first launch", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-required-desk-restart-"));
+    roots.push(root);
+    let bridgeInstalled = false;
+    const inventory = () => ({
+      skills: [],
+      plugins: bridgeInstalled ? [{
+        id: "plugin:package:dsh-desk-plugin",
+        kind: "plugin" as const,
+        name: "dsh-desk-plugin",
+        packageName: "dsh-desk-plugin",
+        enabled: true,
+        manageable: false,
+        required: true,
+        schemeSelectable: true
+      }] : [],
+      scannedAt: 1,
+      runtimeConnected: bridgeInstalled
+    });
+    const createManager = () => new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    expect(createManager().snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([]);
+    bridgeInstalled = true;
+    expect(createManager().snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:dsh-desk-plugin"
+    ]);
+
+    const restarted = createManager();
+    expect(restarted.apply("default").ok).toBe(true);
+    expect(restarted.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:dsh-desk-plugin"
+    ]);
+  });
+
   it("seeds the required Desk bridge while preserving real installed Skill selections", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-required-desk-initial-"));
     roots.push(root);
