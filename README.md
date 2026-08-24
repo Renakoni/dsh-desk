@@ -36,16 +36,20 @@ DSH Desk 连接 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 ## 核心亮点
 
-**5000+ 桌宠生态**  
+**5000+ 桌宠生态**
+
 兼容 [codex-pet](https://codex-pet.org) 宠物包格式。安装包内置 Aqua、月薪喵和 DeepSeek 鲸鱼娘，可继续接入 codex-pet 生态中的 5000+ 桌宠。
 
-**DSH 工作流联动**  
+**DSH 工作流联动**
+
 `dsh-desk-plugin` 接入 DSH 的连接、任务、工具、完成、错误和权限事件。桌宠动作、状态通知、声音和权限确认都由同一条 DSH 工作流驱动。
 
-**方案化扩展管理**  
+**方案化扩展管理**
+
 统一管理 DSH 插件、Skill 和组件状态，支持安装、启用、停用和移除。把 Plugin、Skill 与 DSH Web 主题组合成方案，按工作场景一键切换。
 
-**插件与主题市场**  
+**插件与主题市场**
+
 插件市场提供 DSH 插件和 Skill 的浏览与安装；主题市场提供 DSH Web 主题的预览、安装、更新、卸载和预览缓存，并支持常见旧版主题注册方式。
 
 
