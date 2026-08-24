@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import type { DshProfileName, DshProfilePluginStatus, HookOperationResult, HookStatus } from "../shared/hooks";
@@ -16,6 +16,12 @@ export type DshPluginManagerOptions = {
 };
 
 export type DshCommandRunner = (command: string, args: string[]) => Promise<void>;
+
+type WindowsShortPathRunner = (
+  command: string,
+  args: string[],
+  options: { encoding: "utf8"; shell: true; windowsHide: true; env?: NodeJS.ProcessEnv }
+) => SpawnSyncReturns<string>;
 
 function asObject(value: unknown): JsonObject | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null;
@@ -123,6 +129,29 @@ export function resolvePnpmInvocation(
   return { command: nodePath, args: [cliPath, ...args] };
 }
 
+/**
+ * DSH's Windows plugin forwarder invokes pnpm through a shell. Absolute local
+ * package paths containing spaces are split by that layer, so pass a short
+ * 8.3 path when the bundled plugin lives below a spaced install directory.
+ */
+export function resolveDshPluginPath(
+  pluginPath: string,
+  platform = process.platform,
+  run: WindowsShortPathRunner = (command, args, options) => spawnSync(command, args, options)
+): string {
+  if (platform !== "win32" || !/\s/.test(pluginPath)) return pluginPath;
+
+  const command = 'for %I in ("%DSH_DESK_PLUGIN_PATH%") do @echo %~sI';
+  const result = run(process.env.ComSpec ?? "cmd.exe", ["/d", "/c", command], {
+    encoding: "utf8",
+    shell: true,
+    windowsHide: true,
+    env: { ...process.env, DSH_DESK_PLUGIN_PATH: pluginPath }
+  });
+  const shortPath = result.status === 0 ? result.stdout.trim() : "";
+  return shortPath && !/\s/.test(shortPath) ? shortPath : pluginPath;
+}
+
 function operationPreflight(options: DshPluginManagerOptions): HookOperationResult | null {
   const status = getDshPluginStatus(options);
   if (!status.bundle.exists) {
@@ -137,12 +166,13 @@ function operationPreflight(options: DshPluginManagerOptions): HookOperationResu
 export async function installDshPlugin(options: DshPluginManagerOptions, run: DshCommandRunner = runDshCommand): Promise<HookOperationResult> {
   const preflight = operationPreflight(options);
   if (preflight) return preflight;
+  const installPath = resolveDshPluginPath(options.pluginPath);
   try {
     for (const profile of PROFILES) {
       if (registeredDeskPlugins(options.profilesRoot, profile).includes(LEGACY_PLUGIN_NAME)) {
         await run(options.pnpmPath!, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "remove", LEGACY_PLUGIN_NAME]);
       }
-      await run(options.pnpmPath!, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", options.pluginPath]);
+      await run(options.pnpmPath!, ["dlx", "@deepseek-ai/dsh", "plugin", "--profile", profile, "add", installPath]);
     }
     const status = getDshPluginStatus(options);
     return { success: status.installed, error: status.installed ? undefined : "The DSH plugin was not active in every required profile.", status };

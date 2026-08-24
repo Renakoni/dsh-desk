@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SpawnSyncReturns } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
-import { getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, resolvePnpmInvocation, type DshCommandRunner } from "../src/main/dshPluginManager";
+import { getDshPluginStatus, installDshPlugin, removeDshPlugin, resolveBundledDshPluginPath, resolveDshPluginPath, resolvePnpmInvocation, type DshCommandRunner } from "../src/main/dshPluginManager";
 
 const roots: string[] = [];
 
@@ -80,6 +81,18 @@ describe("DSH plugin status", () => {
 
     expect(resolvePnpmInvocation(pnpmPath, ["--version"], "win32", "C:\\Program Files\\DSH Desk\\electron.exe", nodeRoot))
       .toEqual({ command: nodePath, args: [cliPath, "--version"] });
+  });
+
+  it("uses a Windows short path for bundled plugins installed below a spaced directory", () => {
+    const calls: Array<{ command: string; args: string[]; env?: NodeJS.ProcessEnv }> = [];
+    const resolved = resolveDshPluginPath("E:\\DSH Desk\\resources\\dsh-plugin\\dsh-desk-plugin.tgz", "win32", (command, args, options) => {
+      calls.push({ command, args, env: options.env });
+      return { status: 0, stdout: "E:\\DSHDES~1\\RESOUR~1\\DSH-DE~1.TGZ\r\n" } as SpawnSyncReturns<string>;
+    });
+
+    expect(resolved).toBe("E:\\DSHDES~1\\RESOUR~1\\DSH-DE~1.TGZ");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].env?.DSH_DESK_PLUGIN_PATH).toBe("E:\\DSH Desk\\resources\\dsh-plugin\\dsh-desk-plugin.tgz");
   });
 });
 
