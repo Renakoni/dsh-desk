@@ -106,3 +106,7 @@ npm test --prefix ./dsh-plugin
 - **Minato Aqua**：内置 Aqua 桌宠为粉丝创作的二次创作素材；角色版权归 COVER Corp. 及相关创作者所有，仅限非商业使用，并遵循 [hololive 二次创作指南](https://hololivepro.com/terms/)。
 - **Clawd Companion**：部分界面与事件链路演化自 [Clawd Companion](https://github.com/Doulor/Clawd-Companion)（MIT © Doulor）。
 - **Codex Pets**：相关桌宠与自定义宠物说明见 [OpenAI 官方 Pets 文档](https://learn.chatgpt.com/docs/pets)。
+
+## 友链
+
+- [linux.do](https://linux.do/)
