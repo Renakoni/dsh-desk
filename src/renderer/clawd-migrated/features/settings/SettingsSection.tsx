@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from "react";
-import { Bell, Bot, Cable, Gauge, LockKeyhole, MessageSquareText, MousePointer2, RefreshCw, RotateCcw, Save, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
+import { AlertCircle, Bell, Bot, Cable, CheckCircle2, Download, ExternalLink, Gauge, Github, LockKeyhole, LoaderCircle, MessageSquareText, MousePointer2, PackageCheck, RefreshCw, RotateCcw, Save, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from "lucide-react";
 import { defaultSettings } from "../../../shared/events";
 import { useI18n } from "../../useI18n";
 import appIcon from "../../../../main/assets/kuaclock.png";
@@ -8,6 +8,10 @@ import { NotificationRulesPanel } from "../../components/NotificationRulesPanel"
 import { CurrencySegmented, GroupCard, LanguageSegmented, SettingsInfoRow, Slider, ThemeSegmented, Toggle } from "../../components/workbench/Primitives";
 import { ConnectionManagement } from "./ConnectionManagement";
 import { getPetTheme } from "../../utils/petThemes";
+
+function formatUpdateText(template: string, version: string) {
+  return template.replace("{version}", version || "");
+}
 
 export function SettingsSection({
   settings,
@@ -29,6 +33,8 @@ export function SettingsSection({
   updateStatus,
   checkingUpdate,
   handleCheckUpdate,
+  installingUpdate = false,
+  handleInstallUpdate = () => {},
   petPacks = []
 }: {
   settings: any;
@@ -50,6 +56,8 @@ export function SettingsSection({
   updateStatus: any;
   checkingUpdate: boolean;
   handleCheckUpdate: () => void;
+  installingUpdate?: boolean;
+  handleInstallUpdate?: () => void;
   petPacks?: any[];
 }) {
   const { t } = useI18n();
@@ -89,6 +97,42 @@ export function SettingsSection({
   const aboutUpdateTitle = updateStatus.error ? updateStatus.error
     : updateStatus.lastCheckedAt ? `${t("update.lastChecked", "上次检查")}: ${new Date(updateStatus.lastCheckedAt).toLocaleString()}`
     : undefined;
+  const updateVersion = updateStatus.version ? `v${updateStatus.version}` : "";
+  const updateState = updateStatus.error ? "error"
+    : updateStatus.downloaded ? "downloaded"
+    : updateStatus.downloading ? "downloading"
+    : checkingUpdate || updateStatus.checking ? "checking"
+    : updateStatus.available ? "available"
+    : updateStatus.upToDate ? "up-to-date"
+    : "idle";
+  const updateStateTitle = updateState === "error" ? t("update.about.errorTitle", "检查更新失败")
+    : updateState === "downloaded" ? formatUpdateText(t("update.about.readyTitle", "{version} 已准备好安装"), updateVersion)
+    : updateState === "downloading" ? formatUpdateText(t("update.about.downloadingTitle", "正在下载 {version}"), updateVersion)
+    : updateState === "checking" ? t("update.about.checkingTitle", "正在检查更新")
+    : updateState === "available" ? formatUpdateText(t("update.about.availableTitle", "发现新版本 {version}"), updateVersion)
+    : updateState === "up-to-date" ? t("update.about.latestTitle", "已是最新版本")
+    : t("update.about.idleTitle", "还没有检查更新");
+  const updateStateDescription = updateState === "error" ? t("update.about.errorDescription", "无法连接 GitHub Releases，请稍后重试。")
+    : updateState === "downloaded" ? t("update.about.readyDescription", "更新已下载完成，重启 DSH Desk 后即可应用。")
+    : updateState === "downloading" || updateState === "available" ? t("update.about.downloadingDescription", "下载完成后，你可以选择何时重启应用。")
+    : updateState === "checking" ? t("update.about.checkingDescription", "正在读取最新发布信息。")
+    : updateState === "up-to-date" ? t("update.about.latestDescription", "当前版本已经是可用的最新版本。")
+    : t("update.about.idleDescription", "手动检查 GitHub Releases 中是否有新的桌面版本。");
+  const updateActionBusy = installingUpdate || (!updateStatus.error && (
+    checkingUpdate || updateStatus.checking || updateStatus.downloading || (updateStatus.available && !updateStatus.downloaded)
+  ));
+  const updateActionLabel = installingUpdate ? t("update.installing", "正在启动安装...")
+    : updateStatus.downloaded ? formatUpdateText(t("update.install", "重启并安装 {version}"), updateVersion)
+    : updateState === "error" ? t("update.retry", "重新检查")
+    : updateState === "available" || updateState === "downloading" ? t("update.about.downloadingAction", "正在下载...")
+    : checkingUpdate || updateStatus.checking ? t("update.checkShort", "检查中...")
+    : t("update.check", "检查更新");
+  const updateActionIcon = installingUpdate ? <LoaderCircle className="is-spinning" size={15} />
+    : updateStatus.downloaded ? <PackageCheck size={15} />
+    : updateState === "error" ? <RefreshCw size={15} />
+    : checkingUpdate || updateStatus.checking || updateState === "available" ? <LoaderCircle className="is-spinning" size={15} />
+    : <RefreshCw size={15} />;
+  const releaseDate = updateStatus.releaseDate ? new Date(updateStatus.releaseDate).toLocaleDateString() : "";
 
   return (
     <section className="settings-page">
@@ -271,14 +315,51 @@ export function SettingsSection({
             <h3 className="settings-about-name">DSH Desk</h3>
             <span className="settings-about-version">{appVersion ? `v${appVersion}` : "—"}</span>
             <p className="settings-about-tagline">{t("settings.about.description", "面向 DeepSeek Harness 的本地桌宠和工作台。")}</p>
-            <div className="settings-about-actions">
-              <button className="inline-action" onClick={() => window.companion.openExternal("https://github.com/Renakoni/dsh-desk")}>GitHub</button>
-              <button className="inline-action" onClick={handleCheckUpdate} disabled={checkingUpdate || updateStatus.checking || updateStatus.downloading}>
-                {checkingUpdate || updateStatus.checking ? t("update.checkShort", "检查中...") : t("update.check", "检查更新")}
-              </button>
+            <div className={`settings-update-panel is-${updateState}`}>
+              <div className="settings-update-panel-head">
+                <div className="settings-update-state-mark" aria-hidden="true">
+                  {updateState === "error" ? <AlertCircle size={17} />
+                    : updateState === "downloaded" ? <PackageCheck size={17} />
+                    : updateState === "up-to-date" ? <CheckCircle2 size={17} />
+                    : updateState === "checking" || updateState === "downloading" ? <LoaderCircle className="is-spinning" size={17} />
+                    : <Download size={17} />}
+                </div>
+                <div className="settings-update-copy">
+                  <strong>{updateStateTitle}</strong>
+                  <span>{updateStateDescription}</span>
+                </div>
+                {updateVersion && updateState !== "idle" && updateState !== "up-to-date" && (
+                  <span className="settings-update-version">{updateVersion}</span>
+                )}
+              </div>
+              {(updateState === "downloading" || updateState === "available" || updateState === "downloaded") && (
+                <div className="settings-update-progress" aria-label={t("update.about.progress", "下载进度")}>
+                  <div className="settings-update-progress-track"><span style={{ width: `${Math.min(100, Math.max(0, updateStatus.progress ?? (updateState === "downloaded" ? 100 : 0)))}%` }} /></div>
+                  <span>{Math.round(updateStatus.progress ?? (updateState === "downloaded" ? 100 : 0))}%</span>
+                </div>
+              )}
+              {releaseDate && updateState !== "idle" && (
+                <div className="settings-update-meta">
+                  <span>{t("update.about.releaseDate", "发布于")} {releaseDate}</span>
+                  {updateStatus.releaseName && <span>{updateStatus.releaseName}</span>}
+                </div>
+              )}
+              <div className="settings-update-actions">
+                <button className="settings-update-primary" onClick={updateStatus.downloaded ? handleInstallUpdate : handleCheckUpdate} disabled={updateActionBusy}>
+                  {updateActionIcon}
+                  <span>{updateActionLabel}</span>
+                </button>
+                <button className="settings-update-secondary" onClick={() => window.companion.openExternal("https://github.com/Renakoni/dsh-desk")}>
+                  <Github size={15} />
+                  <span>GitHub</span>
+                  <ExternalLink size={13} />
+                </button>
+              </div>
+              {updateStatus.error && <p className="settings-update-error" title={aboutUpdateTitle}><AlertCircle size={13} />{t("update.about.errorHint", "请检查网络连接后重试。")}</p>}
             </div>
             <div className="settings-info-list settings-about-facts">
               <SettingsInfoRow label={t("update.status", "更新状态")} value={aboutUpdateValue} title={aboutUpdateTitle} tone={updateStatus.error ? "danger" : undefined} />
+              {updateStatus.lastCheckedAt && <SettingsInfoRow label={t("update.lastChecked", "上次检查")} value={new Date(updateStatus.lastCheckedAt).toLocaleString()} />}
             </div>
             <p className="settings-about-credit">{t("settings.about.character", "桌宠角色")} · {activePetTheme.displayName}</p>
           </div>
