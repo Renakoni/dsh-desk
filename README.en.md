@@ -105,3 +105,7 @@ The code is released under the [MIT License](LICENSE).
 - **Minato Aqua:** the built-in Aqua pet is fan-made derivative artwork. The character belongs to COVER Corp. and the respective creators. It is for non-commercial use only and follows the [hololive derivative works guidelines](https://hololivepro.com/terms/).
 - **Clawd Companion:** parts of the interface and event pipeline evolved from [Clawd Companion](https://github.com/Doulor/Clawd-Companion) (MIT © Doulor).
 - **Codex Pets:** see the [OpenAI Pets documentation](https://learn.chatgpt.com/docs/pets) for the related pet format and customization details.
+
+## Links
+
+- [linux.do](https://linux.do/)
