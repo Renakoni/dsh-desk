@@ -80,8 +80,8 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
    ```
 
 <p align="center">
-  <img src="docs/screenshots/appearance-overview.png" alt="DSH Desk 外观与主题管理" width="40%">
-  <img src="docs/screenshots/plugins-overview.png" alt="DSH Desk 插件与方案管理" width="40%">
+  <img src="docs/screenshots/appearance-overview.png" alt="DSH Desk 外观与主题管理" width="42%">&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/screenshots/plugins-overview.png" alt="DSH Desk 插件与方案管理" width="42%">
 </p>
 
 ## 从源码运行
