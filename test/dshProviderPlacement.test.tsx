@@ -246,6 +246,35 @@ describe("DSH model routing placement", () => {
     expect(screen.getByRole("button", { name: /Downloading/ }).hasAttribute("disabled")).toBe(true);
   });
 
+  it("allows another update check after an available release fails to download", () => {
+    const handleCheckUpdate = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <SettingsSection
+          settings={defaultSettings}
+          updateSettings={vi.fn()}
+          connection={{ serverListening: false, error: null }}
+          now={Date.now()}
+          hookStatus={null}
+          activeSettingsSubsection="about"
+          setActiveSettingsSubsection={vi.fn()}
+          sectionContentRef={React.createRef<HTMLDivElement>()}
+          locale="en"
+          setLocale={vi.fn()}
+          appVersion="0.1.0"
+          updateStatus={{ available: true, version: "0.1.1", downloading: false, downloaded: false, error: "network failure" }}
+          checkingUpdate={false}
+          handleCheckUpdate={handleCheckUpdate}
+        />
+      </I18nProvider>
+    );
+
+    const retry = screen.getByRole("button", { name: "Check again" });
+    expect(retry.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(retry);
+    expect(handleCheckUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it("starts installing a downloaded release from the About page", () => {
     const installUpdate = vi.fn();
     Reflect.set(window, "companion", { ...window.companion, installUpdate, openExternal: vi.fn() });

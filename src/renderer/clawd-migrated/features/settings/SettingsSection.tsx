@@ -118,7 +118,9 @@ export function SettingsSection({
     : updateState === "checking" ? t("update.about.checkingDescription", "正在读取最新发布信息。")
     : updateState === "up-to-date" ? t("update.about.latestDescription", "当前版本已经是可用的最新版本。")
     : t("update.about.idleDescription", "手动检查 GitHub Releases 中是否有新的桌面版本。");
-  const updateActionBusy = checkingUpdate || updateStatus.checking || updateStatus.downloading || (updateStatus.available && !updateStatus.downloaded) || installingUpdate;
+  const updateActionBusy = installingUpdate || (!updateStatus.error && (
+    checkingUpdate || updateStatus.checking || updateStatus.downloading || (updateStatus.available && !updateStatus.downloaded)
+  ));
   const updateActionLabel = installingUpdate ? t("update.installing", "正在启动安装...")
     : updateStatus.downloaded ? formatUpdateText(t("update.install", "重启并安装 {version}"), updateVersion)
     : updateState === "error" ? t("update.retry", "重新检查")
