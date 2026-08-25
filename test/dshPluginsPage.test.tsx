@@ -862,6 +862,24 @@ describe("DSH resource schemes page", () => {
     expect(sonnerMocks.error.mock.calls[0][0]).not.toContain("profile");
   });
 
+  it("uses the same wrapped prepare-script error for Skill installs", async () => {
+    const mockApi = api();
+    mockApi.installDshSkill = vi.fn(async () => ({
+      ok: false,
+      error: "dsh: git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed"
+    })) as unknown as typeof mockApi.installDshSkill;
+    renderPage(mockApi);
+    await screen.findByText("@deepseek-ai/plugin-0");
+    fireEvent.click(screen.getByRole("button", { name: "资源市场" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skill 市场" }));
+    const skillRow = (await screen.findByText("ably-automation")).closest("article") as HTMLElement;
+    fireEvent.click(within(skillRow).getByRole("button", { name: "安装" }));
+
+    await waitFor(() => expect(sonnerMocks.error).toHaveBeenCalledTimes(1));
+    expect(sonnerMocks.error.mock.calls[0][0]).toContain("构建脚本");
+    expect(sonnerMocks.error.mock.calls[0][0]).not.toContain("profile");
+  });
+
   it("keeps the install action available when a plugin is missing from one profile", async () => {
     const mockApi = api();
     mockApi.listDshPlugins = vi.fn(async () => ({
