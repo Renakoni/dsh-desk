@@ -43,6 +43,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
+  const [marketBusy, setMarketBusy] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const newTriggerRef = useRef<HTMLButtonElement>(null);
   const busyRef = useRef<BusyAction>(null);
@@ -207,7 +208,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
     setSnapshot(result.snapshot);
   }
 
-  if (marketOpen) return <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page"><DshMarketPanel onBack={() => setMarketOpen(false)} onChanged={() => void refresh()} /></div>;
+  if (marketOpen) return <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page"><DshMarketPanel busy={marketBusy} onBusyChange={setMarketBusy} onBack={() => setMarketOpen(false)} onChanged={() => void refresh()} /></div>;
 
   if (editor) return (
     <div className="settings-page dsh-plugins-page claude-resources-page claude-resources-page-dark claude-profiles-page">
@@ -235,7 +236,7 @@ function PluginsPageInner({ hideSensitiveContent, active = true }: { hideSensiti
 
         <nav className="claude-resource-subtabs compact claude-profile-resource-tabs dsh-resource-tabs" aria-label={t("dshResources.resourceType", "Resource type")}>
           {tabs.map(tab => { const Icon = tab.icon; const count = visibleDshSchemeResourceIds(selectedScheme?.[tab.id] ?? []).length; return <button type="button" key={tab.id} className={`claude-resource-subtab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} /><span><b>{tab.label}</b></span><small>{count}</small></button>; })}
-          <button type="button" className="claude-resource-subtab claude-resource-refresh-tab dsh-market-button" onClick={() => setMarketOpen(true)} aria-label={t("dshResources.marketplace", "Marketplace")} title={t("dshResources.marketplace", "Marketplace")}><Store size={17} /></button>
+          <button type="button" className="claude-resource-subtab claude-resource-refresh-tab dsh-market-button" onClick={() => setMarketOpen(true)} disabled={marketBusy !== ""} aria-label={t("dshResources.marketplace", "Marketplace")} title={t("dshResources.marketplace", "Marketplace")}><Store size={17} /></button>
         </nav>
       </div>
 

@@ -257,6 +257,24 @@
   text-align: center;
 }
 
+[data-sonner-toaster] .dsh-market-toast[data-sonner-toast][data-styled="true"] {
+  width: min(420px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  align-items: flex-start;
+}
+
+[data-sonner-toaster] .dsh-market-toast[data-sonner-toast][data-styled="true"] [data-content] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-sonner-toaster] .dsh-market-toast[data-sonner-toast][data-styled="true"] [data-title] {
+  max-width: 100%;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* Connectivity feedback is content-sized instead of reserving a broad empty
    surface. The max width keeps long provider names readable without letting a
    provider name push the toast out of a narrow window. */

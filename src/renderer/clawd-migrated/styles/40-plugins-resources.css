@@ -137,6 +137,7 @@
   background: transparent;
 }
 .dsh-market-row .claude-profile-primary-button { min-width: 64px; min-height: 28px; font-size: 11px; }
+.dsh-market-install-button { min-width: 78px !important; white-space: nowrap; }
 .dsh-repo-manager {
   display: grid;
   gap: 7px;
