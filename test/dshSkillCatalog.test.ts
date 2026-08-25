@@ -18,6 +18,33 @@ function skill(root: string, directory: string, frontmatter: string) {
 }
 
 describe("DSH skill inventory", () => {
+  it("scans real-world PDF and frontend Skill frontmatter without losing the resources", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-skills-real-frontmatter-"));
+    roots.push(root);
+    const dshHome = join(root, "dsh");
+    const agentsHome = join(root, "agents");
+    skill(join(dshHome, "skills"), "pdf", [
+      "name: pdf",
+      "description: Use this skill whenever the user wants to do anything with PDF files.",
+      "license: Proprietary. LICENSE.txt has complete terms",
+    ].join("\n"));
+    skill(join(dshHome, "skills"), "impeccable", [
+      "name: impeccable",
+      'description: "Use when the user wants to design, redesign, or audit a frontend interface."',
+      'argument-hint: "[{{command_hint}}] [target]"',
+      "allowed-tools:",
+      "  - Bash(npx impeccable *)",
+      "license: Apache 2.0",
+    ].join("\n"));
+
+    const snapshot = scanDshSkills(dshHome, agentsHome);
+    expect(snapshot.skills.filter(skill => skill.active).map(skill => skill.name)).toEqual(["impeccable", "pdf"]);
+    expect(dshSkillResources(snapshot, {})).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "skill:name:impeccable", name: "impeccable", enabled: true }),
+      expect.objectContaining({ id: "skill:name:pdf", name: "pdf", enabled: true })
+    ]));
+  });
+
   it("matches user-root precedence and invocation frontmatter", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-skills-"));
     roots.push(root);
