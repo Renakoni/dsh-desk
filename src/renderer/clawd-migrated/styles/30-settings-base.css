@@ -162,7 +162,7 @@ pre { margin: 0; max-height: 280px; overflow: auto; padding: 13px; color: #f9e6b
   border-radius: 18px;
   object-fit: cover;
   object-position: 50% 10%;
-  box-shadow: 0 16px 38px rgba(43, 31, 21, 0.18);
+  box-shadow: none;
 }
 .settings-about-app-icon {
   width: 128px;
@@ -220,7 +220,7 @@ pre { margin: 0; max-height: 280px; overflow: auto; padding: 13px; color: #f9e6b
   border-radius: 12px;
   color: var(--settings-ink, var(--ink));
   background: var(--settings-surface-raised, var(--panel));
-  box-shadow: 0 12px 28px rgba(43, 31, 21, 0.08);
+  box-shadow: none;
   text-align: left;
 }
 .settings-update-panel.is-error {
@@ -330,7 +330,7 @@ pre { margin: 0; max-height: 280px; overflow: auto; padding: 13px; color: #f9e6b
   color: var(--settings-surface-raised, var(--paper));
   border-color: var(--settings-accent, var(--honey));
   background: var(--settings-accent, var(--honey));
-  box-shadow: 0 7px 14px color-mix(in oklch, var(--settings-accent, var(--honey)) 22%, transparent);
+  box-shadow: none;
 }
 .settings-update-secondary {
   flex: 0 0 auto;
@@ -342,7 +342,7 @@ pre { margin: 0; max-height: 280px; overflow: auto; padding: 13px; color: #f9e6b
   transform: translateY(-1px);
   border-color: var(--settings-accent, var(--honey));
 }
-.settings-update-primary:hover:not(:disabled) { box-shadow: 0 9px 18px color-mix(in oklch, var(--settings-accent, var(--honey)) 30%, transparent); }
+.settings-update-primary:hover:not(:disabled) { box-shadow: none; }
 .settings-update-primary:active:not(:disabled),
 .settings-update-secondary:active:not(:disabled) { transform: translateY(0) scale(0.985); }
 .settings-update-primary:disabled,
