@@ -9,7 +9,7 @@ import { parse as parseYaml } from 'yaml'
 import { agentErrorEvent, createBridge, sessionStartEvent } from './bridge.js'
 import { mountAppearanceManager } from './appearance-manager.js'
 
-export { allowGitHostedBuild, blockedBuildPackage, commandError, detectThemeCompatibility, mountAppearanceManager, repairKnownThemeDependencies, runPlugin } from './appearance-manager.js'
+export { allowGitHostedBuild, blockedBuildPackage, commandError, detectThemeCompatibility, isGitSubdirectoryTarget, mountAppearanceManager, repairKnownThemeDependencies, resolvePnpmInvocation, runPlugin } from './appearance-manager.js'
 
 export const name = 'dsh-desk'
 export const inject = ['agents', 'sessions', 'approval', 'loader', 'skills']

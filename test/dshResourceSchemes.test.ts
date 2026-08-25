@@ -16,6 +16,140 @@ function writeSkill(root: string, name: string) {
 }
 
 describe("DSH resource schemes", () => {
+  it("repairs the default scheme when the Desk bridge is installed after first launch", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-required-desk-restart-"));
+    roots.push(root);
+    let bridgeInstalled = false;
+    const inventory = () => ({
+      skills: [],
+      plugins: bridgeInstalled ? [{
+        id: "plugin:package:dsh-desk-plugin",
+        kind: "plugin" as const,
+        name: "dsh-desk-plugin",
+        packageName: "dsh-desk-plugin",
+        enabled: true,
+        manageable: false,
+        required: true,
+        schemeSelectable: true
+      }] : [],
+      scannedAt: 1,
+      runtimeConnected: bridgeInstalled
+    });
+    const createManager = () => new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory,
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    expect(createManager().snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([]);
+    bridgeInstalled = true;
+    expect(createManager().snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:dsh-desk-plugin"
+    ]);
+
+    const restarted = createManager();
+    expect(restarted.apply("default").ok).toBe(true);
+    expect(restarted.snapshot().schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:dsh-desk-plugin"
+    ]);
+  });
+
+  it("seeds the required Desk bridge while preserving real installed Skill selections", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-required-desk-initial-"));
+    roots.push(root);
+    const manager = new DshResourceSchemeManager({
+      storePath: join(root, "schemes.json"),
+      inventory: () => ({
+        skills: [
+          { id: "skill:name:impeccable", kind: "skill", name: "impeccable", description: "Frontend review", enabled: true, manageable: true },
+          { id: "skill:name:pdf", kind: "skill", name: "pdf", description: "PDF workflows", enabled: true, manageable: true },
+          { id: "skill:name:review", kind: "skill", name: "review", description: "Review changes", enabled: false, manageable: true }
+        ],
+        plugins: [{
+          id: "plugin:package:dsh-desk-plugin",
+          kind: "plugin",
+          name: "dsh-desk-plugin",
+          packageName: "dsh-desk-plugin",
+          enabled: false,
+          manageable: false,
+          required: true,
+          schemeSelectable: true
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const snapshot = manager.snapshot();
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")).toMatchObject({
+      skills: ["skill:name:impeccable", "skill:name:pdf"],
+      plugins: ["plugin:package:dsh-desk-plugin"]
+    });
+    expect(snapshot.schemes.find(scheme => scheme.id === "all")?.skills).toEqual([
+      "skill:name:impeccable",
+      "skill:name:pdf",
+      "skill:name:review"
+    ]);
+  });
+
+  it("adds the required Desk bridge to an existing default scheme without changing user selections", () => {
+    const root = mkdtempSync(join(tmpdir(), "dsh-schemes-required-desk-"));
+    roots.push(root);
+    const packageName = "dsh-desk-plugin";
+    const storePath = join(root, "schemes.json");
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      schemes: [
+        { id: "default", name: "Default", skills: [], plugins: ["plugin:package:user-plugin"], isProtected: true, createdAt: 1, updatedAt: 1 },
+        { id: "all", name: "All", skills: [], plugins: ["plugin:package:user-plugin"], isProtected: true, createdAt: 1, updatedAt: 1 }
+      ],
+      pluginRuntimePackages: {},
+      legacyRuntimePluginIds: [],
+      appliedSchemeId: "default"
+    }));
+    const manager = new DshResourceSchemeManager({
+      storePath,
+      inventory: () => ({
+        skills: [{ id: "skill:name:review", kind: "skill", name: "review", enabled: false, manageable: true }],
+        plugins: [{
+          id: `plugin:package:${packageName}`,
+          kind: "plugin",
+          name: packageName,
+          packageName,
+          enabled: true,
+          manageable: false,
+          required: true,
+          schemeSelectable: true
+        }, {
+          id: "plugin:package:user-plugin",
+          kind: "plugin",
+          name: "user-plugin",
+          packageName: "user-plugin",
+          enabled: true,
+          manageable: true,
+          schemeSelectable: true
+        }],
+        scannedAt: 1,
+        runtimeConnected: true
+      }),
+      setDesiredSkills: () => undefined,
+      setDesiredPlugins: () => undefined,
+      now: () => 10
+    });
+
+    const snapshot = manager.snapshot();
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.plugins).toEqual([
+      "plugin:package:user-plugin",
+      "plugin:package:dsh-desk-plugin"
+    ]);
+    expect(snapshot.schemes.find(scheme => scheme.id === "default")?.skills).toEqual([]);
+  });
+
   it("retains package aliases when the live Loader inventory arrives", () => {
     const root = mkdtempSync(join(tmpdir(), "dsh-schemes-runtime-"));
     roots.push(root);
