@@ -189,7 +189,7 @@ function initialStore(inventory: DshResourceInventory, now: number): DshResource
   const pluginRuntimePackages = runtimePluginPackages(inventory);
   const pluginAliases = (enabledOnly: boolean) => [...new Set(inventory.plugins
     .filter(item => !isBaseThemeResource(item))
-    .filter(item => !enabledOnly || item.enabled)
+    .filter(item => !enabledOnly || item.enabled || item.required)
     .map(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX)
       ? item.id
       : `${PACKAGE_PLUGIN_PREFIX}${item.packageName ?? item.name}`))];
@@ -390,12 +390,19 @@ export class DshResourceSchemeManager {
       item.id,
       `${PACKAGE_PLUGIN_PREFIX}${item.packageName ?? item.name}`
     ]));
+    // Required DSH layers are not user-selectable, but older scheme stores may
+    // predate their installation (notably dsh-desk-plugin). Keep them in every
+    // scheme without changing the user's selectable plugin or skill choices.
+    const requiredPluginIds = inventory.plugins
+      .filter(item => item.required && !isBaseThemeResource(item))
+      .map(item => item.id);
+    const withRequiredPlugins = (ids: string[]) => [...new Set([...ids, ...requiredPluginIds])];
     const withoutThemePlugins = (ids: string[]) => ids.filter(id => !themePluginIds.has(id));
     const skills = inventory.skills.map(item => item.id);
     const runtimePlugins = inventory.plugins.map(item => item.id);
     const offlinePackageIds = inventory.plugins.filter(item => item.id.startsWith(PACKAGE_PLUGIN_PREFIX) && !isBaseThemeResource(item)).map(item => item.id);
     const offlinePackageSet = new Set(offlinePackageIds);
-    const canonicalAllPlugins = withoutThemePlugins(canonicalize(all.plugins));
+    const canonicalAllPlugins = withoutThemePlugins(canonicalize(withRequiredPlugins(all.plugins)));
     const plugins = withoutThemePlugins(packageOnlyInventory
       ? offlinePackageIds
       : inventory.runtimeConnected
@@ -407,7 +414,7 @@ export class DshResourceSchemeManager {
     const timestamp = this.now();
     const schemes = store.schemes.map(scheme => {
       const nextSkills = migrateSkillIds(scheme.skills, inventory);
-      const nextPlugins = canonicalize(scheme.plugins);
+      const nextPlugins = canonicalize(withRequiredPlugins(scheme.plugins));
       const nextThemeId = migratedThemeId(scheme, nextPlugins, inventory);
       if (scheme.id === ALL_DSH_SCHEME_ID) {
         if (arraysEqual(scheme.skills, skills) && arraysEqual(scheme.plugins, plugins) && scheme.themeId === nextThemeId) return scheme;
