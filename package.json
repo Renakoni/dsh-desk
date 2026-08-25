@@ -1,7 +1,7 @@
 {
   "name": "dsh-desk",
   "productName": "DSH Desk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH Desk - a desktop pet companion and local usage workbench for DeepSeek Harness.",
   "author": "Renakoni",
   "private": true,

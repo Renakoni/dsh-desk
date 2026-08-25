@@ -23,7 +23,7 @@ files:
 #  - The DSH plugin tarball is installed into the user's web/headless profiles via pnpm.
 #  - kuaclock.png is the tray icon, loaded from process.resourcesPath when packaged.
 extraResources:
-  - from: build/dsh-desk-plugin-0.1.0.tgz
+  - from: build/dsh-desk-plugin-0.1.1.tgz
     to: dsh-plugin/dsh-desk-plugin.tgz
   - from: src/main/assets/kuaclock.png
     to: kuaclock.png

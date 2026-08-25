@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
+  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.1"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="最新版本"></a>
   &nbsp;
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
   &nbsp;
@@ -71,7 +71,7 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 
 ### 安装步骤
 
-1. 下载 [Windows 安装包 (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) 或 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip)。
+1. 下载 [Windows 安装包 (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.1/DSHDesk-Setup-0.1.1.exe) 或 [免安装 ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.1/DSHDesk-0.1.1-portable.zip)。
 2. 启动 DSH Desk，在 **总览** 中点击安装 DSH 插件。
 3. 启动（或重启）DSH 服务：
 

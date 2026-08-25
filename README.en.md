@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="Latest release"></a>
+  <a href="https://github.com/Renakoni/dsh-desk/releases/tag/v0.1.1"><img src="https://img.shields.io/github/v/release/Renakoni/dsh-desk?display_name=tag&style=flat-square" alt="Latest release"></a>
   &nbsp;
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DeepSeek-Harness-4c8492?style=flat-square" alt="DeepSeek Harness"></a>
   &nbsp;
@@ -71,7 +71,7 @@ Browse and install DSH plugins and Skills from the plugin marketplace. Preview, 
 
 ### Install
 
-1. Download the [Windows installer (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-Setup-0.1.0.exe) or [portable ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.0/DSHDesk-0.1.0-portable.zip).
+1. Download the [Windows installer (.exe)](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.1/DSHDesk-Setup-0.1.1.exe) or [portable ZIP](https://github.com/Renakoni/dsh-desk/releases/download/v0.1.1/DSHDesk-0.1.1-portable.zip).
 2. Launch DSH Desk and click **Install DSH plugin** in **Overview**.
 3. Start (or restart) the DSH service:
 
