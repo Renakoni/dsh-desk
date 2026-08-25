@@ -29,8 +29,8 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
 ## 界面预览
 
 <p align="center">
-  <img src="docs/screenshots/dsh-themes.webp" alt="DSH 主题库" width="42%">
-  <img src="docs/screenshots/dsh-pets.webp" alt="桌宠库与导入对话框" width="42%">
+  <img src="docs/screenshots/dsh-real-states-grid.png" alt="桌宠响应不同的 DSH 会话状态" width="42%" align="middle">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="docs/screenshots/dsh-pets.webp" alt="桌宠库与导入对话框" width="46%" align="middle">
 </p>
 
 ## 核心亮点
@@ -80,7 +80,8 @@ DSH Desk 是为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harne
    ```
 
 <p align="center">
-  <img src="docs/screenshots/pet-states.gif" alt="桌宠响应不同的 DSH 会话状态" width="360">
+  <img src="docs/screenshots/appearance-overview.png" alt="DSH Desk 外观与主题管理" width="42%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/screenshots/plugins-overview.png" alt="DSH Desk 插件与方案管理" width="42%">
 </p>
 
 ## 从源码运行
